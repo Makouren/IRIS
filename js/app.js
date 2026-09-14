@@ -732,6 +732,8 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     // 2. Render Right Column: Live Editable Table Grid & Chart
     ensureTableDataStructure(record);
+    const activeSheet = record.extractedData[Object.keys(record.extractedData)[0]];
+    updateFieldSelectOptions(activeSheet);
     renderStudioTableGrid(record);
     renderStudioChart(record);
   }
@@ -822,6 +824,49 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
   }
 
+  function updateFieldSelectOptions(sheet, selectedLabelCol = null, selectedValueCol = null) {
+    const labelSelect = document.getElementById('studioLabelColSelect');
+    const valueSelect = document.getElementById('studioValueColSelect');
+    if (!labelSelect || !valueSelect || !sheet || !sheet.headers) return;
+
+    const currentLabelVal = selectedLabelCol !== null ? String(selectedLabelCol) : (labelSelect.value || '0');
+    const currentValueVal = selectedValueCol !== null ? String(selectedValueCol) : (valueSelect.value || '1');
+
+    labelSelect.innerHTML = '';
+    valueSelect.innerHTML = '';
+
+    sheet.headers.forEach((h, colIdx) => {
+      const optL = document.createElement('option');
+      optL.value = colIdx;
+      optL.textContent = `${h || `Column ${colIdx + 1}`} (Col ${colIdx + 1})`;
+      labelSelect.appendChild(optL);
+
+      const optV = document.createElement('option');
+      optV.value = colIdx;
+      optV.textContent = `${h || `Column ${colIdx + 1}`} (Col ${colIdx + 1})`;
+      valueSelect.appendChild(optV);
+    });
+
+    // Determine smart defaults if not set
+    let defaultLabelCol = parseInt(currentLabelVal, 10);
+    if (isNaN(defaultLabelCol) || defaultLabelCol >= sheet.headers.length) defaultLabelCol = 0;
+
+    let defaultValueCol = parseInt(currentValueVal, 10);
+    if (isNaN(defaultValueCol) || defaultValueCol >= sheet.headers.length || defaultValueCol === defaultLabelCol) {
+      defaultValueCol = sheet.headers.length > 1 ? 1 : 0;
+      for (let c = 0; c < sheet.headers.length; c++) {
+        const hasNumbers = (sheet.rows || []).some(r => typeof r[c] === 'number' || (!isNaN(parseFloat(r[c])) && isFinite(r[c])));
+        if (hasNumbers && c !== defaultLabelCol) {
+          defaultValueCol = c;
+          break;
+        }
+      }
+    }
+
+    labelSelect.value = String(defaultLabelCol);
+    valueSelect.value = String(defaultValueCol);
+  }
+
   function renderStudioTableGrid(record) {
     const container = document.getElementById('studioTableContainer');
     if (!container) return;
@@ -830,11 +875,24 @@ document.addEventListener('DOMContentLoaded', async () => {
     const sheet = record.extractedData[sheetName];
     if (!sheet) return;
 
+    const labelSelect = document.getElementById('studioLabelColSelect');
+    const valueSelect = document.getElementById('studioValueColSelect');
+    const activeLabelCol = labelSelect ? parseInt(labelSelect.value, 10) : 0;
+    const activeValueCol = valueSelect ? parseInt(valueSelect.value, 10) : 1;
+
     let tHtml = `<table class="data-table"><thead><tr>`;
     sheet.headers.forEach((h, colIdx) => {
+      const isX = colIdx === activeLabelCol;
+      const isY = colIdx === activeValueCol;
+      const badge = isX ? `<span class="axis-indicator-badge x-axis">🏷️ X-Axis</span>` : (isY ? `<span class="axis-indicator-badge y-axis">📈 Y-Axis</span>` : '');
+
       tHtml += `<th>
-        <div style="display: flex; align-items: center; justify-content: space-between; gap: 0.3rem;">
-          <input type="text" class="header-rename-input" data-col="${colIdx}" value="${String(h).replace(/"/g, '&quot;')}" style="background: transparent; border: none; font-weight: 800; color: var(--clsu-green); font-size: 0.78rem; text-transform: uppercase; width: 100%; outline: none;" title="Click to rename field header">
+        <div class="header-cell-box">
+          <div style="display: flex; align-items: center; justify-content: space-between; gap: 0.25rem;">
+            ${badge}
+            ${sheet.headers.length > 1 ? `<button type="button" class="btn-delete-col" data-col="${colIdx}" style="background: none; border: none; color: #EF4444; cursor: pointer; font-size: 0.85rem; font-weight: 800;" title="Delete this field / column">✕</button>` : ''}
+          </div>
+          <input type="text" class="header-rename-input" data-col="${colIdx}" value="${String(h || '').replace(/"/g, '&quot;')}" placeholder="Field Name..." title="Click to rename this field header">
         </div>
       </th>`;
     });
@@ -874,10 +932,27 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     // Rename Header input
     document.querySelectorAll('.header-rename-input').forEach(input => {
-      input.addEventListener('change', () => {
+      input.addEventListener('input', () => {
         const c = parseInt(input.getAttribute('data-col'), 10);
-        sheet.headers[c] = input.value.trim() || `Field_${c+1}`;
+        const newHeader = input.value.trim() || `Field_${c + 1}`;
+        sheet.headers[c] = newHeader;
+        updateFieldSelectOptions(sheet, labelSelect ? labelSelect.value : null, valueSelect ? valueSelect.value : null);
         updateStudioChart();
+      });
+    });
+
+    // Delete Column
+    document.querySelectorAll('.btn-delete-col').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const c = parseInt(btn.getAttribute('data-col'), 10);
+        if (sheet.headers.length <= 1) return;
+        if (confirm(`Are you sure you want to delete the field "${sheet.headers[c]}"?`)) {
+          sheet.headers.splice(c, 1);
+          sheet.rows.forEach(r => r.splice(c, 1));
+          updateFieldSelectOptions(sheet);
+          renderStudioTableGrid(record);
+          updateStudioChart();
+        }
       });
     });
 
@@ -898,7 +973,9 @@ document.addEventListener('DOMContentLoaded', async () => {
   function renderStudioChart(record) {
     const canvas = document.getElementById('studioChartCanvas');
     const chartTypeSelect = document.getElementById('studioChartTypeSelect');
-    const chartTitleDisplay = document.getElementById('studioChartTitleDisplay');
+    const chartTitleInput = document.getElementById('studioChartTitleInput');
+    const labelSelect = document.getElementById('studioLabelColSelect');
+    const valueSelect = document.getElementById('studioValueColSelect');
     if (!canvas || !chartTypeSelect) return;
 
     if (studioChartInstance) {
@@ -910,19 +987,13 @@ document.addEventListener('DOMContentLoaded', async () => {
     const sheet = record.extractedData[sheetName];
     if (!sheet || !sheet.headers || !sheet.rows || sheet.rows.length === 0) return;
 
-    // Determine label column and numerical column
-    let labelCol = 0;
-    let numCol = sheet.headers.length > 1 ? 1 : 0;
+    let labelCol = labelSelect ? parseInt(labelSelect.value, 10) : 0;
+    let numCol = valueSelect ? parseInt(valueSelect.value, 10) : (sheet.headers.length > 1 ? 1 : 0);
 
-    for (let c = 0; c < sheet.headers.length; c++) {
-      const hasNumbers = sheet.rows.some(r => typeof r[c] === 'number' || (!isNaN(parseFloat(r[c])) && isFinite(r[c])));
-      if (hasNumbers && c > 0) {
-        numCol = c;
-        break;
-      }
-    }
+    if (isNaN(labelCol) || labelCol >= sheet.headers.length) labelCol = 0;
+    if (isNaN(numCol) || numCol >= sheet.headers.length) numCol = sheet.headers.length > 1 ? 1 : 0;
 
-    const labels = sheet.rows.map(r => String(r[labelCol] !== undefined ? r[labelCol] : `Item`).trim());
+    const labels = sheet.rows.map(r => String(r[labelCol] !== undefined && r[labelCol] !== null ? r[labelCol] : `Item`).trim());
     const dataValues = sheet.rows.map(r => {
       const val = parseFloat(r[numCol]);
       return isNaN(val) ? 0 : val;
@@ -931,29 +1002,33 @@ document.addEventListener('DOMContentLoaded', async () => {
     const currentType = chartTypeSelect.value || 'bar';
     const headerName = sheet.headers[numCol] || 'Metric Value';
 
-    if (chartTitleDisplay) {
-      chartTitleDisplay.textContent = `${headerName} — Live Observatory Draft`;
+    if (chartTitleInput && !chartTitleInput.getAttribute('data-customized')) {
+      chartTitleInput.value = `${headerName} — Live Observatory Draft`;
     }
 
+    const currentChartTitle = chartTitleInput ? chartTitleInput.value : `${headerName} — Live Observatory Draft`;
+
     const clsuPalettes = [
-      { border: '#146C36', bg: 'rgba(20, 108, 54, 0.65)' },
-      { border: '#F59E0B', bg: 'rgba(245, 158, 11, 0.65)' },
-      { border: '#0D9488', bg: 'rgba(13, 148, 136, 0.65)' },
-      { border: '#10B981', bg: 'rgba(16, 185, 129, 0.65)' },
-      { border: '#D97706', bg: 'rgba(217, 119, 6, 0.65)' },
-      { border: '#2563EB', bg: 'rgba(37, 99, 235, 0.65)' }
+      { border: '#146C36', bg: 'rgba(20, 108, 54, 0.75)' },
+      { border: '#F59E0B', bg: 'rgba(245, 158, 11, 0.75)' },
+      { border: '#0D9488', bg: 'rgba(13, 148, 136, 0.75)' },
+      { border: '#10B981', bg: 'rgba(16, 185, 129, 0.75)' },
+      { border: '#D97706', bg: 'rgba(217, 119, 6, 0.75)' },
+      { border: '#2563EB', bg: 'rgba(37, 99, 235, 0.75)' },
+      { border: '#8B5CF6', bg: 'rgba(139, 92, 246, 0.75)' },
+      { border: '#EC4899', bg: 'rgba(236, 72, 153, 0.75)' }
     ];
 
     const ctx = canvas.getContext('2d');
     studioChartInstance = new Chart(ctx, {
       type: currentType,
       data: {
-        labels: labels.slice(0, 15),
+        labels: labels.slice(0, 25),
         datasets: [{
           label: headerName,
-          data: dataValues.slice(0, 15),
-          backgroundColor: currentType === 'pie' ? clsuPalettes.map(c => c.bg) : 'rgba(20, 108, 54, 0.65)',
-          borderColor: currentType === 'pie' ? clsuPalettes.map(c => c.border) : '#146C36',
+          data: dataValues.slice(0, 25),
+          backgroundColor: (currentType === 'pie' || currentType === 'doughnut' || currentType === 'polarArea') ? clsuPalettes.map(c => c.bg) : 'rgba(20, 108, 54, 0.7)',
+          borderColor: (currentType === 'pie' || currentType === 'doughnut' || currentType === 'polarArea') ? clsuPalettes.map(c => c.border) : '#146C36',
           borderWidth: 2,
           tension: 0.35,
           fill: currentType === 'line'
@@ -963,18 +1038,22 @@ document.addEventListener('DOMContentLoaded', async () => {
         responsive: true,
         maintainAspectRatio: false,
         plugins: {
+          title: {
+            display: false,
+            text: currentChartTitle
+          },
           legend: {
-            display: currentType === 'pie',
+            display: (currentType === 'pie' || currentType === 'doughnut' || currentType === 'polarArea'),
             labels: { color: '#334155', font: { family: 'Inter, sans-serif', weight: '600' } }
           }
         },
-        scales: currentType === 'pie' ? {} : {
+        scales: (currentType === 'pie' || currentType === 'doughnut' || currentType === 'polarArea') ? {} : {
           x: {
-            ticks: { color: '#475569', font: { family: 'Inter, sans-serif', weight: '600' } },
+            ticks: { color: '#334155', font: { family: 'Inter, sans-serif', weight: '600' } },
             grid: { color: '#E2E8E2' }
           },
           y: {
-            ticks: { color: '#475569', font: { family: 'Inter, sans-serif', weight: '600' } },
+            ticks: { color: '#334155', font: { family: 'Inter, sans-serif', weight: '600' } },
             grid: { color: '#E2E8E2' }
           }
         }
@@ -988,10 +1067,47 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
   }
 
-  // Chart Type Selector Switcher
+  // Chart Controls Event Listeners
   const studioChartTypeSelect = document.getElementById('studioChartTypeSelect');
   if (studioChartTypeSelect) {
     studioChartTypeSelect.addEventListener('change', updateStudioChart);
+  }
+
+  const studioLabelColSelect = document.getElementById('studioLabelColSelect');
+  if (studioLabelColSelect) {
+    studioLabelColSelect.addEventListener('change', () => {
+      renderStudioTableGrid(studioActiveRecord);
+      updateStudioChart();
+    });
+  }
+
+  const studioValueColSelect = document.getElementById('studioValueColSelect');
+  if (studioValueColSelect) {
+    studioValueColSelect.addEventListener('change', () => {
+      renderStudioTableGrid(studioActiveRecord);
+      updateStudioChart();
+    });
+  }
+
+  const studioChartTitleInput = document.getElementById('studioChartTitleInput');
+  if (studioChartTitleInput) {
+    studioChartTitleInput.addEventListener('input', () => {
+      studioChartTitleInput.setAttribute('data-customized', 'true');
+      updateStudioChart();
+    });
+  }
+
+  // Swap Axes Button
+  const studioBtnSwapAxes = document.getElementById('studioBtnSwapAxes');
+  if (studioBtnSwapAxes) {
+    studioBtnSwapAxes.addEventListener('click', () => {
+      if (!studioLabelColSelect || !studioValueColSelect || !studioActiveRecord) return;
+      const temp = studioLabelColSelect.value;
+      studioLabelColSelect.value = studioValueColSelect.value;
+      studioValueColSelect.value = temp;
+      renderStudioTableGrid(studioActiveRecord);
+      updateStudioChart();
+    });
   }
 
   // ➕ Add New Field / Column Button Handler
@@ -1007,6 +1123,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       if (fieldName && fieldName.trim()) {
         sheet.headers.push(fieldName.trim());
         sheet.rows.forEach(r => r.push(''));
+        updateFieldSelectOptions(sheet);
         renderStudioTableGrid(studioActiveRecord);
         updateStudioChart();
       }
@@ -1073,9 +1190,12 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (studioChartInstance) {
       const chartTypeSelect = document.getElementById('studioChartTypeSelect');
       const chartType = chartTypeSelect ? chartTypeSelect.value : 'bar';
+      const chartTitleInput = document.getElementById('studioChartTitleInput');
+      const finalTitle = chartTitleInput ? chartTitleInput.value : `${sheet.headers[1] || 'Metric'} — Observatory Draft`;
+
       studioActiveRecord.graphDrafts = [{
         id: `draft_${Date.now()}`,
-        title: `${sheet.headers[1] || 'Metric'} — Observatory Draft`,
+        title: finalTitle,
         source: `Studio Data Editor: ${sheetName}`,
         primaryType: chartType,
         recommendation: `Administrator configured ${chartType} visualization.`,

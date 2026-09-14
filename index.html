@@ -306,20 +306,45 @@
             
             <!-- Live Chart Visualization Card -->
             <div class="studio-chart-box">
-              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.85rem; flex-wrap: wrap; gap: 0.5rem;">
-                <div>
-                  <h3 id="studioChartTitleDisplay" style="font-size: 1.15rem; font-weight: 800; color: var(--clsu-green);">Chart Preview</h3>
+              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.85rem; flex-wrap: wrap; gap: 0.75rem;">
+                <div style="flex: 1; min-width: 250px;">
+                  <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.25rem;">
+                    <span style="font-size: 0.82rem; font-weight: 800; color: var(--clsu-green); text-transform: uppercase;">Chart Title:</span>
+                    <input type="text" id="studioChartTitleInput" class="form-input" value="Observatory Draft" placeholder="Type chart title..." style="padding: 0.3rem 0.65rem; font-size: 0.95rem; font-weight: 800; color: var(--clsu-green); border: 1.5px solid #CBD5E1; background: #FFFFFF; flex: 1;" title="Click to edit the chart title">
+                  </div>
                   <p id="studioChartSubtitleDisplay" style="font-size: 0.78rem; color: #64748B;">Live interactive rendering from data fields below</p>
                 </div>
                 
-                <!-- Chart Controls -->
+                <!-- Chart Type Selector -->
                 <div style="display: flex; gap: 0.5rem; align-items: center;">
-                  <label style="font-size: 0.8rem; font-weight: 800; color: #334155; text-transform: uppercase;">Chart Type:</label>
+                  <label style="font-size: 0.78rem; font-weight: 800; color: #334155; text-transform: uppercase;">Chart Type:</label>
                   <select id="studioChartTypeSelect" class="form-input" style="width: auto; padding: 0.35rem 0.75rem; font-size: 0.82rem; font-weight: 700; color: #0F172A;">
-                    <option value="bar">Bar Chart</option>
-                    <option value="line">Line Chart</option>
-                    <option value="pie">Pie Chart</option>
+                    <option value="bar">📊 Bar Chart</option>
+                    <option value="line">📈 Line Chart</option>
+                    <option value="pie">🥧 Pie Chart</option>
+                    <option value="doughnut">🍩 Doughnut Chart</option>
+                    <option value="polarArea">🧭 Polar Area</option>
                   </select>
+                </div>
+              </div>
+
+              <!-- Interactive Field / Axis Mapping Controls -->
+              <div style="background: #FFFFFF; border: 1.5px solid var(--border-green); border-radius: var(--radius-sm); padding: 0.75rem 1rem; margin-bottom: 0.85rem; display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 0.75rem;">
+                <div style="display: flex; align-items: center; gap: 1rem; flex-wrap: wrap;">
+                  <div style="display: flex; align-items: center; gap: 0.4rem;">
+                    <span style="font-size: 0.8rem; font-weight: 800; color: #047857;">🏷️ X-Axis / Label Field:</span>
+                    <select id="studioLabelColSelect" class="form-input" style="padding: 0.3rem 0.65rem; font-size: 0.82rem; font-weight: 700; color: #0F172A; min-width: 140px;"></select>
+                  </div>
+                  <div style="display: flex; align-items: center; gap: 0.4rem;">
+                    <span style="font-size: 0.8rem; font-weight: 800; color: #1D4ED8;">📈 Y-Axis / Metric Field:</span>
+                    <select id="studioValueColSelect" class="form-input" style="padding: 0.3rem 0.65rem; font-size: 0.82rem; font-weight: 700; color: #0F172A; min-width: 140px;"></select>
+                  </div>
+                </div>
+
+                <div>
+                  <button id="studioBtnSwapAxes" type="button" class="btn-studio-action" style="background: #F8FAF8; border: 1.5px solid #CBD5E1; color: #334155; font-size: 0.78rem; padding: 0.35rem 0.75rem;" title="Swap X and Y fields">
+                    🔄 Swap Axes
+                  </button>
                 </div>
               </div>
 
