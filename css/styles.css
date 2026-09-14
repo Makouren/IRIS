@@ -718,12 +718,12 @@ body {
 }
 
 /* ====================================================================
-   Modals
+   Modals & High-Contrast Editor Forms
    ==================================================================== */
 .modal-overlay {
   position: fixed;
   top: 0; left: 0; right: 0; bottom: 0;
-  background: rgba(15, 23, 42, 0.6);
+  background: rgba(15, 23, 42, 0.65);
   backdrop-filter: blur(6px);
   display: flex;
   align-items: center;
@@ -745,9 +745,9 @@ body {
   border-radius: var(--radius-lg);
   padding: 2rem;
   width: 90%;
-  max-width: 900px;
+  max-width: 950px;
   box-shadow: var(--modal-shadow);
-  border-top: 4px solid var(--clsu-green);
+  border-top: 5px solid var(--clsu-green);
 }
 
 .modal-header {
@@ -755,10 +755,94 @@ body {
   justify-content: space-between;
   align-items: center;
   margin-bottom: 1.5rem;
+  padding-bottom: 0.75rem;
+  border-bottom: 1px solid var(--border-light);
 }
 
 .modal-title {
-  font-size: 1.3rem;
+  font-size: 1.35rem;
   font-weight: 800;
   color: var(--clsu-green);
+}
+
+/* High Contrast Cell Inputs for Admin Table Editor */
+.cell-input {
+  background: #FFFFFF !important;
+  border: 1.5px solid #CBD5E1 !important;
+  color: #0F172A !important;
+  padding: 0.45rem 0.65rem !important;
+  border-radius: var(--radius-sm) !important;
+  width: 100% !important;
+  font-size: 0.88rem !important;
+  font-weight: 600 !important;
+  font-family: var(--font-mono) !important;
+  transition: all 0.2s ease !important;
+}
+
+.cell-input:focus {
+  border-color: var(--clsu-green) !important;
+  box-shadow: 0 0 0 3px rgba(20, 108, 54, 0.15) !important;
+  background: #FAFCFA !important;
+  outline: none !important;
+}
+
+.cell-input:hover {
+  border-color: #94A3B8 !important;
+}
+
+/* Modal Action Buttons */
+.btn-cancel {
+  background: #F1F5F9 !important;
+  border: 1px solid #CBD5E1 !important;
+  color: #334155 !important;
+  font-weight: 700 !important;
+  padding: 0.55rem 1.4rem !important;
+  border-radius: var(--radius-full) !important;
+  cursor: pointer !important;
+  font-family: var(--font-sans) !important;
+  font-size: 0.88rem !important;
+  transition: all 0.2s ease !important;
+}
+
+.btn-cancel:hover {
+  background: #E2E8F0 !important;
+  color: #0F172A !important;
+}
+
+.btn-save-modal {
+  background: var(--clsu-green) !important;
+  border: none !important;
+  color: #FFFFFF !important;
+  font-weight: 700 !important;
+  padding: 0.55rem 1.4rem !important;
+  border-radius: var(--radius-full) !important;
+  cursor: pointer !important;
+  font-family: var(--font-sans) !important;
+  font-size: 0.88rem !important;
+  box-shadow: 0 2px 6px rgba(20, 108, 54, 0.3) !important;
+  transition: all 0.2s ease !important;
+}
+
+.btn-save-modal:hover {
+  background: var(--clsu-green-dark) !important;
+  transform: translateY(-1px) !important;
+}
+
+.btn-approve-modal {
+  background: #059669 !important;
+  border: none !important;
+  color: #FFFFFF !important;
+  font-weight: 700 !important;
+  padding: 0.55rem 1.4rem !important;
+  border-radius: var(--radius-full) !important;
+  cursor: pointer !important;
+  font-family: var(--font-sans) !important;
+  font-size: 0.88rem !important;
+  box-shadow: 0 2px 6px rgba(5, 150, 105, 0.3) !important;
+  transition: all 0.2s ease !important;
+}
+
+.btn-approve-modal:hover {
+  background: #047857 !important;
+  transform: translateY(-1px) !important;
 }

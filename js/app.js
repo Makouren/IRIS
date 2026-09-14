@@ -619,28 +619,28 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     // 1. Record Metadata Section
     const metaSection = document.createElement('div');
-    metaSection.style.cssText = 'display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem; margin-bottom: 1.25rem; background: var(--bg-surface); padding: 1.25rem; border-radius: var(--radius-md); border: 1px solid var(--border-light);';
+    metaSection.style.cssText = 'display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1.25rem; margin-bottom: 1.5rem; background: #F8FAF8; padding: 1.25rem; border-radius: var(--radius-md); border: 1px solid var(--border-light);';
 
     metaSection.innerHTML = `
       <div>
-        <label class="form-label" style="font-weight: 700; color: var(--text-muted); font-size: 0.8rem; margin-bottom: 0.35rem; display: block;">File Name</label>
-        <input type="text" id="editFileName" class="form-input" value="${record.fileName || ''}">
+        <label class="form-label" style="font-weight: 800; color: #334155; font-size: 0.8rem; margin-bottom: 0.4rem; display: block; text-transform: uppercase;">File Name</label>
+        <input type="text" id="editFileName" class="form-input" value="${record.fileName || ''}" style="font-weight: 600; color: #0F172A;">
       </div>
       <div>
-        <label class="form-label" style="font-weight: 700; color: var(--text-muted); font-size: 0.8rem; margin-bottom: 0.35rem; display: block;">Category / Classification</label>
-        <input type="text" id="editDocType" class="form-input" value="${record.docType || 'General Institutional Data'}">
+        <label class="form-label" style="font-weight: 800; color: #334155; font-size: 0.8rem; margin-bottom: 0.4rem; display: block; text-transform: uppercase;">Category / Classification</label>
+        <input type="text" id="editDocType" class="form-input" value="${record.docType || 'General Institutional Data'}" style="font-weight: 600; color: #0F172A;">
       </div>
       <div>
-        <label class="form-label" style="font-weight: 700; color: var(--text-muted); font-size: 0.8rem; margin-bottom: 0.35rem; display: block;">Approval Status</label>
-        <select id="editStatus" class="form-input">
+        <label class="form-label" style="font-weight: 800; color: #334155; font-size: 0.8rem; margin-bottom: 0.4rem; display: block; text-transform: uppercase;">Approval Status</label>
+        <select id="editStatus" class="form-input" style="font-weight: 600; color: #0F172A;">
           <option value="Pending Review" ${(record.status === 'Pending Review' || !record.status) ? 'selected' : ''}>Pending Review</option>
           <option value="Approved" ${record.status === 'Approved' ? 'selected' : ''}>Approved for Dashboard</option>
           <option value="Needs Revision" ${record.status === 'Needs Revision' ? 'selected' : ''}>Needs Revision</option>
         </select>
       </div>
       <div style="grid-column: 1 / -1;">
-        <label class="form-label" style="font-weight: 700; color: var(--text-muted); font-size: 0.8rem; margin-bottom: 0.35rem; display: block;">Admin Verification Notes & Logs</label>
-        <textarea id="editAdminNotes" class="form-input" rows="2" placeholder="Add administrative verification notes...">${record.adminNotes || ''}</textarea>
+        <label class="form-label" style="font-weight: 800; color: #334155; font-size: 0.8rem; margin-bottom: 0.4rem; display: block; text-transform: uppercase;">Admin Verification Notes & Logs</label>
+        <textarea id="editAdminNotes" class="form-input" rows="2" placeholder="Add administrative verification notes..." style="font-weight: 500; color: #0F172A; line-height: 1.5;">${record.adminNotes || ''}</textarea>
       </div>
     `;
     recordEditBody.appendChild(metaSection);
@@ -659,17 +659,17 @@ document.addEventListener('DOMContentLoaded', async () => {
         const sheet = record.extractedData[activeSheetKey];
 
         const tableSection = document.createElement('div');
-        tableSection.style.cssText = 'margin-bottom: 1.25rem; background: var(--bg-surface); padding: 1.25rem; border-radius: var(--radius-md); border: 1px solid var(--border-light);';
+        tableSection.style.cssText = 'margin-bottom: 1.5rem; background: #FFFFFF; padding: 1.25rem; border-radius: var(--radius-md); border: 1px solid var(--border-light);';
 
         tableSection.innerHTML = `
-          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem;">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.85rem;">
             <div>
-              <h4 style="font-size: 0.95rem; font-weight: 700; color: var(--accent-cyan); display: flex; align-items: center; gap: 0.5rem;">
+              <h4 style="font-size: 1rem; font-weight: 800; color: var(--clsu-green); display: flex; align-items: center; gap: 0.5rem;">
                 <span>📊</span> Extracted Table Cells (${activeSheetKey})
               </h4>
-              <p style="font-size: 0.78rem; color: var(--text-muted);">Click inside any cell to edit its value directly.</p>
+              <p style="font-size: 0.82rem; color: #64748B;">Click inside any cell to edit its value directly.</p>
             </div>
-            <button id="btnAddRowBtn" type="button" style="padding: 0.4rem 0.8rem; font-size: 0.8rem; background: rgba(16, 185, 129, 0.2); border: 1px solid var(--accent-emerald); color: var(--accent-emerald); border-radius: var(--radius-sm); cursor: pointer; font-weight: 600;">
+            <button id="btnAddRowBtn" type="button" style="padding: 0.45rem 0.95rem; font-size: 0.82rem; background: #ECFDF5; border: 1.5px solid #10B981; color: #065F46; border-radius: var(--radius-sm); cursor: pointer; font-weight: 700;">
               ➕ Add Row
             </button>
           </div>
@@ -683,15 +683,15 @@ document.addEventListener('DOMContentLoaded', async () => {
         sheet.headers.forEach(h => {
           tHtml += `<th>${h || ''}</th>`;
         });
-        tHtml += `<th style="width: 50px;">Action</th></tr></thead><tbody id="editableTableBody">`;
+        tHtml += `<th style="width: 60px; text-align: center;">Action</th></tr></thead><tbody id="editableTableBody">`;
 
         (sheet.rows || []).slice(0, 50).forEach((row, rIdx) => {
           tHtml += `<tr>`;
           sheet.headers.forEach((h, cIdx) => {
             const cellVal = row[cIdx] !== undefined && row[cIdx] !== null ? row[cIdx] : '';
-            tHtml += `<td><input type="text" class="cell-input" data-sheet="${activeSheetKey}" data-row="${rIdx}" data-col="${cIdx}" value="${String(cellVal).replace(/"/g, '&quot;')}" style="background: rgba(15,23,42,0.6); border: 1px solid var(--border-light); color: var(--text-light); padding: 0.35rem 0.6rem; border-radius: var(--radius-sm); width: 100%; font-size: 0.82rem; font-family: var(--font-mono);"></td>`;
+            tHtml += `<td><input type="text" class="cell-input" data-sheet="${activeSheetKey}" data-row="${rIdx}" data-col="${cIdx}" value="${String(cellVal).replace(/"/g, '&quot;')}"></td>`;
           });
-          tHtml += `<td style="text-align: center;"><button type="button" class="btn-delete-row" data-sheet="${activeSheetKey}" data-row="${rIdx}" style="background: none; border: none; color: var(--accent-rose); cursor: pointer; font-size: 1rem;" title="Delete row">✕</button></td></tr>`;
+          tHtml += `<td style="text-align: center;"><button type="button" class="btn-delete-row" data-sheet="${activeSheetKey}" data-row="${rIdx}" style="background: none; border: none; color: #EF4444; cursor: pointer; font-size: 1.1rem; font-weight: 800;" title="Delete row">✕</button></td></tr>`;
         });
 
         tHtml += `</tbody></table>`;
@@ -723,23 +723,23 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     // 3. Raw Content / Text Editor (Always available for fine-tuning text/OCR/prompts)
     const textSection = document.createElement('div');
-    textSection.style.cssText = 'background: var(--bg-surface); padding: 1.25rem; border-radius: var(--radius-md); border: 1px solid var(--border-light);';
+    textSection.style.cssText = 'background: #FFFFFF; padding: 1.25rem; border-radius: var(--radius-md); border: 1px solid var(--border-light);';
     textSection.innerHTML = `
-      <label class="form-label" style="font-weight: 700; color: var(--text-muted); font-size: 0.8rem; margin-bottom: 0.35rem; display: block;">
-        📝 Extracted Text & OCR Content
+      <label class="form-label" style="font-weight: 800; color: #334155; font-size: 0.8rem; margin-bottom: 0.4rem; display: block; text-transform: uppercase;">
+        📝 Extracted Text Content
       </label>
-      <textarea id="editRawText" class="form-input" rows="6" style="font-family: var(--font-mono); font-size: 0.82rem; line-height: 1.5;">${record.rawText || ''}</textarea>
+      <textarea id="editRawText" class="form-input" rows="6" style="background: #FAFCFA; border: 1.5px solid #CBD5E1; color: #0F172A; font-family: var(--font-mono); font-size: 0.88rem; font-weight: 500; line-height: 1.6;">${record.rawText || ''}</textarea>
     `;
     recordEditBody.appendChild(textSection);
 
     // 4. Modal Action Buttons Footer
     const actionRow = document.createElement('div');
-    actionRow.style.cssText = 'display: flex; justify-content: flex-end; gap: 0.75rem; margin-top: 1.5rem; padding-top: 1rem; border-top: 1px solid var(--border-light);';
+    actionRow.style.cssText = 'display: flex; justify-content: flex-end; gap: 0.85rem; margin-top: 1.5rem; padding-top: 1.25rem; border-top: 1px solid var(--border-light);';
 
     actionRow.innerHTML = `
-      <button id="btnCancelEdit" type="button" class="btn-icon" style="background: transparent; border: 1px solid var(--border-light); cursor: pointer;">Cancel</button>
-      <button id="btnSaveRecordChanges" type="button" class="btn-icon" style="background: var(--accent-violet); border: none; cursor: pointer;">💾 Save Changes</button>
-      <button id="btnApproveDraft" type="button" class="btn-icon" style="background: var(--accent-emerald); border: none; color: #fff; cursor: pointer;">✅ Approve for Dashboard</button>
+      <button id="btnCancelEdit" type="button" class="btn-cancel">Cancel</button>
+      <button id="btnSaveRecordChanges" type="button" class="btn-save-modal">💾 Save Changes</button>
+      <button id="btnApproveDraft" type="button" class="btn-approve-modal">✅ Approve for Dashboard</button>
     `;
 
     recordEditBody.appendChild(actionRow);
