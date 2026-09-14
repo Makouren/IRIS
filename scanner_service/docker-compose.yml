@@ -1,0 +1,16 @@
+version: '3.8'
+
+services:
+  scanner-service:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: iris-ai-file-scanner
+    ports:
+      - "8000:8000"
+    environment:
+      - HOST=0.0.0.0
+      - PORT=8000
+      - ALLOWED_ORIGINS=*
+      - MAX_FILE_SIZE_MB=50
+    restart: unless-stopped

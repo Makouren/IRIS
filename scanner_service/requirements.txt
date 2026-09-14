@@ -1,0 +1,22 @@
+# IRIS AI File Scanner Microservice Dependencies
+fastapi>=0.110.0
+uvicorn[standard]>=0.28.0
+python-multipart>=0.0.9
+pydantic>=2.6.0
+
+# Data Extraction & Spreadsheets
+pandas>=2.2.0
+openpyxl>=3.1.2
+xlrd>=2.0.1
+
+# Document Parsers
+python-docx>=1.1.0
+pymupdf>=1.24.0
+pymupdf4llm>=0.0.14
+
+# OCR & Image Processing
+pillow>=10.2.0
+pytesseract>=0.3.10
+
+# Utilities
+python-dotenv>=1.0.1
