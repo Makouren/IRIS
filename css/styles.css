@@ -599,195 +599,237 @@ body {
 }
 
 /* ====================================================================
-   Authentic MS Office Word / Document Reader Window Screen
+   Authentic Adobe Acrobat Style Document Viewer Component
    ==================================================================== */
-.doc-window-container {
+.doc-viewer-container {
   display: flex;
   flex-direction: column;
-  border-radius: 8px;
+  border-radius: var(--radius-md, 8px);
   overflow: hidden;
-  background: #2B2B2B;
-  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.25);
-  border: 1px solid #404040;
+  background: #323639;
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.22);
+  border: 1px solid #282B2E;
 }
 
-.doc-window-titlebar {
-  background: #1F1F1F;
+.acrobat-toolbar {
+  background: #2B2E31;
   color: #E2E8F0;
-  padding: 0.4rem 0.75rem;
+  padding: 0.45rem 0.75rem;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  border-bottom: 1px solid #333333;
+  border-bottom: 1px solid #1E2124;
   font-family: var(--font-sans);
+  gap: 0.5rem;
+  user-select: none;
+  flex-wrap: wrap;
 }
 
-.doc-window-quick-tools {
+.acrobat-title-group {
   display: flex;
-  gap: 0.4rem;
   align-items: center;
-  color: #94A3B8;
-  font-size: 0.75rem;
+  gap: 0.45rem;
+  overflow: hidden;
+  max-width: 42%;
 }
 
-.doc-window-title {
-  font-size: 0.78rem;
-  font-weight: 700;
+.acrobat-badge-icon {
+  background: #E5252A; /* Adobe Red */
+  color: #FFFFFF;
+  font-size: 0.62rem;
+  font-weight: 800;
+  padding: 0.15rem 0.38rem;
+  border-radius: 3px;
+  letter-spacing: 0.04em;
+  line-height: 1.2;
+}
+
+.acrobat-filename {
+  font-size: 0.8rem;
+  font-weight: 600;
   color: #F8FAFC;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  max-width: 260px;
 }
 
-.doc-window-controls {
+.acrobat-controls-center {
   display: flex;
-  gap: 0.5rem;
   align-items: center;
-  color: #94A3B8;
-  font-size: 0.75rem;
+  gap: 0.35rem;
+  background: #202225;
+  padding: 0.15rem 0.45rem;
+  border-radius: 4px;
+  border: 1px solid #3A3E42;
 }
 
-.doc-ribbon-tabs {
-  background: #1F1F1F;
-  display: flex;
-  gap: 0.15rem;
-  padding: 0 0.5rem;
-  border-bottom: 1px solid #333333;
-}
-
-.doc-ribbon-tab {
+.acrobat-tool-btn {
   background: transparent;
   border: none;
   color: #CBD5E1;
-  font-size: 0.72rem;
-  padding: 0.25rem 0.55rem;
   cursor: pointer;
-  border-bottom: 2px solid transparent;
-  transition: all 0.15s ease;
-}
-
-.doc-ribbon-tab:hover {
-  background: #333333;
-  color: #FFFFFF;
-}
-
-.doc-ribbon-tab.active {
-  background: #2B2B2B;
-  color: #FFFFFF;
-  border-bottom: 2px solid #3B82F6;
-  font-weight: 700;
-}
-
-.doc-ribbon-toolbar {
-  background: #2B2B2B;
-  border-bottom: 1px solid #383838;
-  padding: 0.35rem 0.75rem;
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-  color: #E2E8F0;
-  font-size: 0.72rem;
-  flex-wrap: wrap;
-}
-
-.ribbon-group {
-  display: flex;
-  align-items: center;
-  gap: 0.3rem;
-  padding-right: 0.6rem;
-  border-right: 1px solid #404040;
-}
-
-.ribbon-badge {
-  background: #383838;
-  border: 1px solid #4A4A4A;
-  color: #F1F5F9;
-  padding: 0.15rem 0.4rem;
+  padding: 0.15rem 0.35rem;
   border-radius: 3px;
-  font-size: 0.7rem;
+  font-size: 0.72rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.15s ease;
+  line-height: 1;
 }
 
-.doc-window-body {
+.acrobat-tool-btn:hover {
+  background: #40444B;
+  color: #FFFFFF;
+}
+
+.acrobat-page-input {
+  width: 34px;
+  text-align: center;
+  background: #141618;
+  border: 1px solid #4A4E53;
+  color: #FFFFFF;
+  font-size: 0.72rem;
+  padding: 0.1rem 0.2rem;
+  border-radius: 3px;
+  font-weight: 600;
+}
+
+.acrobat-zoom-label {
+  font-size: 0.72rem;
+  color: #CBD5E1;
+  min-width: 38px;
+  text-align: center;
+  font-weight: 600;
+}
+
+.acrobat-controls-right {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+}
+
+.doc-sheet-select {
+  padding: 0.2rem 0.5rem !important;
+  font-size: 0.74rem !important;
+  font-weight: 600 !important;
+  width: auto !important;
+  max-width: 140px !important;
+  border-radius: 4px !important;
+}
+
+/* Authentic Acrobat PDF Viewport Canvas (Slate Background) */
+.acrobat-viewer-body {
   height: 520px;
   overflow-y: auto;
-  background: #4A4A4A;
-  padding: 1.25rem 0.85rem;
+  overflow-x: auto;
+  background: #525659; /* Authentic Adobe Acrobat Slate Background */
+  padding: 1.5rem 1rem;
   position: relative;
   scrollbar-width: thin;
+  scrollbar-color: #767A7E #525659;
 }
 
-/* Authentic Document Page Sheet */
-.word-doc-page {
+.acrobat-viewer-body::-webkit-scrollbar {
+  width: 9px;
+  height: 9px;
+}
+
+.acrobat-viewer-body::-webkit-scrollbar-track {
+  background: #525659;
+}
+
+.acrobat-viewer-body::-webkit-scrollbar-thumb {
+  background: #767A7E;
+  border-radius: 4px;
+}
+
+.acrobat-viewer-body::-webkit-scrollbar-thumb:hover {
+  background: #9AA0A6;
+}
+
+/* Acrobat Multi-Pages Stack */
+.acrobat-pages-container {
+  display: flex;
+  flex-direction: column;
+  gap: 1.75rem; /* Gap between PDF pages */
+  width: 100%;
+  align-items: center;
+  transition: transform 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  transform-origin: top center;
+}
+
+/* Authentic White Acrobat Paper Page Card */
+.acrobat-page-card {
   background: #FFFFFF;
-  color: #0F172A;
-  width: 96%;
-  max-width: 440px;
-  margin: 0 auto 1.5rem auto;
-  padding: 2rem 1.75rem;
-  box-shadow: 0 4px 18px rgba(0, 0, 0, 0.35);
+  color: #111827;
+  width: 100%;
+  max-width: 480px;
+  min-height: 580px;
+  margin: 0 auto;
+  padding: 2.25rem 2rem 2.75rem 2rem;
+  box-shadow: 0 4px 18px rgba(0, 0, 0, 0.45), 0 0 2px rgba(0, 0, 0, 0.3);
   border-radius: 2px;
-  font-family: 'Times New Roman', Times, 'Cambria', Georgia, serif;
-  font-size: 0.86rem;
-  line-height: 1.65;
+  font-family: 'Cambria', 'Georgia', 'Times New Roman', serif;
+  font-size: 0.88rem;
+  line-height: 1.68;
   user-select: text;
+  position: relative;
+  box-sizing: border-box;
 }
 
-.word-doc-page h3, .word-doc-page h4 {
-  font-family: 'Times New Roman', Times, serif;
+.acrobat-page-number-tag {
+  position: absolute;
+  bottom: 0.85rem;
+  left: 50%;
+  transform: translateX(-50%);
+  font-family: var(--font-sans);
+  font-size: 0.65rem;
+  color: #94A3B8;
+  letter-spacing: 0.05em;
+  font-weight: 600;
+}
+
+.acrobat-page-card h3, .acrobat-page-card h4 {
+  font-family: var(--font-sans);
   font-weight: 800;
   color: #0F172A;
-  margin-top: 1rem;
+  margin-top: 1.1rem;
   margin-bottom: 0.4rem;
-  line-height: 1.3;
+  line-height: 1.35;
 }
 
-.word-doc-page p {
-  margin-bottom: 0.75rem;
+.acrobat-page-card p {
+  margin-bottom: 0.8rem;
   text-align: justify;
   text-justify: inter-word;
-  color: #111827;
+  color: #1F2937;
 }
 
-.word-doc-page strong {
+.acrobat-page-card strong {
   color: #000000;
   font-weight: 700;
 }
 
-.word-doc-page ul, .word-doc-page ol {
-  margin-bottom: 0.75rem;
+.acrobat-page-card ul, .acrobat-page-card ol {
+  margin-bottom: 0.8rem;
   padding-left: 1.25rem;
 }
 
-.word-doc-page li {
+.acrobat-page-card li {
   margin-bottom: 0.35rem;
-  color: #111827;
+  color: #1F2937;
 }
 
-/* Word Bottom Status Bar */
-.doc-window-statusbar {
-  background: #1F1F1F;
-  border-top: 1px solid #333333;
-  color: #94A3B8;
-  padding: 0.3rem 0.75rem;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  font-size: 0.68rem;
-  font-family: var(--font-sans);
-}
-
-.doc-status-group {
-  display: flex;
-  gap: 0.6rem;
-  align-items: center;
-}
-
-.zoom-slider-fake {
-  display: flex;
-  align-items: center;
-  gap: 0.3rem;
-  color: #CBD5E1;
+/* Spreadsheet Horizontal Scroll Container */
+.doc-sheet-wrapper {
+  background: #FFFFFF;
+  border-radius: 6px;
+  overflow-x: auto;
+  box-shadow: 0 4px 18px rgba(0, 0, 0, 0.35);
+  border: 1px solid #CBD5E1;
+  width: 100%;
+  min-width: 100%;
 }
 
 /* Mini Spreadsheet Table View */

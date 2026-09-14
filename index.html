@@ -289,84 +289,50 @@
               Read the full file directly side-by-side. Click any cell or word to copy value directly into your dashboard fields.
             </p>
 
-            <!-- Document Window Screen Frame (MS Office / PDF Reader Theme) -->
-            <div class="doc-window-container">
-              <!-- Window Titlebar -->
-              <div class="doc-window-titlebar">
-                <div class="doc-window-quick-tools">
-                  <span title="Save">💾</span>
-                  <span title="Undo">↩</span>
-                  <span title="Redo">↪</span>
-                  <span style="color: #64748B;">|</span>
+            <!-- Document Viewer Container (Adobe Acrobat Style Document Viewer) -->
+            <div class="doc-viewer-container">
+              <!-- Adobe Acrobat Style Dark Sleek Toolbar -->
+              <div class="acrobat-toolbar">
+                <div class="acrobat-title-group">
+                  <span class="acrobat-badge-icon" id="acrobatDocBadge">PDF</span>
+                  <span class="acrobat-filename" id="docWindowTitle">document.docx</span>
                 </div>
-                <div class="doc-window-title" id="docWindowTitle">document.docx - Word</div>
-                <div class="doc-window-controls">
-                  <span style="font-size: 0.7rem; color: #94A3B8;">Makouren</span>
-                  <span>🗕</span>
-                  <span>🗖</span>
-                  <span style="color: #EF4444; font-weight: 800;">✕</span>
-                </div>
-              </div>
 
-              <!-- Ribbon Menu Tabs -->
-              <div class="doc-ribbon-tabs">
-                <button type="button" class="doc-ribbon-tab active">File</button>
-                <button type="button" class="doc-ribbon-tab active">Home</button>
-                <button type="button" class="doc-ribbon-tab">Insert</button>
-                <button type="button" class="doc-ribbon-tab">Layout</button>
-                <button type="button" class="doc-ribbon-tab">References</button>
-                <button type="button" class="doc-ribbon-tab">Review</button>
-                <button type="button" class="doc-ribbon-tab">View</button>
-              </div>
+                <!-- Page Navigator Controls -->
+                <div class="acrobat-controls-center" id="acrobatPageNavControls">
+                  <button type="button" id="btnAcrobatPrevPage" class="acrobat-tool-btn" title="Previous Page">▲</button>
+                  <input type="number" id="acrobatCurrentPageInput" class="acrobat-page-input" value="1" min="1" max="1" title="Go to Page">
+                  <span style="font-size: 0.72rem; color: #94A3B8;">/</span>
+                  <span id="acrobatTotalPagesSpan" style="font-size: 0.72rem; color: #E2E8F0; font-weight: 600;">1</span>
+                  <button type="button" id="btnAcrobatNextPage" class="acrobat-tool-btn" title="Next Page">▼</button>
+                </div>
 
-              <!-- Ribbon Toolbar Group -->
-              <div class="doc-ribbon-toolbar">
-                <div class="ribbon-group">
-                  <span title="Clipboard" style="font-size: 0.8rem; cursor: pointer;">📋 Paste</span>
-                </div>
-                <div class="ribbon-group">
-                  <span class="ribbon-badge" style="font-family: serif;">Times New Roman ▼</span>
-                  <span class="ribbon-badge">10 ▼</span>
-                  <span style="font-weight: 800; cursor: pointer; padding: 0 2px;">B</span>
-                  <span style="font-style: italic; cursor: pointer; padding: 0 2px;">I</span>
-                  <span style="text-decoration: underline; cursor: pointer; padding: 0 2px;">U</span>
-                </div>
-                <div class="ribbon-group">
-                  <span>≡</span>
-                  <span>⋮≡</span>
-                </div>
-                <!-- Worksheet Tab Dropdown (if spreadsheet) -->
-                <div id="studioDocSheetSelectorContainer" style="display: none; align-items: center; gap: 0.3rem;">
-                  <span style="font-size: 0.68rem; color: #94A3B8;">Sheet:</span>
-                  <select id="studioDocSheetSelect" class="form-input" style="padding: 0.15rem 0.4rem; font-size: 0.72rem; font-weight: 600; width: auto; max-width: 110px; background: #383838; color: #FFF; border-color: #555;"></select>
-                </div>
-              </div>
-
-              <!-- Document Page Canvas Body -->
-              <div id="studioDocContentArea" class="doc-window-body">
-                <div class="word-doc-page">
-                  <p style="color: #64748B; text-align: center;">Loading authentic document text...</p>
-                </div>
-              </div>
-
-              <!-- Word Bottom Status Bar -->
-              <div class="doc-window-statusbar">
-                <div class="doc-status-group">
-                  <span id="docWindowPageCount">Page 1 of 1</span>
-                  <span>•</span>
-                  <span id="docWindowWordCount">450 words</span>
-                  <span>•</span>
-                  <span>English (United States)</span>
-                </div>
-                <div class="doc-status-group">
-                  <span title="Print Layout">📄</span>
-                  <span title="Web Layout">🌐</span>
-                  <div class="zoom-slider-fake">
-                    <span>—</span>
-                    <span style="font-size: 0.6rem; color: #64748B;">[ ──●── ]</span>
-                    <span>+</span>
-                    <span>100%</span>
+                <!-- Zoom & Sheet Controls -->
+                <div class="acrobat-controls-right">
+                  <!-- Sheet Selector (for spreadsheets) -->
+                  <div id="studioDocSheetSelectorContainer" style="display: none; align-items: center; gap: 0.35rem;">
+                    <span style="font-size: 0.72rem; color: #CBD5E1; font-weight: 600;">Sheet:</span>
+                    <select id="studioDocSheetSelect" class="form-input doc-sheet-select" style="background: #202225 !important; color: #FFF !important; border-color: #4A4E53 !important;"></select>
                   </div>
+
+                  <!-- Zoom Controls (for Word/PDF/OCR) -->
+                  <div id="acrobatZoomControlsGroup" style="display: flex; align-items: center; gap: 0.25rem; background: #202225; padding: 0.15rem 0.4rem; border-radius: 4px; border: 1px solid #3A3E42;">
+                    <button type="button" id="btnAcrobatZoomOut" class="acrobat-tool-btn" title="Zoom Out">−</button>
+                    <span id="acrobatZoomValue" class="acrobat-zoom-label">100%</span>
+                    <button type="button" id="btnAcrobatZoomIn" class="acrobat-tool-btn" title="Zoom In">+</button>
+                    <button type="button" id="btnAcrobatFitWidth" class="acrobat-tool-btn" title="Fit Width" style="font-size: 0.68rem; margin-left: 2px;">↔</button>
+                  </div>
+
+                  <!-- Hidden span for JS stats compatibility -->
+                  <span id="docWindowPageCount" style="display: none;"></span>
+                  <span id="docWindowWordCount" style="display: none;"></span>
+                </div>
+              </div>
+
+              <!-- Acrobat Slate Viewport Canvas (Scroll Down Pages & Side Scroll Document) -->
+              <div id="studioDocContentArea" class="acrobat-viewer-body">
+                <div class="acrobat-page-card">
+                  <p style="color: #64748B; text-align: center;">Loading document content...</p>
                 </div>
               </div>
             </div>

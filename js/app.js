@@ -685,27 +685,50 @@ document.addEventListener('DOMContentLoaded', async () => {
   }
 
   // ----------------------------------------------------
-  // Mini Document Window Screen Viewer Engine
+  // Adobe Acrobat Style Document & File Viewer Engine
   // ----------------------------------------------------
   let docWindowActiveView = 'sheet'; // 'sheet' or 'text'
   let docWindowActiveSheetKey = '';
   let docWindowSearchQuery = '';
+  let acrobatZoomLevel = 100;
+  let acrobatCurrentPage = 1;
+  let acrobatTotalPages = 1;
 
   function renderDocumentWindow(record) {
     const docWindowTitle = document.getElementById('docWindowTitle');
-    const docWindowMeta = document.getElementById('docWindowMeta');
+    const acrobatDocBadge = document.getElementById('acrobatDocBadge');
     const docContentArea = document.getElementById('studioDocContentArea');
     const sheetSelectorContainer = document.getElementById('studioDocSheetSelectorContainer');
     const sheetSelect = document.getElementById('studioDocSheetSelect');
-    const searchInput = document.getElementById('docWindowSearchInput');
-    const btnDocViewSheet = document.getElementById('btnDocViewSheet');
-    const btnDocViewText = document.getElementById('btnDocViewText');
+    const acrobatPageNavControls = document.getElementById('acrobatPageNavControls');
+    const acrobatZoomControlsGroup = document.getElementById('acrobatZoomControlsGroup');
 
     if (!record || !docContentArea) return;
 
     if (docWindowTitle) {
-      docWindowTitle.textContent = `${record.fileName}`;
-      docWindowTitle.title = record.fileName;
+      docWindowTitle.textContent = `${record.fileName || 'document'}`;
+      docWindowTitle.title = record.fileName || '';
+    }
+
+    // Determine File Type Badge
+    const fType = ((record.fileType || '') + ' ' + (record.fileName || '')).toLowerCase();
+    if (acrobatDocBadge) {
+      if (fType.includes('xls')) {
+        acrobatDocBadge.textContent = 'XLSX';
+        acrobatDocBadge.style.background = '#107C41';
+      } else if (fType.includes('pdf')) {
+        acrobatDocBadge.textContent = 'PDF';
+        acrobatDocBadge.style.background = '#E5252A';
+      } else if (fType.includes('doc')) {
+        acrobatDocBadge.textContent = 'DOCX';
+        acrobatDocBadge.style.background = '#E5252A';
+      } else if (fType.includes('png') || fType.includes('jpg') || fType.includes('jpeg') || fType.includes('img')) {
+        acrobatDocBadge.textContent = 'IMG';
+        acrobatDocBadge.style.background = '#7C3AED';
+      } else {
+        acrobatDocBadge.textContent = 'DOC';
+        acrobatDocBadge.style.background = '#E5252A';
+      }
     }
 
     const hasSheets = record.extractedData && typeof record.extractedData === 'object' && Object.keys(record.extractedData).length > 0;
@@ -715,71 +738,127 @@ document.addEventListener('DOMContentLoaded', async () => {
     }) : [];
 
     if (sheetKeys.length > 0) {
+      docWindowActiveView = 'sheet';
       if (!docWindowActiveSheetKey || !sheetKeys.includes(docWindowActiveSheetKey)) {
         docWindowActiveSheetKey = sheetKeys[0];
       }
-      sheetSelectorContainer.style.display = 'flex';
-      sheetSelect.innerHTML = '';
-      sheetKeys.forEach(k => {
-        const opt = document.createElement('option');
-        opt.value = k;
-        opt.textContent = k;
-        if (k === docWindowActiveSheetKey) opt.selected = true;
-        sheetSelect.appendChild(opt);
-      });
+      if (sheetSelectorContainer) sheetSelectorContainer.style.display = 'flex';
+      if (acrobatPageNavControls) acrobatPageNavControls.style.display = 'none';
+      if (acrobatZoomControlsGroup) acrobatZoomControlsGroup.style.display = 'none';
 
-      sheetSelect.onchange = (e) => {
-        docWindowActiveSheetKey = e.target.value;
-        renderDocWindowBody(record);
-      };
-    } else {
-      sheetSelectorContainer.style.display = 'none';
-      docWindowActiveView = 'text';
-    }
+      if (sheetSelect) {
+        sheetSelect.innerHTML = '';
+        sheetKeys.forEach(k => {
+          const opt = document.createElement('option');
+          opt.value = k;
+          opt.textContent = k;
+          if (k === docWindowActiveSheetKey) opt.selected = true;
+          sheetSelect.appendChild(opt);
+        });
 
-    // View Toggle Buttons
-    if (btnDocViewSheet && btnDocViewText) {
-      if (sheetKeys.length > 0) {
-        btnDocViewSheet.style.display = 'inline-block';
-      } else {
-        btnDocViewSheet.style.display = 'none';
-        docWindowActiveView = 'text';
+        sheetSelect.onchange = (e) => {
+          docWindowActiveSheetKey = e.target.value;
+          renderDocWindowBody(record);
+        };
       }
-
-      btnDocViewSheet.className = `doc-window-view-btn ${docWindowActiveView === 'sheet' ? 'active' : ''}`;
-      btnDocViewText.className = `doc-window-view-btn ${docWindowActiveView === 'text' ? 'active' : ''}`;
-
-      btnDocViewSheet.onclick = () => {
-        docWindowActiveView = 'sheet';
-        btnDocViewSheet.classList.add('active');
-        btnDocViewText.classList.remove('active');
-        renderDocWindowBody(record);
-      };
-
-      btnDocViewText.onclick = () => {
-        docWindowActiveView = 'text';
-        btnDocViewText.classList.add('active');
-        btnDocViewSheet.classList.remove('active');
-        renderDocWindowBody(record);
-      };
+    } else {
+      docWindowActiveView = 'text';
+      if (sheetSelectorContainer) sheetSelectorContainer.style.display = 'none';
+      if (acrobatPageNavControls) acrobatPageNavControls.style.display = 'flex';
+      if (acrobatZoomControlsGroup) acrobatZoomControlsGroup.style.display = 'flex';
     }
 
-    // Live Search Input Filter
-    if (searchInput) {
-      searchInput.value = docWindowSearchQuery;
-      searchInput.oninput = (e) => {
-        docWindowSearchQuery = (e.target.value || '').toLowerCase().trim();
-        renderDocWindowBody(record);
-      };
-    }
-
+    wireAcrobatToolbarEvents();
     renderDocWindowBody(record);
+  }
+
+  function wireAcrobatToolbarEvents() {
+    const btnPrev = document.getElementById('btnAcrobatPrevPage');
+    const btnNext = document.getElementById('btnAcrobatNextPage');
+    const pageInput = document.getElementById('acrobatCurrentPageInput');
+    const btnZoomIn = document.getElementById('btnAcrobatZoomIn');
+    const btnZoomOut = document.getElementById('btnAcrobatZoomOut');
+    const btnFitWidth = document.getElementById('btnAcrobatFitWidth');
+    const zoomValLabel = document.getElementById('acrobatZoomValue');
+
+    if (btnPrev) {
+      btnPrev.onclick = () => {
+        if (acrobatCurrentPage > 1) {
+          jumpToAcrobatPage(acrobatCurrentPage - 1);
+        }
+      };
+    }
+
+    if (btnNext) {
+      btnNext.onclick = () => {
+        if (acrobatCurrentPage < acrobatTotalPages) {
+          jumpToAcrobatPage(acrobatCurrentPage + 1);
+        }
+      };
+    }
+
+    if (pageInput) {
+      pageInput.onchange = (e) => {
+        const val = parseInt(e.target.value, 10);
+        if (!isNaN(val) && val >= 1 && val <= acrobatTotalPages) {
+          jumpToAcrobatPage(val);
+        } else {
+          pageInput.value = acrobatCurrentPage;
+        }
+      };
+    }
+
+    if (btnZoomIn) {
+      btnZoomIn.onclick = () => {
+        if (acrobatZoomLevel < 150) {
+          acrobatZoomLevel = Math.min(150, acrobatZoomLevel + 15);
+          applyAcrobatZoom(zoomValLabel);
+        }
+      };
+    }
+
+    if (btnZoomOut) {
+      btnZoomOut.onclick = () => {
+        if (acrobatZoomLevel > 70) {
+          acrobatZoomLevel = Math.max(70, acrobatZoomLevel - 15);
+          applyAcrobatZoom(zoomValLabel);
+        }
+      };
+    }
+
+    if (btnFitWidth) {
+      btnFitWidth.onclick = () => {
+        acrobatZoomLevel = 100;
+        applyAcrobatZoom(zoomValLabel);
+      };
+    }
+  }
+
+  function applyAcrobatZoom(labelEl) {
+    if (labelEl) labelEl.textContent = `${acrobatZoomLevel}%`;
+    const stack = document.getElementById('acrobatPagesStack');
+    if (stack) {
+      stack.style.transform = `scale(${acrobatZoomLevel / 100})`;
+    }
+  }
+
+  function jumpToAcrobatPage(pageNum) {
+    acrobatCurrentPage = Math.max(1, Math.min(pageNum, acrobatTotalPages));
+    const pageInput = document.getElementById('acrobatCurrentPageInput');
+    if (pageInput) pageInput.value = acrobatCurrentPage;
+
+    const targetCard = document.getElementById(`acrobatDocPage_${acrobatCurrentPage}`);
+    if (targetCard) {
+      targetCard.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
   }
 
   function renderDocWindowBody(record) {
     const docContentArea = document.getElementById('studioDocContentArea');
     const docWindowPageCount = document.getElementById('docWindowPageCount');
     const docWindowWordCount = document.getElementById('docWindowWordCount');
+    const acrobatTotalPagesSpan = document.getElementById('acrobatTotalPagesSpan');
+    const acrobatCurrentPageInput = document.getElementById('acrobatCurrentPageInput');
     const copyStatus = document.getElementById('docWindowCopyStatus');
     if (!docContentArea) return;
 
@@ -802,11 +881,11 @@ document.addEventListener('DOMContentLoaded', async () => {
         return;
       }
 
-      let html = `<div style="background: #FFFFFF; border-radius: 4px; overflow: hidden; box-shadow: 0 4px 16px rgba(0,0,0,0.3); margin: 0 auto; max-width: 100%;"><table class="mini-sheet-table"><thead><tr>`;
-      html += `<th style="width: 32px; text-align: center; position: sticky; left: 0; z-index: 6; background: #F1F5F9;">#</th>`;
+      let html = `<div class="doc-sheet-wrapper"><table class="mini-sheet-table"><thead><tr>`;
+      html += `<th style="width: 36px; text-align: center; position: sticky; left: 0; z-index: 6; background: #F1F5F9;">#</th>`;
       headers.forEach((h, cIdx) => {
         const colLetter = String.fromCharCode(65 + (cIdx % 26));
-        html += `<th><span style="font-size: 0.65rem; color: #94A3B8; margin-right: 4px;">${colLetter}</span> ${h || `Col ${cIdx + 1}`}</th>`;
+        html += `<th><span style="font-size: 0.65rem; color: #94A3B8; margin-right: 4px;">${colLetter}</span> ${escapeHtml(h || `Col ${cIdx + 1}`)}</th>`;
       });
       html += `</tr></thead><tbody>`;
 
@@ -817,7 +896,7 @@ document.addEventListener('DOMContentLoaded', async () => {
           const val = row[cIdx] !== undefined && row[cIdx] !== null ? row[cIdx] : '';
           const strVal = String(val);
           const safeVal = strVal.replace(/"/g, '&quot;');
-          html += `<td class="mini-sheet-cell" data-val="${safeVal}" title="Click to copy: ${safeVal}">${strVal}</td>`;
+          html += `<td class="mini-sheet-cell" data-val="${safeVal}" title="Click to copy: ${safeVal}">${escapeHtml(strVal)}</td>`;
         });
         html += `</tr>`;
       });
@@ -843,58 +922,116 @@ document.addEventListener('DOMContentLoaded', async () => {
       });
 
     } else {
-      // Authentic Word Document Page Layout
+      // Authentic Adobe Acrobat PDF Document Page Layout
       const rawText = record.rawText || '';
       const words = rawText.split(/\s+/).filter(Boolean);
       const totalWords = words.length;
-      const estimatedPages = Math.max(1, Math.ceil(totalWords / 280));
-
-      if (docWindowPageCount) docWindowPageCount.textContent = `Page 1 of ${estimatedPages}`;
-      if (docWindowWordCount) docWindowWordCount.textContent = `${totalWords.toLocaleString()} words`;
 
       if (!rawText.trim()) {
-        docContentArea.innerHTML = `<div class="word-doc-page"><p style="color: #94A3B8; text-align: center;">No document content available.</p></div>`;
+        acrobatTotalPages = 1;
+        acrobatCurrentPage = 1;
+        if (acrobatTotalPagesSpan) acrobatTotalPagesSpan.textContent = '1';
+        if (acrobatCurrentPageInput) acrobatCurrentPageInput.value = '1';
+        if (docWindowPageCount) docWindowPageCount.textContent = `Page 1 of 1`;
+        if (docWindowWordCount) docWindowWordCount.textContent = `0 words`;
+        docContentArea.innerHTML = `<div class="acrobat-page-card"><p style="color: #94A3B8; text-align: center;">No document content available.</p></div>`;
         return;
       }
 
       // Group into paragraphs by blank lines or carriage returns
-      const paragraphs = rawText.split(/\n\s*\n/).map(p => p.trim()).filter(Boolean);
+      const rawParagraphs = rawText.split(/\n\s*\n/).map(p => p.trim()).filter(Boolean);
+      
+      // Paginate into authentic PDF pages (~220 words per page card or at least 1 page)
+      const pages = [];
+      let currentPageParas = [];
+      let currentWordCount = 0;
 
-      let docHtml = `<div class="word-doc-page">`;
+      rawParagraphs.forEach((para) => {
+        const paraWords = para.split(/\s+/).filter(Boolean).length;
+        if (currentWordCount > 0 && (currentWordCount + paraWords > 230)) {
+          pages.push(currentPageParas);
+          currentPageParas = [para];
+          currentWordCount = paraWords;
+        } else {
+          currentPageParas.push(para);
+          currentWordCount += paraWords;
+        }
+      });
+      if (currentPageParas.length > 0) {
+        pages.push(currentPageParas);
+      }
+      if (pages.length === 0) pages.push(['No content available.']);
 
-      paragraphs.forEach(para => {
-        const lines = para.split('\n').map(l => l.trim()).filter(Boolean);
-        
-        lines.forEach(line => {
-          // Check if line is a Heading / Title
-          const isHeading = line.length < 75 && (line.endsWith(':') || line.toUpperCase() === line || /^(\d+\.|\b(Section|Chapter|Title|Summary|Overview|Background|Techniques|Methodology|Backlog|Findings)\b)/i.test(line));
+      acrobatTotalPages = pages.length;
+      acrobatCurrentPage = 1;
+
+      if (acrobatTotalPagesSpan) acrobatTotalPagesSpan.textContent = String(acrobatTotalPages);
+      if (acrobatCurrentPageInput) {
+        acrobatCurrentPageInput.value = '1';
+        acrobatCurrentPageInput.max = String(acrobatTotalPages);
+      }
+      if (docWindowPageCount) docWindowPageCount.textContent = `${acrobatTotalPages} page${acrobatTotalPages > 1 ? 's' : ''}`;
+      if (docWindowWordCount) docWindowWordCount.textContent = `${totalWords.toLocaleString()} words`;
+
+      let docHtml = `<div class="acrobat-pages-container" id="acrobatPagesStack" style="transform: scale(${acrobatZoomLevel / 100});">`;
+
+      pages.forEach((pageParas, pageIdx) => {
+        const pageNum = pageIdx + 1;
+        docHtml += `
+          <div class="acrobat-page-card" id="acrobatDocPage_${pageNum}" data-page="${pageNum}">
+        `;
+
+        pageParas.forEach(para => {
+          const lines = para.split('\n').map(l => l.trim()).filter(Boolean);
           
-          // Check if line is a numbered/bullet item e.g. "1. Interview - ..."
-          const isNumberedItem = /^\d+[\.\)]\s+/.test(line);
+          lines.forEach(line => {
+            const isHeading = line.length < 80 && (line.endsWith(':') || line.toUpperCase() === line || /^(\d+\.|\b(Section|Chapter|Title|Summary|Overview|Background|Techniques|Methodology|Backlog|Findings)\b)/i.test(line));
+            const isNumberedItem = /^\d+[\.\)]\s+/.test(line);
 
-          if (isHeading) {
-            docHtml += `<h4 style="font-family: 'Times New Roman', serif; font-size: 0.95rem; font-weight: 800; color: #000000; margin: 1.1rem 0 0.35rem 0; line-height: 1.35;">${escapeHtml(line)}</h4>`;
-          } else if (isNumberedItem) {
-            // Bold prefix e.g. "1. Interview —"
-            const match = line.match(/^(\d+[\.\)]\s+[^—\-\:]+[\—\-\:])(.*)$/);
-            if (match) {
-              docHtml += `<p style="margin-bottom: 0.65rem; padding-left: 0.75rem; text-indent: -0.75rem;"><strong>${escapeHtml(match[1])}</strong>${escapeHtml(match[2])}</p>`;
+            if (isHeading) {
+              docHtml += `<h4 style="font-size: 0.95rem; font-weight: 800; color: #0F172A; margin: 1.1rem 0 0.4rem 0; line-height: 1.35;">${escapeHtml(line)}</h4>`;
+            } else if (isNumberedItem) {
+              const match = line.match(/^(\d+[\.\)]\s+[^—\-\:]+[\—\-\:])(.*)$/);
+              if (match) {
+                docHtml += `<p style="margin-bottom: 0.65rem; padding-left: 0.75rem; text-indent: -0.75rem;"><strong>${escapeHtml(match[1])}</strong>${escapeHtml(match[2])}</p>`;
+              } else {
+                docHtml += `<p style="margin-bottom: 0.65rem; padding-left: 0.75rem; text-indent: -0.75rem;">${escapeHtml(line)}</p>`;
+              }
             } else {
-              docHtml += `<p style="margin-bottom: 0.65rem; padding-left: 0.75rem; text-indent: -0.75rem;">${escapeHtml(line)}</p>`;
+              docHtml += `<p style="margin-bottom: 0.75rem; text-align: justify; text-justify: inter-word;">${escapeHtml(line)}</p>`;
             }
-          } else {
-            docHtml += `<p style="margin-bottom: 0.75rem; text-align: justify; text-justify: inter-word;">${escapeHtml(line)}</p>`;
-          }
+          });
         });
+
+        docHtml += `
+            <div class="acrobat-page-number-tag">Page ${pageNum} of ${acrobatTotalPages}</div>
+          </div>
+        `;
       });
 
       docHtml += `</div>`;
       docContentArea.innerHTML = docHtml;
 
       // Enable text selection and click-to-copy on paragraphs
-      docContentArea.querySelectorAll('.word-doc-page p, .word-doc-page h4').forEach(el => {
+      docContentArea.querySelectorAll('.acrobat-page-card p, .acrobat-page-card h4').forEach(el => {
         el.style.cursor = 'text';
       });
+
+      // Scroll listener to update page counter as user scrolls down
+      docContentArea.onscroll = () => {
+        const cards = docContentArea.querySelectorAll('.acrobat-page-card');
+        const containerTop = docContentArea.scrollTop;
+        cards.forEach(card => {
+          const cardTop = card.offsetTop - docContentArea.offsetTop;
+          if (containerTop >= cardTop - 120) {
+            const p = parseInt(card.getAttribute('data-page'), 10);
+            if (!isNaN(p) && p !== acrobatCurrentPage) {
+              acrobatCurrentPage = p;
+              if (acrobatCurrentPageInput) acrobatCurrentPageInput.value = String(p);
+            }
+          }
+        });
+      };
     }
   }
 
