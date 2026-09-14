@@ -1,0 +1,46 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+*.egg-info/
+dist/
+build/
+eggs/
+*.egg
+
+# Virtual environments
+venv/
+.venv/
+ENV/
+
+# Environment variables
+.env
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Tesseract / OCR temp files
+*.tif
+*.tiff
+
+# Uploaded files (temp)
+scanner/uploads/
+scanner/tmp/
+
+# Docker
+docker-compose.override.yml
+
+# pytest
+.pytest_cache/
+htmlcov/
+.coverage
