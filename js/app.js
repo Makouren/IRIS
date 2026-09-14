@@ -656,6 +656,22 @@ document.addEventListener('DOMContentLoaded', async () => {
   // ----------------------------------------------------
   // Live Dashboard Studio Renderer
   // ----------------------------------------------------
+  function getStudioActiveSheet(record) {
+    if (!record || !record.extractedData || typeof record.extractedData !== 'object') return null;
+    const keys = Object.keys(record.extractedData);
+    if (keys.length === 0) return null;
+
+    let targetKey = docWindowActiveSheetKey;
+    if (!targetKey || !record.extractedData[targetKey]) {
+      targetKey = keys[0];
+      docWindowActiveSheetKey = targetKey;
+    }
+    return {
+      name: targetKey,
+      data: record.extractedData[targetKey]
+    };
+  }
+
   function renderStudioWorkbench(record) {
     if (!record) return;
 
@@ -663,25 +679,23 @@ document.addEventListener('DOMContentLoaded', async () => {
     const studioDocTypeInput = document.getElementById('studioDocTypeInput');
     const studioStatusSelect = document.getElementById('studioStatusSelect');
     const studioNotesInput = document.getElementById('studioNotesInput');
-    const studioDocContentArea = document.getElementById('studioDocContentArea');
-    const studioTableContainer = document.getElementById('studioTableContainer');
-    const studioDocSheetSelectorContainer = document.getElementById('studioDocSheetSelectorContainer');
-    const studioDocSheetSelect = document.getElementById('studioDocSheetSelect');
 
     if (studioActiveFileName) studioActiveFileName.textContent = `${record.fileName} (${(record.fileType || '').toUpperCase()})`;
     if (studioDocTypeInput) studioDocTypeInput.value = record.docType || 'General Institutional Data';
     if (studioStatusSelect) studioStatusSelect.value = record.status || 'Pending Review';
     if (studioNotesInput) studioNotesInput.value = record.adminNotes || '';
 
-    // 1. Render Left Column: Scanned Document Window Screen
+    // 1. Render Left Column: Scanned Document Window Screen (sets active sheet if spreadsheet)
     renderDocumentWindow(record);
 
-    // 2. Render Right Column: Live Editable Table Grid & Chart
+    // 2. Render Right Column: Live Editable Table Grid & Chart for Active Sheet
     ensureTableDataStructure(record);
-    const activeSheet = record.extractedData[Object.keys(record.extractedData)[0]];
-    updateFieldSelectOptions(activeSheet);
-    renderStudioTableGrid(record);
-    renderStudioChart(record);
+    const activeSheetInfo = getStudioActiveSheet(record);
+    if (activeSheetInfo && activeSheetInfo.data) {
+      updateFieldSelectOptions(activeSheetInfo.data);
+      renderStudioTableGrid(record);
+      renderStudioChart(record);
+    }
   }
 
   // ----------------------------------------------------
@@ -759,6 +773,14 @@ document.addEventListener('DOMContentLoaded', async () => {
         sheetSelect.onchange = (e) => {
           docWindowActiveSheetKey = e.target.value;
           renderDocWindowBody(record);
+
+          // Synchronize Right Column (Fields, Table Grid, and Chart) with the newly selected sheet
+          const activeSheetInfo = getStudioActiveSheet(record);
+          if (activeSheetInfo && activeSheetInfo.data) {
+            updateFieldSelectOptions(activeSheetInfo.data);
+            renderStudioTableGrid(record);
+            renderStudioChart(record);
+          }
         };
       }
     } else {
@@ -863,6 +885,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (!docContentArea) return;
 
     if (docWindowActiveView === 'sheet' && record.extractedData && record.extractedData[docWindowActiveSheetKey]) {
+      docContentArea.classList.add('sheet-mode');
       const sheet = record.extractedData[docWindowActiveSheetKey];
       const headers = sheet.headers || [];
       const rows = sheet.rows || [];
@@ -882,10 +905,10 @@ document.addEventListener('DOMContentLoaded', async () => {
       }
 
       let html = `<div class="doc-sheet-wrapper"><table class="mini-sheet-table"><thead><tr>`;
-      html += `<th style="width: 36px; text-align: center; position: sticky; left: 0; z-index: 6; background: #F1F5F9;">#</th>`;
+      html += `<th style="width: 38px; text-align: center; position: sticky; left: 0; z-index: 15; background: #E2E8F0;">#</th>`;
       headers.forEach((h, cIdx) => {
         const colLetter = String.fromCharCode(65 + (cIdx % 26));
-        html += `<th><span style="font-size: 0.65rem; color: #94A3B8; margin-right: 4px;">${colLetter}</span> ${escapeHtml(h || `Col ${cIdx + 1}`)}</th>`;
+        html += `<th><span style="font-size: 0.65rem; color: #64748B; margin-right: 4px;">${colLetter}</span> ${escapeHtml(h || `Col ${cIdx + 1}`)}</th>`;
       });
       html += `</tr></thead><tbody>`;
 
@@ -922,6 +945,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       });
 
     } else {
+      docContentArea.classList.remove('sheet-mode');
       // Authentic Adobe Acrobat PDF Document Page Layout
       const rawText = record.rawText || '';
       const words = rawText.split(/\s+/).filter(Boolean);
@@ -1121,11 +1145,13 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   function renderStudioTableGrid(record) {
     const container = document.getElementById('studioTableContainer');
-    if (!container) return;
+    if (!container || !record) return;
 
-    const sheetName = Object.keys(record.extractedData)[0];
-    const sheet = record.extractedData[sheetName];
-    if (!sheet) return;
+    const activeSheetInfo = getStudioActiveSheet(record);
+    if (!activeSheetInfo || !activeSheetInfo.data) return;
+
+    const sheetName = activeSheetInfo.name;
+    const sheet = activeSheetInfo.data;
 
     const labelSelect = document.getElementById('studioLabelColSelect');
     const valueSelect = document.getElementById('studioValueColSelect');
@@ -1226,17 +1252,21 @@ document.addEventListener('DOMContentLoaded', async () => {
     const canvas = document.getElementById('studioChartCanvas');
     const chartTypeSelect = document.getElementById('studioChartTypeSelect');
     const chartTitleInput = document.getElementById('studioChartTitleInput');
+    const chartSubtitleDisplay = document.getElementById('studioChartSubtitleDisplay');
     const labelSelect = document.getElementById('studioLabelColSelect');
     const valueSelect = document.getElementById('studioValueColSelect');
-    if (!canvas || !chartTypeSelect) return;
+    if (!canvas || !chartTypeSelect || !record) return;
 
     if (studioChartInstance) {
       studioChartInstance.destroy();
       studioChartInstance = null;
     }
 
-    const sheetName = Object.keys(record.extractedData)[0];
-    const sheet = record.extractedData[sheetName];
+    const activeSheetInfo = getStudioActiveSheet(record);
+    if (!activeSheetInfo || !activeSheetInfo.data) return;
+
+    const sheetName = activeSheetInfo.name;
+    const sheet = activeSheetInfo.data;
     if (!sheet || !sheet.headers || !sheet.rows || sheet.rows.length === 0) return;
 
     let labelCol = labelSelect ? parseInt(labelSelect.value, 10) : 0;
@@ -1254,11 +1284,15 @@ document.addEventListener('DOMContentLoaded', async () => {
     const currentType = chartTypeSelect.value || 'bar';
     const headerName = sheet.headers[numCol] || 'Metric Value';
 
-    if (chartTitleInput && !chartTitleInput.getAttribute('data-customized')) {
-      chartTitleInput.value = `${headerName} — Live Observatory Draft`;
+    if (chartSubtitleDisplay) {
+      chartSubtitleDisplay.textContent = `Live interactive rendering from: ${sheetName}`;
     }
 
-    const currentChartTitle = chartTitleInput ? chartTitleInput.value : `${headerName} — Live Observatory Draft`;
+    if (chartTitleInput && !chartTitleInput.getAttribute('data-customized')) {
+      chartTitleInput.value = `${headerName} — ${sheetName}`;
+    }
+
+    const currentChartTitle = chartTitleInput ? chartTitleInput.value : `${headerName} — ${sheetName}`;
 
     const clsuPalettes = [
       { border: '#146C36', bg: 'rgba(20, 108, 54, 0.75)' },
@@ -1275,10 +1309,10 @@ document.addEventListener('DOMContentLoaded', async () => {
     studioChartInstance = new Chart(ctx, {
       type: currentType,
       data: {
-        labels: labels.slice(0, 25),
+        labels: labels.slice(0, 30),
         datasets: [{
-          label: headerName,
-          data: dataValues.slice(0, 25),
+          label: `${headerName} (${sheetName})`,
+          data: dataValues.slice(0, 30),
           backgroundColor: (currentType === 'pie' || currentType === 'doughnut' || currentType === 'polarArea') ? clsuPalettes.map(c => c.bg) : 'rgba(20, 108, 54, 0.7)',
           borderColor: (currentType === 'pie' || currentType === 'doughnut' || currentType === 'polarArea') ? clsuPalettes.map(c => c.border) : '#146C36',
           borderWidth: 2,
@@ -1367,11 +1401,11 @@ document.addEventListener('DOMContentLoaded', async () => {
   if (studioBtnAddField) {
     studioBtnAddField.addEventListener('click', () => {
       if (!studioActiveRecord) return;
-      const sheetName = Object.keys(studioActiveRecord.extractedData)[0];
-      const sheet = studioActiveRecord.extractedData[sheetName];
-      if (!sheet) return;
+      const activeSheetInfo = getStudioActiveSheet(studioActiveRecord);
+      if (!activeSheetInfo || !activeSheetInfo.data) return;
+      const sheet = activeSheetInfo.data;
 
-      const fieldName = prompt('Enter new Field / Metric Name (e.g. Target Score, 2025 Value, Category):', `Metric_${sheet.headers.length + 1}`);
+      const fieldName = prompt(`Enter new Field / Metric Name for sheet "${activeSheetInfo.name}":`, `Metric_${sheet.headers.length + 1}`);
       if (fieldName && fieldName.trim()) {
         sheet.headers.push(fieldName.trim());
         sheet.rows.forEach(r => r.push(''));
@@ -1387,9 +1421,9 @@ document.addEventListener('DOMContentLoaded', async () => {
   if (studioBtnAddRow) {
     studioBtnAddRow.addEventListener('click', () => {
       if (!studioActiveRecord) return;
-      const sheetName = Object.keys(studioActiveRecord.extractedData)[0];
-      const sheet = studioActiveRecord.extractedData[sheetName];
-      if (!sheet) return;
+      const activeSheetInfo = getStudioActiveSheet(studioActiveRecord);
+      if (!activeSheetInfo || !activeSheetInfo.data) return;
+      const sheet = activeSheetInfo.data;
 
       const emptyRow = sheet.headers.map((h, i) => i === 0 ? `New Item ${sheet.rows.length + 1}` : 0);
       sheet.rows.push(emptyRow);

@@ -727,25 +727,47 @@ body {
   padding: 1.5rem 1rem;
   position: relative;
   scrollbar-width: thin;
-  scrollbar-color: #767A7E #525659;
+  scrollbar-color: #767A7E #323639;
+}
+
+/* When viewing a spreadsheet, make table fill viewport so bottom horizontal scrollbar is permanently pinned to the bottom of the viewer window */
+.acrobat-viewer-body.sheet-mode {
+  padding: 0 !important;
+  background: #FFFFFF !important;
+  overflow: auto !important; /* Both X and Y scrollbars stay pinned to the 520px viewer edges! */
+  scrollbar-color: #64748B #F1F5F9;
 }
 
 .acrobat-viewer-body::-webkit-scrollbar {
-  width: 9px;
-  height: 9px;
+  width: 10px;
+  height: 10px;
 }
 
 .acrobat-viewer-body::-webkit-scrollbar-track {
-  background: #525659;
+  background: #2D3033;
+}
+
+.acrobat-viewer-body.sheet-mode::-webkit-scrollbar-track {
+  background: #F1F5F9;
 }
 
 .acrobat-viewer-body::-webkit-scrollbar-thumb {
   background: #767A7E;
-  border-radius: 4px;
+  border-radius: 5px;
+}
+
+.acrobat-viewer-body.sheet-mode::-webkit-scrollbar-thumb {
+  background: #64748B;
+  border-radius: 5px;
+  border: 2px solid #F1F5F9;
 }
 
 .acrobat-viewer-body::-webkit-scrollbar-thumb:hover {
   background: #9AA0A6;
+}
+
+.acrobat-viewer-body.sheet-mode::-webkit-scrollbar-thumb:hover {
+  background: #334155;
 }
 
 /* Acrobat Multi-Pages Stack */
@@ -824,36 +846,45 @@ body {
 /* Spreadsheet Horizontal Scroll Container */
 .doc-sheet-wrapper {
   background: #FFFFFF;
-  border-radius: 6px;
-  overflow-x: auto;
-  box-shadow: 0 4px 18px rgba(0, 0, 0, 0.35);
-  border: 1px solid #CBD5E1;
-  width: 100%;
+  border-radius: 0;
+  width: max-content;
   min-width: 100%;
 }
 
 /* Mini Spreadsheet Table View */
 .mini-sheet-table {
-  width: 100%;
-  border-collapse: collapse;
+  width: max-content;
+  min-width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
   font-family: var(--font-sans);
   font-size: 0.76rem;
   color: #0F172A;
 }
 
 .mini-sheet-table thead th {
-  background: #F8FAFC;
-  color: #334155;
+  background: #F1F5F9;
+  color: #1E293B;
   font-weight: 800;
   font-size: 0.72rem;
   text-transform: uppercase;
-  padding: 0.4rem 0.55rem;
-  border: 1px solid #CBD5E1;
+  padding: 0.45rem 0.65rem;
+  border-bottom: 2px solid #CBD5E1;
+  border-right: 1px solid #E2E8F0;
   position: sticky;
   top: 0;
-  z-index: 5;
+  z-index: 10;
   white-space: nowrap;
   letter-spacing: 0.02em;
+}
+
+.mini-sheet-table thead th:first-child {
+  position: sticky;
+  left: 0;
+  top: 0;
+  z-index: 15;
+  background: #E2E8F0;
+  border-right: 2px solid #CBD5E1;
 }
 
 .mini-sheet-table tbody tr {
@@ -870,8 +901,9 @@ body {
 }
 
 .mini-sheet-table td {
-  border: 1px solid #E2E8F0;
-  padding: 0.35rem 0.5rem;
+  border-bottom: 1px solid #E2E8F0;
+  border-right: 1px solid #E2E8F0;
+  padding: 0.35rem 0.55rem;
   white-space: nowrap;
   color: #0F172A;
   font-size: 0.76rem;
@@ -886,11 +918,13 @@ body {
   font-weight: 700;
   font-size: 0.7rem;
   text-align: center;
-  width: 32px;
+  width: 38px;
+  min-width: 38px;
   cursor: default;
   position: sticky;
   left: 0;
-  z-index: 2;
+  z-index: 5;
+  border-right: 2px solid #CBD5E1;
 }
 
 .mini-sheet-table td:not(.row-num):hover {
