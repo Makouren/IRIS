@@ -673,62 +673,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (studioStatusSelect) studioStatusSelect.value = record.status || 'Pending Review';
     if (studioNotesInput) studioNotesInput.value = record.adminNotes || '';
 
-    // 1. Render Left Column: Scanned Source Reference
-    if (studioDocContentArea) {
-      studioDocContentArea.innerHTML = '';
-      
-      if (record.extractedData && typeof record.extractedData === 'object' && Object.keys(record.extractedData).length > 0) {
-        const sheetKeys = Object.keys(record.extractedData).filter(k => {
-          const item = record.extractedData[k];
-          return item && Array.isArray(item.headers) && Array.isArray(item.rows);
-        });
-
-        if (sheetKeys.length > 0) {
-          studioDocSheetSelectorContainer.style.display = 'flex';
-          studioDocSheetSelect.innerHTML = '';
-          sheetKeys.forEach(k => {
-            const opt = document.createElement('option');
-            opt.value = k;
-            opt.textContent = k;
-            studioDocSheetSelect.appendChild(opt);
-          });
-
-          function displaySourceSheet(sheetKey) {
-            const sheet = record.extractedData[sheetKey];
-            if (!sheet) return;
-
-            let html = `<div style="margin-bottom: 0.75rem; font-weight: 800; color: var(--clsu-green); font-size: 0.8rem; text-transform: uppercase;">Worksheet: ${sheetKey} (${sheet.rows ? sheet.rows.length : 0} rows)</div>`;
-            html += `<div style="display: flex; flex-direction: column; gap: 0.4rem;">`;
-            
-            (sheet.rows || []).slice(0, 30).forEach((row, rIdx) => {
-              html += `<div style="background: #F8FAF8; border: 1px solid #E2E8E2; border-radius: 4px; padding: 0.35rem 0.5rem; display: flex; flex-wrap: wrap; gap: 0.3rem; align-items: center;">`;
-              html += `<span style="font-size: 0.72rem; color: #94A3B8; font-weight: 700; min-width: 25px;">R${rIdx+1}:</span>`;
-              (row || []).forEach((cell, cIdx) => {
-                if (cell !== undefined && cell !== null && String(cell).trim()) {
-                  const headerLabel = sheet.headers[cIdx] ? `${sheet.headers[cIdx]}: ` : '';
-                  const safeVal = String(cell).replace(/"/g, '&quot;');
-                  html += `<span class="copy-token" data-val="${safeVal}" title="Click to copy: ${headerLabel}${safeVal}"><strong>${headerLabel}</strong>${cell} 📋</span>`;
-                }
-              });
-              html += `</div>`;
-            });
-            html += `</div>`;
-            studioDocContentArea.innerHTML = html;
-            wireCopyTokens();
-          }
-
-          studioDocSheetSelect.onchange = (e) => displaySourceSheet(e.target.value);
-          displaySourceSheet(sheetKeys[0]);
-
-        } else {
-          studioDocSheetSelectorContainer.style.display = 'none';
-          renderRawTextTokens(record.rawText, studioDocContentArea);
-        }
-      } else {
-        studioDocSheetSelectorContainer.style.display = 'none';
-        renderRawTextTokens(record.rawText, studioDocContentArea);
-      }
-    }
+    // 1. Render Left Column: Scanned Document Window Screen
+    renderDocumentWindow(record);
 
     // 2. Render Right Column: Live Editable Table Grid & Chart
     ensureTableDataStructure(record);
@@ -738,58 +684,217 @@ document.addEventListener('DOMContentLoaded', async () => {
     renderStudioChart(record);
   }
 
-  function renderRawTextTokens(rawText, container) {
-    if (!rawText) {
-      container.innerHTML = '<div style="color: #94A3B8; padding: 1rem; text-align: center;">No extracted text available.</div>';
-      return;
+  // ----------------------------------------------------
+  // Mini Document Window Screen Viewer Engine
+  // ----------------------------------------------------
+  let docWindowActiveView = 'sheet'; // 'sheet' or 'text'
+  let docWindowActiveSheetKey = '';
+  let docWindowSearchQuery = '';
+
+  function renderDocumentWindow(record) {
+    const docWindowTitle = document.getElementById('docWindowTitle');
+    const docWindowMeta = document.getElementById('docWindowMeta');
+    const docContentArea = document.getElementById('studioDocContentArea');
+    const sheetSelectorContainer = document.getElementById('studioDocSheetSelectorContainer');
+    const sheetSelect = document.getElementById('studioDocSheetSelect');
+    const searchInput = document.getElementById('docWindowSearchInput');
+    const btnDocViewSheet = document.getElementById('btnDocViewSheet');
+    const btnDocViewText = document.getElementById('btnDocViewText');
+
+    if (!record || !docContentArea) return;
+
+    if (docWindowTitle) {
+      docWindowTitle.textContent = `${record.fileName}`;
+      docWindowTitle.title = record.fileName;
     }
 
-    let html = `<div style="font-size: 0.78rem; font-weight: 800; color: var(--clsu-green); margin-bottom: 0.5rem; text-transform: uppercase;">Extracted Text & Metrics:</div>`;
-    const lines = rawText.split('\n').map(l => l.trim()).filter(Boolean);
-    
-    html += `<div style="display: flex; flex-direction: column; gap: 0.35rem;">`;
-    lines.slice(0, 40).forEach(line => {
-      const parts = line.split(/[:\-\=]/);
-      if (parts.length >= 2) {
-        const key = parts[0].trim();
-        const val = parts.slice(1).join(':').trim();
-        const safeVal = val.replace(/"/g, '&quot;');
-        html += `<div style="background: #F8FAF8; border: 1px solid #E2E8E2; padding: 0.35rem 0.55rem; border-radius: 4px; display: flex; justify-content: space-between; align-items: center; gap: 0.5rem;">
-          <span style="font-size: 0.8rem; font-weight: 600; color: #334155;">${key}</span>
-          <span class="copy-token" data-val="${safeVal}" title="Click to copy">${val} 📋</span>
-        </div>`;
-      } else {
-        const safeVal = line.replace(/"/g, '&quot;');
-        html += `<div style="padding: 0.25rem 0.4rem; font-size: 0.8rem; color: #1E293B;">
-          <span>${line}</span> <span class="copy-token" data-val="${safeVal}" style="font-size: 0.7rem;">Copy 📋</span>
-        </div>`;
+    const hasSheets = record.extractedData && typeof record.extractedData === 'object' && Object.keys(record.extractedData).length > 0;
+    const sheetKeys = hasSheets ? Object.keys(record.extractedData).filter(k => {
+      const item = record.extractedData[k];
+      return item && Array.isArray(item.headers) && Array.isArray(item.rows);
+    }) : [];
+
+    if (sheetKeys.length > 0) {
+      if (!docWindowActiveSheetKey || !sheetKeys.includes(docWindowActiveSheetKey)) {
+        docWindowActiveSheetKey = sheetKeys[0];
       }
-    });
-    html += `</div>`;
-    container.innerHTML = html;
-    wireCopyTokens();
+      sheetSelectorContainer.style.display = 'flex';
+      sheetSelect.innerHTML = '';
+      sheetKeys.forEach(k => {
+        const opt = document.createElement('option');
+        opt.value = k;
+        opt.textContent = k;
+        if (k === docWindowActiveSheetKey) opt.selected = true;
+        sheetSelect.appendChild(opt);
+      });
+
+      sheetSelect.onchange = (e) => {
+        docWindowActiveSheetKey = e.target.value;
+        renderDocWindowBody(record);
+      };
+    } else {
+      sheetSelectorContainer.style.display = 'none';
+      docWindowActiveView = 'text';
+    }
+
+    // View Toggle Buttons
+    if (btnDocViewSheet && btnDocViewText) {
+      if (sheetKeys.length > 0) {
+        btnDocViewSheet.style.display = 'inline-block';
+      } else {
+        btnDocViewSheet.style.display = 'none';
+        docWindowActiveView = 'text';
+      }
+
+      btnDocViewSheet.className = `doc-window-view-btn ${docWindowActiveView === 'sheet' ? 'active' : ''}`;
+      btnDocViewText.className = `doc-window-view-btn ${docWindowActiveView === 'text' ? 'active' : ''}`;
+
+      btnDocViewSheet.onclick = () => {
+        docWindowActiveView = 'sheet';
+        btnDocViewSheet.classList.add('active');
+        btnDocViewText.classList.remove('active');
+        renderDocWindowBody(record);
+      };
+
+      btnDocViewText.onclick = () => {
+        docWindowActiveView = 'text';
+        btnDocViewText.classList.add('active');
+        btnDocViewSheet.classList.remove('active');
+        renderDocWindowBody(record);
+      };
+    }
+
+    // Live Search Input Filter
+    if (searchInput) {
+      searchInput.value = docWindowSearchQuery;
+      searchInput.oninput = (e) => {
+        docWindowSearchQuery = (e.target.value || '').toLowerCase().trim();
+        renderDocWindowBody(record);
+      };
+    }
+
+    renderDocWindowBody(record);
   }
 
-  function wireCopyTokens() {
-    document.querySelectorAll('.copy-token').forEach(token => {
-      token.onclick = (e) => {
-        e.stopPropagation();
-        const val = token.getAttribute('data-val');
-        if (val) {
-          navigator.clipboard.writeText(val).then(() => {
-            const orig = token.innerHTML;
-            token.innerHTML = '✓ Copied!';
-            token.style.background = '#ECFDF5';
-            token.style.color = '#065F46';
-            setTimeout(() => {
-              token.innerHTML = orig;
-              token.style.background = '';
-              token.style.color = '';
-            }, 1200);
-          });
-        }
-      };
-    });
+  function renderDocWindowBody(record) {
+    const docContentArea = document.getElementById('studioDocContentArea');
+    const docWindowMeta = document.getElementById('docWindowMeta');
+    const copyStatus = document.getElementById('docWindowCopyStatus');
+    if (!docContentArea) return;
+
+    if (docWindowActiveView === 'sheet' && record.extractedData && record.extractedData[docWindowActiveSheetKey]) {
+      const sheet = record.extractedData[docWindowActiveSheetKey];
+      const headers = sheet.headers || [];
+      const rows = sheet.rows || [];
+
+      if (docWindowMeta) {
+        docWindowMeta.textContent = `${rows.length} ROWS • ${(record.fileType || 'SHEET').toUpperCase()}`;
+      }
+
+      // Filter rows if search active
+      const filteredRows = rows.map((row, origIdx) => ({ row, origIdx })).filter(item => {
+        if (!docWindowSearchQuery) return true;
+        return item.row.some(cell => String(cell || '').toLowerCase().includes(docWindowSearchQuery));
+      });
+
+      if (filteredRows.length === 0) {
+        docContentArea.innerHTML = `<div style="color: #94A3B8; font-size: 0.82rem; padding: 2rem; text-align: center;">No matching rows for "${docWindowSearchQuery}"</div>`;
+        return;
+      }
+
+      let html = `<table class="mini-sheet-table"><thead><tr>`;
+      html += `<th style="width: 32px; text-align: center; position: sticky; left: 0; z-index: 6; background: #F1F5F9;">#</th>`;
+      headers.forEach((h, cIdx) => {
+        const colLetter = String.fromCharCode(65 + (cIdx % 26));
+        html += `<th><span style="font-size: 0.65rem; color: #94A3B8; margin-right: 4px;">${colLetter}</span> ${h || `Col ${cIdx + 1}`}</th>`;
+      });
+      html += `</tr></thead><tbody>`;
+
+      filteredRows.forEach(({ row, origIdx }) => {
+        html += `<tr>`;
+        html += `<td class="row-num">${origIdx + 1}</td>`;
+        headers.forEach((h, cIdx) => {
+          const val = row[cIdx] !== undefined && row[cIdx] !== null ? row[cIdx] : '';
+          const strVal = String(val);
+          const safeVal = strVal.replace(/"/g, '&quot;');
+          html += `<td class="mini-sheet-cell" data-val="${safeVal}" title="Click to copy: ${safeVal}">${strVal}</td>`;
+        });
+        html += `</tr>`;
+      });
+
+      html += `</tbody></table>`;
+      docContentArea.innerHTML = html;
+
+      // Wire 1-Click Copy on Table Cells
+      docContentArea.querySelectorAll('.mini-sheet-cell').forEach(cell => {
+        cell.onclick = (e) => {
+          const val = cell.getAttribute('data-val');
+          if (val !== undefined && val !== null) {
+            navigator.clipboard.writeText(val).then(() => {
+              cell.classList.add('copied-flash');
+              if (copyStatus) {
+                copyStatus.textContent = `✓ Copied: "${val.length > 25 ? val.substr(0, 25) + '...' : val}"`;
+                setTimeout(() => { if (copyStatus) copyStatus.textContent = ''; }, 2000);
+              }
+              setTimeout(() => { cell.classList.remove('copied-flash'); }, 700);
+            });
+          }
+        };
+      });
+
+    } else {
+      // Document Text Reader View
+      const rawText = record.rawText || '';
+      const lines = rawText.split('\n').map(l => l.trim()).filter(Boolean);
+
+      if (docWindowMeta) {
+        docWindowMeta.textContent = `${lines.length} LINES • ${(record.fileType || 'DOC').toUpperCase()}`;
+      }
+
+      if (lines.length === 0) {
+        docContentArea.innerHTML = `<div style="color: #94A3B8; font-size: 0.82rem; padding: 2rem; text-align: center;">No raw document text available.</div>`;
+        return;
+      }
+
+      const filteredLines = lines.map((l, origIdx) => ({ l, origIdx })).filter(item => {
+        if (!docWindowSearchQuery) return true;
+        return item.l.toLowerCase().includes(docWindowSearchQuery);
+      });
+
+      let html = `<div class="mini-doc-page">`;
+      filteredLines.forEach(({ l, origIdx }) => {
+        const safeVal = l.replace(/"/g, '&quot;');
+        html += `
+          <div class="mini-doc-line">
+            <span class="line-no">${origIdx + 1}</span>
+            <span class="line-text" data-val="${safeVal}" title="Click to copy full line">${l}</span>
+          </div>
+        `;
+      });
+      html += `</div>`;
+      docContentArea.innerHTML = html;
+
+      // Wire 1-Click Copy on Text Lines
+      docContentArea.querySelectorAll('.line-text').forEach(el => {
+        el.onclick = (e) => {
+          const val = el.getAttribute('data-val');
+          if (val) {
+            navigator.clipboard.writeText(val).then(() => {
+              el.style.color = '#047857';
+              el.style.fontWeight = '800';
+              if (copyStatus) {
+                copyStatus.textContent = `✓ Copied line ${el.previousElementSibling ? el.previousElementSibling.textContent : ''}`;
+                setTimeout(() => { if (copyStatus) copyStatus.textContent = ''; }, 2000);
+              }
+              setTimeout(() => {
+                el.style.color = '';
+                el.style.fontWeight = '';
+              }, 700);
+            });
+          }
+        };
+      });
+    }
   }
 
   function ensureTableDataStructure(record) {

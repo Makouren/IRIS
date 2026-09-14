@@ -560,24 +560,24 @@ body {
 
 .studio-grid {
   display: grid;
-  grid-template-columns: 400px 1fr;
+  grid-template-columns: 480px 1fr;
   gap: 1.5rem;
 }
 
-@media (max-width: 1024px) {
+@media (max-width: 1200px) {
   .studio-grid {
     grid-template-columns: 1fr;
   }
 }
 
 .studio-left-card {
-  background: #FAFCFA;
+  background: #FFFFFF;
   border: 1.5px solid var(--border-light);
   border-radius: var(--radius-md);
-  padding: 1.25rem;
+  padding: 1rem;
   display: flex;
   flex-direction: column;
-  max-height: 800px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
 }
 
 .studio-right-card {
@@ -598,45 +598,231 @@ body {
   margin-bottom: 0.5rem;
 }
 
-.studio-ref-scroll {
-  flex: 1;
-  overflow-y: auto;
-  border: 1px solid var(--border-light);
-  border-radius: var(--radius-sm);
-  background: #FFFFFF;
-  padding: 1rem;
-  font-family: var(--font-mono);
-  font-size: 0.82rem;
-  line-height: 1.6;
+/* ====================================================================
+   Mini Document Window Screen Component
+   ==================================================================== */
+.doc-window-container {
+  display: flex;
+  flex-direction: column;
+  border: 1.5px solid #CBD5E1;
+  border-radius: 8px;
+  overflow: hidden;
+  background: #F8FAFC;
+  box-shadow: 0 4px 14px rgba(15, 23, 42, 0.08);
 }
 
-.copy-token {
-  display: inline-flex;
+.doc-window-titlebar {
+  background: #1E293B;
+  color: #F8FAFC;
+  padding: 0.5rem 0.75rem;
+  display: flex;
   align-items: center;
-  gap: 0.25rem;
+  justify-content: space-between;
+  border-bottom: 1px solid #334155;
+}
+
+.doc-window-dots {
+  display: flex;
+  gap: 5px;
+  align-items: center;
+}
+
+.doc-window-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  display: inline-block;
+}
+
+.doc-window-dot.red { background: #EF4444; }
+.doc-window-dot.yellow { background: #F59E0B; }
+.doc-window-dot.green { background: #10B981; }
+
+.doc-window-title {
+  font-size: 0.76rem;
+  font-weight: 700;
+  color: #E2E8F0;
+  font-family: var(--font-mono);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 250px;
+}
+
+.doc-window-toolbar {
   background: #F1F5F9;
+  border-bottom: 1px solid #E2E8F0;
+  padding: 0.45rem 0.65rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.doc-window-view-btn {
+  background: #FFFFFF;
   border: 1px solid #CBD5E1;
-  color: #0F172A;
-  padding: 0.15rem 0.45rem;
+  color: #334155;
+  font-size: 0.72rem;
+  font-weight: 700;
+  padding: 0.2rem 0.5rem;
   border-radius: 4px;
-  font-size: 0.78rem;
-  font-weight: 600;
   cursor: pointer;
   transition: all 0.15s ease;
-  margin: 2px;
 }
 
-.copy-token:hover {
+.doc-window-view-btn:hover {
   background: #E2E8F0;
-  border-color: var(--clsu-green);
   color: var(--clsu-green);
-  transform: translateY(-1px);
 }
 
-.copy-token:active {
-  background: #ECFDF5;
-  color: #065F46;
+.doc-window-view-btn.active {
+  background: var(--clsu-green);
+  color: #FFFFFF;
+  border-color: var(--clsu-green);
 }
+
+.doc-window-search {
+  background: #FFFFFF;
+  border: 1px solid #CBD5E1;
+  border-radius: 4px;
+  padding: 0.2rem 0.5rem;
+  font-size: 0.75rem;
+  color: #0F172A;
+  width: 130px;
+  outline: none;
+}
+
+.doc-window-search:focus {
+  border-color: var(--clsu-green);
+  box-shadow: 0 0 0 2px rgba(20, 108, 54, 0.15);
+}
+
+.doc-window-body {
+  height: 480px;
+  overflow: auto;
+  background: #FFFFFF;
+  position: relative;
+}
+
+/* Mini Spreadsheet Table View */
+.mini-sheet-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-family: var(--font-sans);
+  font-size: 0.76rem;
+  color: #0F172A;
+}
+
+.mini-sheet-table thead th {
+  background: #F8FAFC;
+  color: #334155;
+  font-weight: 800;
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  padding: 0.4rem 0.55rem;
+  border: 1px solid #E2E8F0;
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  white-space: nowrap;
+  letter-spacing: 0.02em;
+}
+
+.mini-sheet-table tbody tr {
+  transition: background 0.1s ease;
+}
+
+.mini-sheet-table tbody tr:nth-child(even) {
+  background: #FAFCFA;
+}
+
+.mini-sheet-table tbody tr:hover {
+  background: #EFF6FF !important;
+}
+
+.mini-sheet-table td {
+  border: 1px solid #E2E8F0;
+  padding: 0.35rem 0.5rem;
+  white-space: nowrap;
+  color: #0F172A;
+  font-size: 0.76rem;
+  user-select: text;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.mini-sheet-table td.row-num {
+  background: #F1F5F9;
+  color: #64748B;
+  font-weight: 700;
+  font-size: 0.7rem;
+  text-align: center;
+  width: 32px;
+  cursor: default;
+  position: sticky;
+  left: 0;
+  z-index: 2;
+}
+
+.mini-sheet-table td:not(.row-num):hover {
+  background: #DCFCE7;
+  color: #065F46;
+  font-weight: 700;
+}
+
+.mini-sheet-table td.copied-flash {
+  background: #10B981 !important;
+  color: #FFFFFF !important;
+  font-weight: 800;
+}
+
+/* Mini Document Text View */
+.mini-doc-page {
+  padding: 1.25rem;
+  font-family: var(--font-mono);
+  font-size: 0.8rem;
+  line-height: 1.7;
+  color: #1E293B;
+  background: #FFFFFF;
+  min-height: 100%;
+}
+
+.mini-doc-page p {
+  margin-bottom: 0.75rem;
+}
+
+.mini-doc-line {
+  display: flex;
+  gap: 0.5rem;
+  padding: 0.15rem 0;
+  border-bottom: 1px solid #F1F5F9;
+  align-items: baseline;
+}
+
+.mini-doc-line:hover {
+  background: #F0FDF4;
+}
+
+.mini-doc-line .line-no {
+  color: #94A3B8;
+  font-size: 0.7rem;
+  min-width: 24px;
+  user-select: none;
+}
+
+.mini-doc-line .line-text {
+  color: #0F172A;
+  cursor: pointer;
+  flex: 1;
+}
+
+.mini-doc-line .line-text:hover {
+  color: var(--clsu-green);
+  font-weight: 600;
+}
+
 
 .studio-chart-box {
   background: #F8FAF8;

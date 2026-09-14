@@ -279,25 +279,56 @@
         <!-- Studio 2-Column Split View: Source Document (Left) vs Live Chart & Field Studio (Right) -->
         <div class="studio-grid">
           
-          <!-- LEFT COLUMN: Scanned Document Reference (Copy Source) -->
+          <!-- LEFT COLUMN: Scanned Document Window Screen (Side-by-Side Document Reader) -->
           <div class="studio-left-card">
-            <div class="studio-card-title" style="display: flex; justify-content: space-between; align-items: center;">
-              <span>📄 Scanned Source Reference</span>
-              <span class="badge badge-low" style="font-size: 0.7rem;">Click to Copy Value</span>
+            <div class="studio-card-title" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.4rem;">
+              <span>🪟 Scanned Source Document Window</span>
+              <span class="badge badge-low" style="font-size: 0.68rem; background: #ECFDF5; color: #047857;">Live Ingestion View</span>
             </div>
-            <p style="font-size: 0.8rem; color: #64748B; margin-bottom: 0.85rem;">
-              Click any token badge below or highlight text to copy and paste directly into your charts and fields.
+            <p style="font-size: 0.78rem; color: #64748B; margin-bottom: 0.75rem;">
+              Read the full file directly side-by-side. Click any cell or word to copy value directly into your dashboard fields.
             </p>
 
-            <!-- Sheet selector for spreadsheets -->
-            <div id="studioDocSheetSelectorContainer" style="display: none; margin-bottom: 0.75rem; align-items: center; gap: 0.5rem;">
-              <label style="font-size: 0.78rem; font-weight: 800; color: var(--clsu-green);">Worksheet:</label>
-              <select id="studioDocSheetSelect" class="form-input" style="padding: 0.3rem 0.6rem; font-size: 0.8rem; font-weight: 600;"></select>
+            <!-- Document Window Screen Frame -->
+            <div class="doc-window-container">
+              <!-- Window Titlebar -->
+              <div class="doc-window-titlebar">
+                <div class="doc-window-dots">
+                  <span class="doc-window-dot red"></span>
+                  <span class="doc-window-dot yellow"></span>
+                  <span class="doc-window-dot green"></span>
+                </div>
+                <div class="doc-window-title" id="docWindowTitle">document_source.xlsx</div>
+                <div style="font-size: 0.68rem; color: #94A3B8; font-family: var(--font-mono);" id="docWindowMeta">READY</div>
+              </div>
+
+              <!-- Window Toolbar -->
+              <div class="doc-window-toolbar">
+                <div style="display: flex; gap: 0.35rem; align-items: center;">
+                  <button type="button" id="btnDocViewSheet" class="doc-window-view-btn active" title="View as Spreadsheet Grid">📊 Sheet</button>
+                  <button type="button" id="btnDocViewText" class="doc-window-view-btn" title="View as Formatted Document Reader">📄 Text</button>
+                </div>
+
+                <!-- Sheet dropdown (when applicable) -->
+                <div id="studioDocSheetSelectorContainer" style="display: none; align-items: center; gap: 0.3rem;">
+                  <span style="font-size: 0.7rem; font-weight: 700; color: #334155;">Tab:</span>
+                  <select id="studioDocSheetSelect" class="form-input" style="padding: 0.2rem 0.4rem; font-size: 0.72rem; font-weight: 600; width: auto; max-width: 120px;"></select>
+                </div>
+
+                <!-- Window Quick Search / Filter -->
+                <input type="text" id="docWindowSearchInput" class="doc-window-search" placeholder="🔍 Search file...">
+              </div>
+
+              <!-- Window Body Area -->
+              <div id="studioDocContentArea" class="doc-window-body">
+                <div style="color: #94A3B8; font-size: 0.82rem; padding: 2rem; text-align: center;">Loading scanned source document...</div>
+              </div>
             </div>
 
-            <!-- Reference Content Area -->
-            <div id="studioDocContentArea" class="studio-ref-scroll">
-              <div style="color: #94A3B8; font-size: 0.85rem; padding: 1.5rem; text-align: center;">Select a dataset above to inspect extracted source values.</div>
+            <!-- Quick copy helper note -->
+            <div style="margin-top: 0.65rem; font-size: 0.74rem; color: #64748B; display: flex; align-items: center; justify-content: space-between;">
+              <span>💡 <strong>Tip:</strong> Click any cell/line to copy its value.</span>
+              <span id="docWindowCopyStatus" style="color: var(--clsu-green); font-weight: 700;"></span>
             </div>
           </div>
 
