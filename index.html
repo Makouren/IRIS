@@ -3,8 +3,8 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>IRIS AI — File Scanner & Draft Visualization Portal</title>
-  <meta name="description" content="AI File Scanner for Images, Excel, DOCX, and PDF with layout-aware parsing, draft chart suggestions, and Admin data editor.">
+  <title>CLSU Performance Observatory — IRIS AI File Scanner & Ingestion System</title>
+  <meta name="description" content="Central Luzon State University (CLSU) IRIS AI File Scanner for Spreadsheets, PDFs, and Word DOCX with draft chart suggestions and Admin data editor.">
   
   <!-- CSS Stylesheet -->
   <link rel="stylesheet" href="css/styles.css">
@@ -15,20 +15,19 @@
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/mammoth@1.6.0/mammoth.browser.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
 </head>
 <body>
 
-  <!-- App Header -->
+  <!-- App Header — CLSU Institutional Style -->
   <header class="app-header">
     <div class="brand-container">
-      <div class="brand-logo">👁️</div>
+      <div class="brand-logo-seal">🌾</div>
       <div>
-        <div style="display: flex; align-items: center; gap: 0.5rem;">
-          <span class="brand-title">IRIS AI</span>
-          <span class="brand-badge">File Scanner & Ingestion</span>
+        <div style="display: flex; align-items: center; gap: 0.6rem;">
+          <span class="brand-title">CLSU Performance Observatory</span>
+          <span class="brand-badge">IRIS File Ingestion</span>
         </div>
-        <div style="font-size: 0.75rem; color: var(--text-dim);">International Rapport Insight System</div>
+        <div class="brand-subline">Central Luzon State University • International Rapport Insight System</div>
       </div>
     </div>
 
@@ -38,9 +37,15 @@
         <span>🔍</span> Scanner Workspace
       </button>
       <button id="navAdminBtn" class="nav-btn">
-        <span>🗄️</span> Admin Data Dashboard
+        <span>🗄️</span> Rankings & Admin Dashboard
       </button>
     </nav>
+
+    <!-- Header User Profile Capsule -->
+    <div class="user-capsule">
+      <span class="user-pill">👤 Welcome, Admin</span>
+      <button class="logout-pill" onclick="alert('Admin session active.')">Logout</button>
+    </div>
   </header>
 
   <!-- App Main Container -->
@@ -49,37 +54,43 @@
     <!-- ================= SCANNER WORKSPACE VIEW ================= -->
     <section id="scannerWorkspaceView">
 
+      <div class="clsu-section-title">
+        <span>📊</span> University-Wide Overview & Ingestion
+      </div>
+
       <!-- Hero File Dropzone -->
       <div id="dropzone" class="dropzone-container">
-        <div class="radar-glow"></div>
         
         <div class="dropzone-icon">
-          <svg width="36" height="36" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+          <svg width="32" height="32" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"></path>
           </svg>
         </div>
 
-        <h1 class="dropzone-title">Upload Spreadsheets, PDFs, DOCX, or Images</h1>
-        <p class="dropzone-subtitle">Multi-sheet parsing, layout-aware OCR, tabular field extraction, and draft chart suggestions</p>
+        <h1 class="dropzone-title">Upload Spreadsheets, PDFs, or Word Documents</h1>
+        <p class="dropzone-subtitle">Multi-sheet parsing, institutional text extraction, and draft visualization suggestions for university performance metrics</p>
 
         <div class="format-badges">
           <span class="format-chip excel">📊 Spreadsheets (XLSX, XLS, CSV)</span>
-          <span class="format-chip pdf">📄 PDF Documents (Native & Scanned)</span>
-          <span class="format-chip docx">📝 Word (DOCX + Media Extraction)</span>
+          <span class="format-chip pdf">📄 PDF Documents (Reports & Infographs)</span>
+          <span class="format-chip docx">📝 Word (DOCX Status Links)</span>
+          <!-- [SLATED FOR REVIEW & REVISION]: Standalone image OCR scanning temporarily disabled
           <span class="format-chip image">🖼️ Images (PNG, JPG, WEBP)</span>
+          -->
         </div>
 
-        <input type="file" id="fileInput" multiple accept="image/*,.xlsx,.xls,.csv,.docx,.doc,.pdf" style="display: none;">
+        <!-- [SLATED FOR REVIEW & REVISION]: Image upload formats disabled (*.png, *.jpg, *.webp) -->
+        <input type="file" id="fileInput" multiple accept=".xlsx,.xls,.csv,.docx,.doc,.pdf" style="display: none;">
         
         <div style="margin-bottom: 1.5rem;">
-          <button id="btnBrowse" class="btn-icon" style="padding: 0.75rem 1.75rem; font-size: 1rem; background: linear-gradient(135deg, var(--accent-violet), #6D28D9); border: none; margin: 0 auto;">
-            <span>📁</span> Browse Local Computer Files
+          <button id="btnBrowse" class="btn-icon" style="padding: 0.75rem 2rem; font-size: 0.95rem; margin: 0 auto;">
+            <span>📁</span> Browse Institutional Files
           </button>
         </div>
 
         <!-- 1-Click Pre-loaded Institutional Samples -->
         <div class="samples-container">
-          <span class="samples-label">Test 1-Click Sample Documents:</span>
+          <span class="samples-label">Test 1-Click Samples:</span>
           <button class="sample-btn" data-sample="payroll">
             <span>📊</span> QAO Evaluation Scores (.xlsx)
           </button>
@@ -89,9 +100,11 @@
           <button class="sample-btn" data-sample="contract">
             <span>📝</span> Program Accreditation (.docx)
           </button>
+          <!-- [SLATED FOR REVIEW & REVISION]: Sample image scanning disabled
           <button class="sample-btn" data-sample="invoice">
             <span>🖼️</span> Performance Certificate (.png)
           </button>
+          -->
         </div>
       </div>
 
@@ -112,8 +125,8 @@
         <!-- Left Batch Sidebar Queue -->
         <aside class="queue-sidebar">
           <div class="sidebar-title">
-            <span>Scanned Queue (<span id="queueCount">0</span>)</span>
-            <button id="btnClearQueue" style="background: none; border: none; color: var(--text-dim); cursor: pointer; font-size: 0.75rem;">Clear All</button>
+            <span>Ingestion Queue (<span id="queueCount">0</span>)</span>
+            <button id="btnClearQueue" style="background: none; border: none; color: var(--text-dim); cursor: pointer; font-size: 0.75rem; font-weight: 700;">Clear All</button>
           </div>
           <div id="queueList" class="queue-list">
             <!-- Queue Items dynamically populated -->
@@ -138,7 +151,7 @@
 
           <!-- TAB 1: EXTRACTED FIELDS & OVERVIEW -->
           <div id="tabOverview" class="tab-panel active">
-            <div class="metrics-row" style="grid-template-columns: 1fr;">
+            <div class="metrics-row">
               <div class="summary-card">
                 <div class="summary-title">
                   <span id="summaryDocTitle">Extracted Document Analysis</span>
@@ -146,12 +159,12 @@
                 </div>
                 <p id="executiveSummaryText" class="summary-text">Select or scan a file to inspect extracted fields.</p>
                 
-                <h4 style="font-size: 0.9rem; font-weight: 700; margin-bottom: 0.75rem; color: var(--text-muted);">Extracted Data Fields & Key Metrics</h4>
+                <h4 style="font-size: 0.88rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: 0.75rem; color: var(--clsu-green);">Extracted Data Fields & Key Metrics</h4>
                 <div id="extractedFieldsGrid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 0.75rem; margin-bottom: 1.25rem;">
                   <!-- Dynamically populated field cards -->
                 </div>
 
-                <h4 style="font-size: 0.9rem; font-weight: 700; margin-bottom: 0.5rem; color: var(--text-muted);">Identified Structure Highlights</h4>
+                <h4 style="font-size: 0.88rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: 0.5rem; color: var(--clsu-green);">Identified Structure Highlights</h4>
                 <ul id="takeawayList" class="takeaway-list">
                   <!-- Highlights dynamically populated -->
                 </ul>
@@ -164,7 +177,7 @@
                 Status: <span class="badge badge-low" style="display: inline-block;">Draft (Pending Admin Review)</span>
               </div>
               <div style="display: flex; gap: 0.75rem;">
-                <button id="btnOpenInEditor" class="btn-icon" style="background: var(--accent-violet); border: none;">
+                <button id="btnOpenInEditor" class="btn-icon">
                   <span>✏️</span> Edit in Admin Dashboard
                 </button>
               </div>
@@ -174,15 +187,15 @@
           <!-- TAB 2: DATA & CONTENT VIEWER -->
           <div id="tabViewer" class="tab-panel">
             <div id="viewerControls" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
-              <span id="viewerFileMeta" style="font-size: 0.85rem; color: var(--text-muted);">File Details</span>
+              <span id="viewerFileMeta" style="font-size: 0.85rem; color: var(--text-muted); font-weight: 600;">File Details</span>
               <div id="sheetSelectorContainer" style="display: none;">
-                <label style="font-size: 0.82rem; margin-right: 0.5rem; color: var(--text-muted);">Worksheet:</label>
+                <label style="font-size: 0.82rem; margin-right: 0.5rem; color: var(--clsu-green); font-weight: 700;">Worksheet:</label>
                 <select id="sheetSelect" class="form-input" style="width: auto; padding: 0.35rem 0.75rem; display: inline-block;"></select>
               </div>
             </div>
 
             <div id="viewerContentArea" style="min-height: 450px;">
-              <!-- Dynamically renders Canvas for Images, Data Grid for Excel, Reader for DOCX, or PDF canvas -->
+              <!-- Dynamically renders Data Grid for Excel, Reader for DOCX, or PDF canvas -->
             </div>
           </div>
 
@@ -190,8 +203,8 @@
           <div id="tabGraphs" class="tab-panel">
             <div style="margin-bottom: 1.5rem; display: flex; justify-content: space-between; align-items: center;">
               <div>
-                <h3 style="font-size: 1.1rem; font-weight: 700;">Draft Visualization Suggestions</h3>
-                <p style="font-size: 0.85rem; color: var(--text-muted);">Automatic chart suggestions (Bar, Line, Pie) pending Admin review & approval.</p>
+                <h3 style="font-size: 1.1rem; font-weight: 800; color: var(--clsu-green);">Draft Visualization Suggestions</h3>
+                <p style="font-size: 0.85rem; color: var(--text-muted);">Institutional chart drafts (Bar, Line, Pie) pending Admin review & approval.</p>
               </div>
               <span class="badge badge-low">Draft Only — Not Auto-Published</span>
             </div>
@@ -209,31 +222,35 @@
     <!-- ================= ADMIN DATA DASHBOARD VIEW ================= -->
     <section id="adminDatabaseView" style="display: none;">
       
+      <div class="clsu-section-title">
+        <span>🗄️</span> Rankings & Admin Data Management
+      </div>
+
       <!-- Admin Header Banner -->
-      <div style="background: var(--bg-surface); backdrop-filter: blur(16px); border: 1px solid var(--border-light); border-radius: var(--radius-lg); padding: 1.5rem 2rem; margin-bottom: 1.5rem; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem;">
+      <div style="background: #FFFFFF; border: 1px solid var(--border-light); border-left: 5px solid var(--clsu-green); border-radius: var(--radius-lg); padding: 1.5rem 2rem; margin-bottom: 1.5rem; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem; box-shadow: var(--card-shadow);">
         <div>
-          <h2 style="font-size: 1.5rem; font-weight: 800;">Admin Record Review & Data Editor</h2>
-          <p style="font-size: 0.9rem; color: var(--text-muted);">Review extracted fields, edit tabular cells, update draft status, and approve visualizations for the IRIS dashboard.</p>
+          <h2 style="font-size: 1.4rem; font-weight: 800; color: var(--clsu-green);">Admin Record Review & Data Editor</h2>
+          <p style="font-size: 0.88rem; color: var(--text-muted);">Review extracted fields, edit tabular cells, update draft status, and approve visualizations for the CLSU Observatory.</p>
         </div>
       </div>
 
       <!-- Admin Stats Summary Bar -->
       <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem; margin-bottom: 1.5rem;">
-        <div style="background: var(--bg-card); border: 1px solid var(--border-light); padding: 1rem 1.25rem; border-radius: var(--radius-md);">
-          <div style="font-size: 0.75rem; color: var(--text-muted); font-weight: 700;">TOTAL SCANNED FILES</div>
-          <div id="statTotalDb" style="font-size: 1.6rem; font-weight: 800; font-family: var(--font-mono); color: var(--accent-cyan);">0</div>
+        <div style="background: #FFFFFF; border: 1px solid var(--border-light); padding: 1.1rem 1.25rem; border-radius: var(--radius-md); box-shadow: var(--card-shadow);">
+          <div style="font-size: 0.75rem; color: var(--text-muted); font-weight: 800; text-transform: uppercase;">TOTAL SCANNED FILES</div>
+          <div id="statTotalDb" style="font-size: 1.6rem; font-weight: 800; font-family: var(--font-mono); color: var(--clsu-green);">0</div>
         </div>
-        <div style="background: var(--bg-card); border: 1px solid var(--border-light); padding: 1rem 1.25rem; border-radius: var(--radius-md);">
-          <div style="font-size: 0.75rem; color: var(--text-muted); font-weight: 700;">PENDING DRAFTS</div>
-          <div id="statPendingDb" style="font-size: 1.6rem; font-weight: 800; font-family: var(--font-mono); color: var(--accent-amber);">0</div>
+        <div style="background: #FFFFFF; border: 1px solid var(--border-light); padding: 1.1rem 1.25rem; border-radius: var(--radius-md); box-shadow: var(--card-shadow);">
+          <div style="font-size: 0.75rem; color: var(--text-muted); font-weight: 800; text-transform: uppercase;">PENDING DRAFTS</div>
+          <div id="statPendingDb" style="font-size: 1.6rem; font-weight: 800; font-family: var(--font-mono); color: var(--clsu-gold-dark);">0</div>
         </div>
-        <div style="background: var(--bg-card); border: 1px solid var(--border-light); padding: 1rem 1.25rem; border-radius: var(--radius-md);">
-          <div style="font-size: 0.75rem; color: var(--text-muted); font-weight: 700;">APPROVED FOR DASHBOARD</div>
-          <div id="statVerifiedDb" style="font-size: 1.6rem; font-weight: 800; font-family: var(--font-mono); color: var(--accent-emerald);">0</div>
+        <div style="background: #FFFFFF; border: 1px solid var(--border-light); padding: 1.1rem 1.25rem; border-radius: var(--radius-md); box-shadow: var(--card-shadow);">
+          <div style="font-size: 0.75rem; color: var(--text-muted); font-weight: 800; text-transform: uppercase;">APPROVED FOR DASHBOARD</div>
+          <div id="statVerifiedDb" style="font-size: 1.6rem; font-weight: 800; font-family: var(--font-mono); color: var(--clsu-green-light);">0</div>
         </div>
-        <div style="background: var(--bg-card); border: 1px solid var(--border-light); padding: 1rem 1.25rem; border-radius: var(--radius-md);">
-          <div style="font-size: 0.75rem; color: var(--text-muted); font-weight: 700;">EXTRACTED TABLES</div>
-          <div id="statTablesDb" style="font-size: 1.6rem; font-weight: 800; font-family: var(--font-mono); color: var(--accent-violet);">0</div>
+        <div style="background: #FFFFFF; border: 1px solid var(--border-light); padding: 1.1rem 1.25rem; border-radius: var(--radius-md); box-shadow: var(--card-shadow);">
+          <div style="font-size: 0.75rem; color: var(--text-muted); font-weight: 800; text-transform: uppercase;">EXTRACTED TABLES</div>
+          <div id="statTablesDb" style="font-size: 1.6rem; font-weight: 800; font-family: var(--font-mono); color: var(--clsu-green);">0</div>
         </div>
       </div>
 
@@ -249,7 +266,7 @@
       </div>
 
       <!-- Database Records Table -->
-      <div class="table-container">
+      <div class="table-container" style="box-shadow: var(--card-shadow);">
         <table class="data-table">
           <thead>
             <tr>
@@ -275,7 +292,7 @@
 
   <!-- Admin Record Detail / Editor Modal -->
   <div id="recordEditModal" class="modal-overlay">
-    <div class="modal-card" style="max-width: 950px; width: 95%;">
+    <div class="modal-card">
       <div class="modal-header">
         <h3 id="recordEditTitle" class="modal-title">Edit Record Data</h3>
         <button id="btnCloseRecordModal" style="background: none; border: none; color: var(--text-muted); font-size: 1.4rem; cursor: pointer;">&times;</button>
@@ -288,8 +305,10 @@
   </div>
 
   <!-- JavaScript Modules in Order -->
+  <!-- [SLATED FOR REVIEW & REVISION]: Standalone Image OCR Pipeline disabled
   <script src="js/parsers/imageOcrPipeline.js"></script>
   <script src="js/parsers/imageParser.js"></script>
+  -->
   <script src="js/parsers/excelParser.js"></script>
   <script src="js/parsers/docxParser.js"></script>
   <script src="js/parsers/pdfParser.js"></script>

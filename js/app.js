@@ -125,9 +125,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       const sampleType = btn.getAttribute('data-sample');
       let sampleFile = null;
 
-      if (sampleType === 'invoice') {
-        sampleFile = await SampleGenerator.createSampleInvoiceImage();
-      } else if (sampleType === 'payroll') {
+      if (sampleType === 'payroll') {
         sampleFile = SampleGenerator.createSampleExcelFile();
       } else if (sampleType === 'contract') {
         sampleFile = SampleGenerator.createSampleDocxFile();

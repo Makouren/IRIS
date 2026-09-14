@@ -1,8 +1,8 @@
 /**
  * IRIS AI - PDF Document Parser
  * Parses PDF files using Mozilla PDF.js.
- * Extracts multi-page text, embedded metadata, document outlines, renders pages to canvas,
- * AND runs OCR on scanned/image-based pages via the Unified OCR Pipeline.
+ * Extracts multi-page text, embedded metadata, document outlines, and renders pages to canvas.
+ * [NOTE]: Embedded image extraction and OCR are commented out and slated for review/revision.
  */
 
 class PdfParser {
@@ -14,7 +14,7 @@ class PdfParser {
   }
 
   async parse(file, onProgress = () => {}) {
-    onProgress({ status: 'Loading PDF document stream...', progress: 10 });
+    onProgress({ status: 'Loading PDF document stream...', progress: 15 });
 
     const arrayBuffer = await file.arrayBuffer();
 
@@ -22,13 +22,13 @@ class PdfParser {
       throw new Error('PDF.js library is not loaded.');
     }
 
-    onProgress({ status: 'Initializing PDF worker & decrypting structure...', progress: 20 });
+    onProgress({ status: 'Initializing PDF worker & reading structure...', progress: 30 });
 
     const loadingTask = pdfjsLib.getDocument({ data: arrayBuffer });
     const pdfDoc = await loadingTask.promise;
     const numPages = pdfDoc.numPages;
 
-    onProgress({ status: `Extracting text layer from ${numPages} page(s)...`, progress: 30 });
+    onProgress({ status: `Extracting text layer from ${numPages} page(s)...`, progress: 45 });
 
     let pagesData = [];
     let fullText = '';
@@ -46,29 +46,26 @@ class PdfParser {
 
       fullText += `\n--- Page ${pageNum} ---\n` + pageText;
 
-      const progress = 30 + Math.round((pageNum / numPages) * 25);
+      const progress = 45 + Math.round((pageNum / numPages) * 35);
       onProgress({ status: `Parsing text layer: page ${pageNum} of ${numPages}...`, progress });
     }
 
-    // --- Embedded Image OCR Pipeline ---
+    /* [SLATED FOR REVIEW & REVISION]: Embedded Image OCR pipeline disabled
     let embeddedImageOcr = { text: '', count: 0, sources: [] };
-
     if (typeof ImageOcrPipeline !== 'undefined') {
       onProgress({ status: 'Scanning pages for embedded images & scanned content (OCR)...', progress: 60 });
       const ocrPipeline = new ImageOcrPipeline();
-
       const ocrResults = await ocrPipeline.extractFromPdf(pdfDoc, pagesData, (p) => {
         onProgress({ status: p.status, progress: 60 + Math.round(p.progress * 0.2) });
       });
-
       embeddedImageOcr = ocrPipeline.mergeOcrResults(ocrResults);
-
       if (embeddedImageOcr.text) {
         fullText += '\n\n--- EMBEDDED IMAGE OCR RESULTS ---' + embeddedImageOcr.text;
       }
     }
+    */
 
-    onProgress({ status: 'Extracting PDF metadata & document catalog...', progress: 85 });
+    onProgress({ status: 'Extracting PDF metadata & document catalog...', progress: 90 });
 
     let metadata = {
       pageCount: numPages,
@@ -77,9 +74,7 @@ class PdfParser {
       creator: 'Unknown',
       producer: 'Unknown',
       creationDate: null,
-      encrypted: false,
-      embeddedImagesScanned: embeddedImageOcr.count,
-      embeddedImageSources: embeddedImageOcr.sources
+      encrypted: false
     };
 
     try {
@@ -109,8 +104,7 @@ class PdfParser {
       rawText: fullText.trim(),
       metadata,
       pages: pagesData,
-      pdfDocReference: pdfDoc,
-      embeddedImageOcr
+      pdfDocReference: pdfDoc
     };
   }
 

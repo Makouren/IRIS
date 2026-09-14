@@ -1,11 +1,14 @@
 /**
  * IRIS AI - Central Dispatcher & Scanner Orchestrator
- * Integrates Document Parsers, Graph Engine, and Database Manager.
+ * Integrates Document Parsers (Excel, DOCX, PDF), Graph Engine, and Database Manager.
+ * [NOTE]: Standalone image and embedded media OCR scanning are commented out and slated for review/revision.
  */
 
 class ScannerOrchestrator {
   constructor() {
+    /* [SLATED FOR REVIEW & REVISION]: Standalone Image OCR Parser
     this.imageParser = new ImageParser();
+    */
     this.excelParser = new ExcelParser();
     this.docxParser = new DocxParser();
     this.pdfParser = new PdfParser();
@@ -20,9 +23,11 @@ class ScannerOrchestrator {
     const name = file.name.toLowerCase();
     const type = file.type.toLowerCase();
 
+    /* [SLATED FOR REVIEW & REVISION]: Standalone image format detection disabled
     if (type.startsWith('image/') || /\.(png|jpg|jpeg|webp|gif|svg|bmp)$/i.test(name)) {
       return 'image';
     }
+    */
     if (type.includes('spreadsheet') || type.includes('excel') || type.includes('csv') || /\.(xlsx|xls|csv)$/i.test(name)) {
       return 'excel';
     }
@@ -42,7 +47,7 @@ class ScannerOrchestrator {
     const category = this.getFileCategory(file);
 
     if (category === 'unknown') {
-      throw new Error(`Unsupported file format: ${file.name}. Supported formats: Spreadsheets (.xlsx, .csv), DOCX, PDF, and Images.`);
+      throw new Error(`Unsupported file format: ${file.name}. Supported formats: Spreadsheets (.xlsx, .xls, .csv), Word (.docx), and PDF documents.`);
     }
 
     onProgress({ status: `Initializing parser for ${file.name}...`, progress: 10 });
@@ -51,9 +56,11 @@ class ScannerOrchestrator {
 
     // 1. Format-specific parsing
     switch (category) {
+      /* [SLATED FOR REVIEW & REVISION]: Standalone image OCR scanning disabled
       case 'image':
         parsedResult = await this.imageParser.parse(file, p => onProgress({ status: p.status, progress: 15 + Math.round(p.progress * 0.45) }));
         break;
+      */
       case 'excel':
         parsedResult = await this.excelParser.parse(file, p => onProgress({ status: p.status, progress: 15 + Math.round(p.progress * 0.45) }));
         break;
@@ -91,7 +98,6 @@ class ScannerOrchestrator {
       sheetsData: parsedResult.sheetsData,
       pages: parsedResult.pages,
       pdfDocReference: parsedResult.pdfDocReference,
-      ocrData: parsedResult.ocrData,
       graphDrafts,
       status: 'Pending Review'
     };

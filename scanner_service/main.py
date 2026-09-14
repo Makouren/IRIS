@@ -31,9 +31,9 @@ async def health_check():
         "version": settings.SERVICE_VERSION,
         "supported_formats": [
             "Spreadsheets (XLSX, XLS, CSV)",
-            "PDF Documents (Native & Scanned)",
-            "Word Documents (DOCX with media extraction)",
-            "Images (PNG, JPG, JPEG, WEBP)"
+            "PDF Documents (Native & Text-layer)",
+            "Word Documents (DOCX structure & tables)"
+            # Note: Image and embedded OCR scanning slated for review and revision
         ]
     }
 

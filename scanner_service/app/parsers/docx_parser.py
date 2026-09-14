@@ -1,25 +1,17 @@
 import io
-import zipfile
 import re
 from typing import Dict, Any, List
-from PIL import Image
 
 try:
     import docx
 except ImportError:
     docx = None
 
-try:
-    import pytesseract
-except ImportError:
-    pytesseract = None
-
 class DOCXParser:
     """
     Parses Word Documents (.docx):
     - Extracts headings, paragraphs, and tables using python-docx.
-    - Unpacks word/media/ archive to extract embedded images (e.g. certificates, badges)
-      and runs OCR on them, merging results into the output payload.
+    - [NOTE]: Embedded image extraction from word/media/ and OCR are commented out and slated for review/revision.
     """
     
     @staticmethod
@@ -73,7 +65,6 @@ class DOCXParser:
                     if col_idx < len(row):
                         v = row[col_idx]
                         col_values.append(v)
-                        # Check numeric
                         clean_v = v.replace(',', '').replace('%', '').strip()
                         if clean_v:
                             try:
@@ -93,28 +84,21 @@ class DOCXParser:
                     "total_count": len(col_values)
                 })
 
-        # 3. Unpack embedded images from word/media/ ZIP archive
-        try:
-            with zipfile.ZipFile(io.BytesIO(file_bytes), 'r') as z:
-                media_files = [f for f in z.namelist() if f.startswith('word/media/')]
-                for mf in media_files:
-                    img_data = z.read(mf)
-                    if pytesseract is not None and len(img_data) > 1024:
-                        try:
-                            img = Image.open(io.BytesIO(img_data))
-                            ocr_text = pytesseract.image_to_string(img).strip()
-                            if len(ocr_text) > 8:
-                                embedded_ocr_text.append({
-                                    "media_path": mf,
-                                    "type": "docx_embedded_image_ocr",
-                                    "text": ocr_text
-                                })
-                        except Exception:
-                            pass
-        except Exception:
-            pass
+        # [SLATED FOR REVIEW & REVISION]: Unpacking word/media/ ZIP archive for embedded image OCR disabled
+        # try:
+        #     with zipfile.ZipFile(io.BytesIO(file_bytes), 'r') as z:
+        #         media_files = [f for f in z.namelist() if f.startswith('word/media/')]
+        #         for mf in media_files:
+        #             img_data = z.read(mf)
+        #             if pytesseract is not None and len(img_data) > 1024:
+        #                 img = Image.open(io.BytesIO(img_data))
+        #                 ocr_text = pytesseract.image_to_string(img).strip()
+        #                 if len(ocr_text) > 8:
+        #                     embedded_ocr_text.append({"media_path": mf, "text": ocr_text})
+        # except Exception:
+        #     pass
 
-        # 4. Extract KPI stat patterns from paragraph text
+        # 3. Extract KPI stat patterns from paragraph text
         combined_text = "\n".join([p["text"] for p in paragraphs])
         stat_patterns = re.findall(r'([A-Za-z\s\(\)\-\/]{3,40})\s*[:\-\=]\s*([0-9\.,]+)\s*([%\w]*)', combined_text)
         for name, val_str, unit in stat_patterns:

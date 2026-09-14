@@ -7,12 +7,12 @@
 class GraphEngine {
   constructor() {
     this.colorPalettes = [
-      { border: '#8B5CF6', bg: 'rgba(139, 92, 246, 0.45)', name: 'Neon Violet' },
-      { border: '#06B6D4', bg: 'rgba(6, 182, 212, 0.45)', name: 'Cyber Cyan' },
+      { border: '#146C36', bg: 'rgba(20, 108, 54, 0.45)', name: 'CLSU Forest Green' },
+      { border: '#F59E0B', bg: 'rgba(245, 158, 11, 0.45)', name: 'CLSU Harvest Gold' },
+      { border: '#0D9488', bg: 'rgba(13, 148, 136, 0.45)', name: 'Teal Green' },
       { border: '#10B981', bg: 'rgba(16, 185, 129, 0.45)', name: 'Emerald' },
-      { border: '#F59E0B', bg: 'rgba(245, 158, 11, 0.45)', name: 'Amber' },
-      { border: '#EC4899', bg: 'rgba(236, 72, 153, 0.45)', name: 'Hot Pink' },
-      { border: '#3B82F6', bg: 'rgba(59, 130, 246, 0.45)', name: 'Royal Blue' }
+      { border: '#D97706', bg: 'rgba(217, 119, 6, 0.45)', name: 'Amber Gold' },
+      { border: '#2563EB', bg: 'rgba(37, 99, 235, 0.45)', name: 'Institutional Blue' }
     ];
   }
 

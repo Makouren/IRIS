@@ -93,59 +93,11 @@ All candidate programs have fulfilled criterion metrics with satisfactory instit
     return new File([blob], 'AACCUP_Program_Accreditation_Link.docx', { type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' });
   }
 
-  /**
-   * Sample 4: Performance Certificate / Infographic (Image PNG Canvas)
-   */
+  /* [SLATED FOR REVIEW & REVISION]: Sample image generator disabled
   static async createSampleInvoiceImage() {
-    const canvas = document.createElement('canvas');
-    canvas.width = 900;
-    canvas.height = 600;
-    const ctx = canvas.getContext('2d');
-
-    // Background Gradient
-    const gradient = ctx.createLinearGradient(0, 0, 900, 600);
-    gradient.addColorStop(0, '#0F172A');
-    gradient.addColorStop(1, '#1E293B');
-    ctx.fillStyle = gradient;
-    ctx.fillRect(0, 0, 900, 600);
-
-    // Decorative Borders
-    ctx.strokeStyle = '#8B5CF6';
-    ctx.lineWidth = 4;
-    ctx.strokeRect(20, 20, 860, 560);
-
-    // Title
-    ctx.fillStyle = '#FFFFFF';
-    ctx.font = 'bold 26px sans-serif';
-    ctx.fillText('INTERNATIONAL RAPPORT INSIGHT SYSTEM (IRIS)', 50, 70);
-
-    ctx.fillStyle = '#94A3B8';
-    ctx.font = '16px sans-serif';
-    ctx.fillText('INSTITUTIONAL PERFORMANCE CERTIFICATE', 50, 105);
-
-    // Stats Grid
-    ctx.fillStyle = '#38BDF8';
-    ctx.font = 'bold 18px sans-serif';
-    ctx.fillText('CERTIFIED METRIC INDICATORS:', 50, 160);
-
-    ctx.fillStyle = '#E2E8F0';
-    ctx.font = '16px sans-serif';
-    ctx.fillText('Accreditation Passing Rate: 96.5%', 50, 200);
-    ctx.fillText('Total Enrolled Scholars: 2,450', 50, 235);
-    ctx.fillText('Faculty Excellence Index: 92.4%', 50, 270);
-    ctx.fillText('International Partner Universities: 48', 50, 305);
-    ctx.fillText('Global Citation Score: 88.6%', 50, 340);
-
-    ctx.fillStyle = '#A78BFA';
-    ctx.font = '14px sans-serif';
-    ctx.fillText('Issued for Academic Quality Assurance Review | 2024', 50, 420);
-
-    return new Promise((resolve) => {
-      canvas.toBlob((blob) => {
-        resolve(new File([blob], 'Institutional_Performance_Certificate.png', { type: 'image/png' }));
-      }, 'image/png');
-    });
+    // ...
   }
+  */
 }
 
 if (typeof window !== 'undefined') {

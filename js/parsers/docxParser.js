@@ -1,6 +1,7 @@
 /**
  * IRIS AI - Microsoft Word (DOCX) Parser
  * Extracts structured HTML, raw text, headings, and formatting with Mammoth.js.
+ * [NOTE]: Embedded image extraction and OCR are commented out and slated for review/revision.
  */
 
 class DocxParser {
@@ -9,7 +10,7 @@ class DocxParser {
 
     const arrayBuffer = await file.arrayBuffer();
 
-    onProgress({ status: 'Extracting Word XML architecture & formatting...', progress: 45 });
+    onProgress({ status: 'Extracting Word document structure & formatting...', progress: 50 });
 
     if (typeof mammoth === 'undefined') {
       throw new Error('Mammoth.js library is not loaded.');
@@ -19,12 +20,12 @@ class DocxParser {
     const htmlResult = await mammoth.convertToHtml({ arrayBuffer });
     const rawResult = await mammoth.extractRawText({ arrayBuffer });
 
-    onProgress({ status: 'Analyzing document structure & outlines...', progress: 80 });
+    onProgress({ status: 'Analyzing document structure & outlines...', progress: 85 });
 
     let rawText = (rawResult.value || '').trim();
     const html = htmlResult.value || '<p>No content extracted</p>';
     
-    // --- Embedded Image OCR Pipeline ---
+    /* [SLATED FOR REVIEW & REVISION]: Embedded Image OCR extraction disabled
     let embeddedImageOcr = { text: '', count: 0, sources: [] };
     if (typeof ImageOcrPipeline !== 'undefined') {
       onProgress({ status: 'Scanning DOCX archive for embedded images (OCR)...', progress: 85 });
@@ -38,6 +39,7 @@ class DocxParser {
         rawText += '\n\n--- EMBEDDED IMAGE OCR RESULTS ---' + embeddedImageOcr.text;
       }
     }
+    */
 
     const words = rawText ? rawText.split(/\s+/).filter(Boolean) : [];
     const wordCount = words.length;
@@ -62,9 +64,7 @@ class DocxParser {
       paragraphCount: tempDiv.querySelectorAll('p').length,
       tableCount: tempDiv.querySelectorAll('table').length,
       headingCount: outline.length,
-      outline,
-      embeddedImagesScanned: embeddedImageOcr.count,
-      embeddedImageSources: embeddedImageOcr.sources
+      outline
     };
 
     return {
@@ -74,7 +74,6 @@ class DocxParser {
       rawText,
       formattedHtml: html,
       metadata,
-      embeddedImageOcr,
       warnings: htmlResult.messages || []
     };
   }
