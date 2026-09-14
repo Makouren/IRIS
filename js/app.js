@@ -520,8 +520,13 @@ document.addEventListener('DOMContentLoaded', async () => {
     });
   });
 
+  // State Management for Dashboard Studio Workbench
+  let studioActiveRecord = null;
+  let studioChartInstance = null;
+  let studioActiveSheetName = '';
+
   // ----------------------------------------------------
-  // Admin Portal & Data Editor
+  // Admin Portal & Live Dashboard Studio
   // ----------------------------------------------------
   async function renderAdminPortal() {
     const records = await dbManager.getAllRecords();
@@ -539,7 +544,42 @@ document.addEventListener('DOMContentLoaded', async () => {
     });
     statTablesDb.textContent = totalTables;
 
-    // Filter and Render Table Rows
+    // Populate Studio Record Dropdown
+    const studioRecordSelect = document.getElementById('studioRecordSelect');
+    if (studioRecordSelect) {
+      const currentSelectedId = studioActiveRecord ? studioActiveRecord.id : (records[0] ? records[0].id : null);
+      studioRecordSelect.innerHTML = '';
+      records.forEach(r => {
+        const opt = document.createElement('option');
+        opt.value = r.id;
+        opt.textContent = `${r.fileName} (${(r.fileType || '').toUpperCase()})`;
+        if (currentSelectedId && r.id === currentSelectedId) opt.selected = true;
+        studioRecordSelect.appendChild(opt);
+      });
+
+      studioRecordSelect.onchange = (e) => {
+        const selected = records.find(r => r.id === e.target.value);
+        if (selected) {
+          studioActiveRecord = selected;
+          renderStudioWorkbench(selected);
+        }
+      };
+    }
+
+    // Set and Render Studio Active Record
+    if (records.length > 0) {
+      if (!studioActiveRecord || !records.some(r => r.id === studioActiveRecord.id)) {
+        studioActiveRecord = records[0];
+      } else {
+        studioActiveRecord = records.find(r => r.id === studioActiveRecord.id) || records[0];
+      }
+      renderStudioWorkbench(studioActiveRecord);
+    } else {
+      const studioActiveFileName = document.getElementById('studioActiveFileName');
+      if (studioActiveFileName) studioActiveFileName.textContent = 'No Scanned Datasets Available';
+    }
+
+    // Filter and Render Archive Table Rows
     const searchTerm = (adminSearchInput.value || '').toLowerCase();
     const statusFilter = adminStatusFilter.value;
 
@@ -568,15 +608,15 @@ document.addEventListener('DOMContentLoaded', async () => {
         <td style="font-weight: 600;">${r.fileName}</td>
         <td><span class="format-chip ${(r.fileType || '').toLowerCase()}">${(r.fileType || 'UNKNOWN').toUpperCase()}</span></td>
         <td>${r.docType || 'General'}</td>
-        <td><span class="badge badge-low" style="background: rgba(139, 92, 246, 0.2); color: #C4B5FD;">${suggestedChart}</span></td>
+        <td><span class="badge badge-low" style="background: rgba(20, 108, 54, 0.1); color: var(--clsu-green); border: 1px solid var(--border-green);">${suggestedChart}</span></td>
         <td><span class="badge ${statusClass}">${r.status || 'Pending Review'}</span></td>
         <td style="font-size: 0.8rem; color: var(--text-muted);">${new Date(r.scannedAt).toLocaleDateString()}</td>
         <td>
           <div style="display: flex; gap: 0.4rem;">
-            <button class="btn-table-edit" data-id="${r.id}" style="padding: 0.35rem 0.65rem; font-size: 0.75rem; background: var(--accent-violet); border: none; border-radius: var(--radius-sm); color: #fff; cursor: pointer;">
-              ✏️ Edit Data
+            <button class="btn-table-load-studio" data-id="${r.id}" style="padding: 0.35rem 0.65rem; font-size: 0.75rem; background: var(--clsu-green); border: none; border-radius: var(--radius-sm); color: #fff; cursor: pointer; font-weight: 700;">
+              🎨 Load in Studio
             </button>
-            <button class="btn-table-delete" data-id="${r.id}" style="padding: 0.35rem 0.65rem; font-size: 0.75rem; background: rgba(244, 63, 94, 0.2); border: 1px solid var(--accent-rose); border-radius: var(--radius-sm); color: var(--accent-rose); cursor: pointer;">
+            <button class="btn-table-delete" data-id="${r.id}" style="padding: 0.35rem 0.65rem; font-size: 0.75rem; background: #FEF2F2; border: 1px solid #FECACA; border-radius: var(--radius-sm); color: #EF4444; cursor: pointer;">
               🗑️
             </button>
           </div>
@@ -586,9 +626,19 @@ document.addEventListener('DOMContentLoaded', async () => {
       adminRecordsTableBody.appendChild(tr);
     });
 
-    // Wire Edit Buttons
-    document.querySelectorAll('.btn-table-edit').forEach(btn => {
-      btn.addEventListener('click', () => openRecordEditModal(btn.getAttribute('data-id')));
+    // Wire Load in Studio Buttons
+    document.querySelectorAll('.btn-table-load-studio').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const id = btn.getAttribute('data-id');
+        const target = records.find(r => r.id === id);
+        if (target) {
+          studioActiveRecord = target;
+          const select = document.getElementById('studioRecordSelect');
+          if (select) select.value = id;
+          renderStudioWorkbench(target);
+          document.getElementById('studioContainer').scrollIntoView({ behavior: 'smooth' });
+        }
+      });
     });
 
     // Wire Delete Buttons
@@ -601,6 +651,457 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
       });
     });
+  }
+
+  // ----------------------------------------------------
+  // Live Dashboard Studio Renderer
+  // ----------------------------------------------------
+  function renderStudioWorkbench(record) {
+    if (!record) return;
+
+    const studioActiveFileName = document.getElementById('studioActiveFileName');
+    const studioDocTypeInput = document.getElementById('studioDocTypeInput');
+    const studioStatusSelect = document.getElementById('studioStatusSelect');
+    const studioNotesInput = document.getElementById('studioNotesInput');
+    const studioDocContentArea = document.getElementById('studioDocContentArea');
+    const studioTableContainer = document.getElementById('studioTableContainer');
+    const studioDocSheetSelectorContainer = document.getElementById('studioDocSheetSelectorContainer');
+    const studioDocSheetSelect = document.getElementById('studioDocSheetSelect');
+
+    if (studioActiveFileName) studioActiveFileName.textContent = `${record.fileName} (${(record.fileType || '').toUpperCase()})`;
+    if (studioDocTypeInput) studioDocTypeInput.value = record.docType || 'General Institutional Data';
+    if (studioStatusSelect) studioStatusSelect.value = record.status || 'Pending Review';
+    if (studioNotesInput) studioNotesInput.value = record.adminNotes || '';
+
+    // 1. Render Left Column: Scanned Source Reference
+    if (studioDocContentArea) {
+      studioDocContentArea.innerHTML = '';
+      
+      if (record.extractedData && typeof record.extractedData === 'object' && Object.keys(record.extractedData).length > 0) {
+        const sheetKeys = Object.keys(record.extractedData).filter(k => {
+          const item = record.extractedData[k];
+          return item && Array.isArray(item.headers) && Array.isArray(item.rows);
+        });
+
+        if (sheetKeys.length > 0) {
+          studioDocSheetSelectorContainer.style.display = 'flex';
+          studioDocSheetSelect.innerHTML = '';
+          sheetKeys.forEach(k => {
+            const opt = document.createElement('option');
+            opt.value = k;
+            opt.textContent = k;
+            studioDocSheetSelect.appendChild(opt);
+          });
+
+          function displaySourceSheet(sheetKey) {
+            const sheet = record.extractedData[sheetKey];
+            if (!sheet) return;
+
+            let html = `<div style="margin-bottom: 0.75rem; font-weight: 800; color: var(--clsu-green); font-size: 0.8rem; text-transform: uppercase;">Worksheet: ${sheetKey} (${sheet.rows ? sheet.rows.length : 0} rows)</div>`;
+            html += `<div style="display: flex; flex-direction: column; gap: 0.4rem;">`;
+            
+            (sheet.rows || []).slice(0, 30).forEach((row, rIdx) => {
+              html += `<div style="background: #F8FAF8; border: 1px solid #E2E8E2; border-radius: 4px; padding: 0.35rem 0.5rem; display: flex; flex-wrap: wrap; gap: 0.3rem; align-items: center;">`;
+              html += `<span style="font-size: 0.72rem; color: #94A3B8; font-weight: 700; min-width: 25px;">R${rIdx+1}:</span>`;
+              (row || []).forEach((cell, cIdx) => {
+                if (cell !== undefined && cell !== null && String(cell).trim()) {
+                  const headerLabel = sheet.headers[cIdx] ? `${sheet.headers[cIdx]}: ` : '';
+                  const safeVal = String(cell).replace(/"/g, '&quot;');
+                  html += `<span class="copy-token" data-val="${safeVal}" title="Click to copy: ${headerLabel}${safeVal}"><strong>${headerLabel}</strong>${cell} 📋</span>`;
+                }
+              });
+              html += `</div>`;
+            });
+            html += `</div>`;
+            studioDocContentArea.innerHTML = html;
+            wireCopyTokens();
+          }
+
+          studioDocSheetSelect.onchange = (e) => displaySourceSheet(e.target.value);
+          displaySourceSheet(sheetKeys[0]);
+
+        } else {
+          studioDocSheetSelectorContainer.style.display = 'none';
+          renderRawTextTokens(record.rawText, studioDocContentArea);
+        }
+      } else {
+        studioDocSheetSelectorContainer.style.display = 'none';
+        renderRawTextTokens(record.rawText, studioDocContentArea);
+      }
+    }
+
+    // 2. Render Right Column: Live Editable Table Grid & Chart
+    ensureTableDataStructure(record);
+    renderStudioTableGrid(record);
+    renderStudioChart(record);
+  }
+
+  function renderRawTextTokens(rawText, container) {
+    if (!rawText) {
+      container.innerHTML = '<div style="color: #94A3B8; padding: 1rem; text-align: center;">No extracted text available.</div>';
+      return;
+    }
+
+    let html = `<div style="font-size: 0.78rem; font-weight: 800; color: var(--clsu-green); margin-bottom: 0.5rem; text-transform: uppercase;">Extracted Text & Metrics:</div>`;
+    const lines = rawText.split('\n').map(l => l.trim()).filter(Boolean);
+    
+    html += `<div style="display: flex; flex-direction: column; gap: 0.35rem;">`;
+    lines.slice(0, 40).forEach(line => {
+      const parts = line.split(/[:\-\=]/);
+      if (parts.length >= 2) {
+        const key = parts[0].trim();
+        const val = parts.slice(1).join(':').trim();
+        const safeVal = val.replace(/"/g, '&quot;');
+        html += `<div style="background: #F8FAF8; border: 1px solid #E2E8E2; padding: 0.35rem 0.55rem; border-radius: 4px; display: flex; justify-content: space-between; align-items: center; gap: 0.5rem;">
+          <span style="font-size: 0.8rem; font-weight: 600; color: #334155;">${key}</span>
+          <span class="copy-token" data-val="${safeVal}" title="Click to copy">${val} 📋</span>
+        </div>`;
+      } else {
+        const safeVal = line.replace(/"/g, '&quot;');
+        html += `<div style="padding: 0.25rem 0.4rem; font-size: 0.8rem; color: #1E293B;">
+          <span>${line}</span> <span class="copy-token" data-val="${safeVal}" style="font-size: 0.7rem;">Copy 📋</span>
+        </div>`;
+      }
+    });
+    html += `</div>`;
+    container.innerHTML = html;
+    wireCopyTokens();
+  }
+
+  function wireCopyTokens() {
+    document.querySelectorAll('.copy-token').forEach(token => {
+      token.onclick = (e) => {
+        e.stopPropagation();
+        const val = token.getAttribute('data-val');
+        if (val) {
+          navigator.clipboard.writeText(val).then(() => {
+            const orig = token.innerHTML;
+            token.innerHTML = '✓ Copied!';
+            token.style.background = '#ECFDF5';
+            token.style.color = '#065F46';
+            setTimeout(() => {
+              token.innerHTML = orig;
+              token.style.background = '';
+              token.style.color = '';
+            }, 1200);
+          });
+        }
+      };
+    });
+  }
+
+  function ensureTableDataStructure(record) {
+    if (!record.extractedData || typeof record.extractedData !== 'object') {
+      record.extractedData = {};
+    }
+
+    const keys = Object.keys(record.extractedData);
+    if (keys.length === 0 || !record.extractedData[keys[0]].headers) {
+      // Build default table from raw text or draft if empty
+      const draft = (record.graphDrafts && record.graphDrafts[0]) ? record.graphDrafts[0] : null;
+      let headers = ['Item / Metric', 'Value'];
+      let rows = [];
+
+      if (draft && draft.chartData && draft.chartData.labels) {
+        const ds = draft.chartData.datasets[0] || { label: 'Value', data: [] };
+        headers = ['Item / Category', ds.label || 'Value'];
+        rows = draft.chartData.labels.map((lbl, i) => [lbl, ds.data[i] !== undefined ? ds.data[i] : 0]);
+      } else {
+        rows = [
+          ['Category A', 92.5],
+          ['Category B', 88.0],
+          ['Category C', 95.4]
+        ];
+      }
+
+      record.extractedData['Main_Metrics'] = {
+        name: 'Main_Metrics',
+        headers,
+        rows
+      };
+    }
+  }
+
+  function renderStudioTableGrid(record) {
+    const container = document.getElementById('studioTableContainer');
+    if (!container) return;
+
+    const sheetName = Object.keys(record.extractedData)[0];
+    const sheet = record.extractedData[sheetName];
+    if (!sheet) return;
+
+    let tHtml = `<table class="data-table"><thead><tr>`;
+    sheet.headers.forEach((h, colIdx) => {
+      tHtml += `<th>
+        <div style="display: flex; align-items: center; justify-content: space-between; gap: 0.3rem;">
+          <input type="text" class="header-rename-input" data-col="${colIdx}" value="${String(h).replace(/"/g, '&quot;')}" style="background: transparent; border: none; font-weight: 800; color: var(--clsu-green); font-size: 0.78rem; text-transform: uppercase; width: 100%; outline: none;" title="Click to rename field header">
+        </div>
+      </th>`;
+    });
+    tHtml += `<th style="width: 50px; text-align: center;">Action</th></tr></thead><tbody>`;
+
+    (sheet.rows || []).forEach((row, rIdx) => {
+      tHtml += `<tr>`;
+      sheet.headers.forEach((h, cIdx) => {
+        const cellVal = row[cIdx] !== undefined && row[cIdx] !== null ? row[cIdx] : '';
+        tHtml += `<td>
+          <input type="text" class="studio-cell-input" data-row="${rIdx}" data-col="${cIdx}" value="${String(cellVal).replace(/"/g, '&quot;')}">
+        </td>`;
+      });
+      tHtml += `<td style="text-align: center;">
+        <button type="button" class="studio-delete-row" data-row="${rIdx}" style="background: none; border: none; color: #EF4444; cursor: pointer; font-size: 1.1rem; font-weight: 800;" title="Delete Row">✕</button>
+      </td></tr>`;
+    });
+
+    tHtml += `</tbody></table>`;
+    container.innerHTML = tHtml;
+
+    // Real-time live chart update on cell input
+    document.querySelectorAll('.studio-cell-input').forEach(input => {
+      input.addEventListener('input', () => {
+        const r = parseInt(input.getAttribute('data-row'), 10);
+        const c = parseInt(input.getAttribute('data-col'), 10);
+        let val = input.value.trim();
+        if (!isNaN(parseFloat(val)) && isFinite(val)) {
+          val = parseFloat(val);
+        }
+        if (sheet.rows[r]) {
+          sheet.rows[r][c] = val;
+        }
+        updateStudioChart();
+      });
+    });
+
+    // Rename Header input
+    document.querySelectorAll('.header-rename-input').forEach(input => {
+      input.addEventListener('change', () => {
+        const c = parseInt(input.getAttribute('data-col'), 10);
+        sheet.headers[c] = input.value.trim() || `Field_${c+1}`;
+        updateStudioChart();
+      });
+    });
+
+    // Delete Row
+    document.querySelectorAll('.studio-delete-row').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const r = parseInt(btn.getAttribute('data-row'), 10);
+        sheet.rows.splice(r, 1);
+        renderStudioTableGrid(record);
+        updateStudioChart();
+      });
+    });
+  }
+
+  // ----------------------------------------------------
+  // Studio Live Chart Engine
+  // ----------------------------------------------------
+  function renderStudioChart(record) {
+    const canvas = document.getElementById('studioChartCanvas');
+    const chartTypeSelect = document.getElementById('studioChartTypeSelect');
+    const chartTitleDisplay = document.getElementById('studioChartTitleDisplay');
+    if (!canvas || !chartTypeSelect) return;
+
+    if (studioChartInstance) {
+      studioChartInstance.destroy();
+      studioChartInstance = null;
+    }
+
+    const sheetName = Object.keys(record.extractedData)[0];
+    const sheet = record.extractedData[sheetName];
+    if (!sheet || !sheet.headers || !sheet.rows || sheet.rows.length === 0) return;
+
+    // Determine label column and numerical column
+    let labelCol = 0;
+    let numCol = sheet.headers.length > 1 ? 1 : 0;
+
+    for (let c = 0; c < sheet.headers.length; c++) {
+      const hasNumbers = sheet.rows.some(r => typeof r[c] === 'number' || (!isNaN(parseFloat(r[c])) && isFinite(r[c])));
+      if (hasNumbers && c > 0) {
+        numCol = c;
+        break;
+      }
+    }
+
+    const labels = sheet.rows.map(r => String(r[labelCol] !== undefined ? r[labelCol] : `Item`).trim());
+    const dataValues = sheet.rows.map(r => {
+      const val = parseFloat(r[numCol]);
+      return isNaN(val) ? 0 : val;
+    });
+
+    const currentType = chartTypeSelect.value || 'bar';
+    const headerName = sheet.headers[numCol] || 'Metric Value';
+
+    if (chartTitleDisplay) {
+      chartTitleDisplay.textContent = `${headerName} — Live Observatory Draft`;
+    }
+
+    const clsuPalettes = [
+      { border: '#146C36', bg: 'rgba(20, 108, 54, 0.65)' },
+      { border: '#F59E0B', bg: 'rgba(245, 158, 11, 0.65)' },
+      { border: '#0D9488', bg: 'rgba(13, 148, 136, 0.65)' },
+      { border: '#10B981', bg: 'rgba(16, 185, 129, 0.65)' },
+      { border: '#D97706', bg: 'rgba(217, 119, 6, 0.65)' },
+      { border: '#2563EB', bg: 'rgba(37, 99, 235, 0.65)' }
+    ];
+
+    const ctx = canvas.getContext('2d');
+    studioChartInstance = new Chart(ctx, {
+      type: currentType,
+      data: {
+        labels: labels.slice(0, 15),
+        datasets: [{
+          label: headerName,
+          data: dataValues.slice(0, 15),
+          backgroundColor: currentType === 'pie' ? clsuPalettes.map(c => c.bg) : 'rgba(20, 108, 54, 0.65)',
+          borderColor: currentType === 'pie' ? clsuPalettes.map(c => c.border) : '#146C36',
+          borderWidth: 2,
+          tension: 0.35,
+          fill: currentType === 'line'
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: {
+            display: currentType === 'pie',
+            labels: { color: '#334155', font: { family: 'Inter, sans-serif', weight: '600' } }
+          }
+        },
+        scales: currentType === 'pie' ? {} : {
+          x: {
+            ticks: { color: '#475569', font: { family: 'Inter, sans-serif', weight: '600' } },
+            grid: { color: '#E2E8E2' }
+          },
+          y: {
+            ticks: { color: '#475569', font: { family: 'Inter, sans-serif', weight: '600' } },
+            grid: { color: '#E2E8E2' }
+          }
+        }
+      }
+    });
+  }
+
+  function updateStudioChart() {
+    if (studioActiveRecord) {
+      renderStudioChart(studioActiveRecord);
+    }
+  }
+
+  // Chart Type Selector Switcher
+  const studioChartTypeSelect = document.getElementById('studioChartTypeSelect');
+  if (studioChartTypeSelect) {
+    studioChartTypeSelect.addEventListener('change', updateStudioChart);
+  }
+
+  // ➕ Add New Field / Column Button Handler
+  const studioBtnAddField = document.getElementById('studioBtnAddField');
+  if (studioBtnAddField) {
+    studioBtnAddField.addEventListener('click', () => {
+      if (!studioActiveRecord) return;
+      const sheetName = Object.keys(studioActiveRecord.extractedData)[0];
+      const sheet = studioActiveRecord.extractedData[sheetName];
+      if (!sheet) return;
+
+      const fieldName = prompt('Enter new Field / Metric Name (e.g. Target Score, 2025 Value, Category):', `Metric_${sheet.headers.length + 1}`);
+      if (fieldName && fieldName.trim()) {
+        sheet.headers.push(fieldName.trim());
+        sheet.rows.forEach(r => r.push(''));
+        renderStudioTableGrid(studioActiveRecord);
+        updateStudioChart();
+      }
+    });
+  }
+
+  // ➕ Add Data Row Button Handler
+  const studioBtnAddRow = document.getElementById('studioBtnAddRow');
+  if (studioBtnAddRow) {
+    studioBtnAddRow.addEventListener('click', () => {
+      if (!studioActiveRecord) return;
+      const sheetName = Object.keys(studioActiveRecord.extractedData)[0];
+      const sheet = studioActiveRecord.extractedData[sheetName];
+      if (!sheet) return;
+
+      const emptyRow = sheet.headers.map((h, i) => i === 0 ? `New Item ${sheet.rows.length + 1}` : 0);
+      sheet.rows.push(emptyRow);
+      renderStudioTableGrid(studioActiveRecord);
+      updateStudioChart();
+    });
+  }
+
+  // 💾 Save Dashboard Changes Button Handler
+  const studioBtnSave = document.getElementById('studioBtnSave');
+  if (studioBtnSave) {
+    studioBtnSave.addEventListener('click', async () => {
+      if (!studioActiveRecord) return;
+      await saveStudioData(false);
+    });
+  }
+
+  // ✅ Approve for Observatory Button Handler
+  const studioBtnApprove = document.getElementById('studioBtnApprove');
+  if (studioBtnApprove) {
+    studioBtnApprove.addEventListener('click', async () => {
+      if (!studioActiveRecord) return;
+      await saveStudioData(true);
+    });
+  }
+
+  async function saveStudioData(forceApprove = false) {
+    const studioDocTypeInput = document.getElementById('studioDocTypeInput');
+    const studioStatusSelect = document.getElementById('studioStatusSelect');
+    const studioNotesInput = document.getElementById('studioNotesInput');
+
+    const updatedDocType = studioDocTypeInput ? studioDocTypeInput.value.trim() : studioActiveRecord.docType;
+    const updatedStatus = forceApprove ? 'Approved' : (studioStatusSelect ? studioStatusSelect.value : studioActiveRecord.status);
+    const updatedAdminNotes = studioNotesInput ? studioNotesInput.value.trim() : studioActiveRecord.adminNotes;
+
+    // Harvest table cells from grid
+    const sheetName = Object.keys(studioActiveRecord.extractedData)[0];
+    const sheet = studioActiveRecord.extractedData[sheetName];
+    document.querySelectorAll('.studio-cell-input').forEach(input => {
+      const r = parseInt(input.getAttribute('data-row'), 10);
+      const c = parseInt(input.getAttribute('data-col'), 10);
+      let val = input.value.trim();
+      if (!isNaN(parseFloat(val)) && isFinite(val)) val = parseFloat(val);
+      if (sheet && sheet.rows && sheet.rows[r]) {
+        sheet.rows[r][c] = val;
+      }
+    });
+
+    // Update Draft Charts in record with current live state
+    if (studioChartInstance) {
+      const chartTypeSelect = document.getElementById('studioChartTypeSelect');
+      const chartType = chartTypeSelect ? chartTypeSelect.value : 'bar';
+      studioActiveRecord.graphDrafts = [{
+        id: `draft_${Date.now()}`,
+        title: `${sheet.headers[1] || 'Metric'} — Observatory Draft`,
+        source: `Studio Data Editor: ${sheetName}`,
+        primaryType: chartType,
+        recommendation: `Administrator configured ${chartType} visualization.`,
+        isDraft: !forceApprove,
+        chartData: JSON.parse(JSON.stringify(studioChartInstance.data))
+      }];
+    }
+
+    const updated = await dbManager.updateRecord(studioActiveRecord.id, {
+      docType: updatedDocType,
+      status: updatedStatus,
+      adminNotes: updatedAdminNotes,
+      extractedData: studioActiveRecord.extractedData,
+      graphDrafts: studioActiveRecord.graphDrafts
+    });
+
+    studioActiveRecord = { ...studioActiveRecord, ...updated };
+    if (activeScan && activeScan.id === studioActiveRecord.id) {
+      activeScan = { ...activeScan, ...updated };
+      renderOverviewTab(activeScan);
+      renderViewerTab(activeScan);
+      renderGraphsTab(activeScan);
+    }
+
+    await renderAdminPortal();
+    alert(`Dataset '${studioActiveRecord.fileName}' successfully saved to database!${forceApprove ? ' (Approved for Observatory)' : ''}`);
   }
 
   adminSearchInput.addEventListener('input', renderAdminPortal);
@@ -812,3 +1313,4 @@ document.addEventListener('DOMContentLoaded', async () => {
   });
 
 });
+

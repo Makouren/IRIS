@@ -254,6 +254,147 @@
         </div>
       </div>
 
+      <!-- ================= LIVE DASHBOARD STUDIO WORKBENCH ================= -->
+      <div class="studio-container" id="studioContainer" style="margin-bottom: 2rem;">
+        
+        <!-- Studio Header & Active Record Switcher -->
+        <div class="studio-header-card">
+          <div style="display: flex; align-items: center; gap: 1rem; flex-wrap: wrap; justify-content: space-between; width: 100%;">
+            <div style="display: flex; align-items: center; gap: 0.75rem;">
+              <span style="font-size: 1.4rem;">🎨</span>
+              <div>
+                <div style="font-size: 0.75rem; font-weight: 800; color: var(--clsu-green); text-transform: uppercase; letter-spacing: 0.05em;">ACTIVE DASHBOARD STUDIO WORKBENCH</div>
+                <div style="font-size: 1.2rem; font-weight: 800; color: #0F172A;" id="studioActiveFileName">Loading Scanned Dataset...</div>
+              </div>
+            </div>
+
+            <!-- Quick Document Switcher -->
+            <div style="display: flex; align-items: center; gap: 0.75rem;">
+              <label style="font-size: 0.82rem; font-weight: 800; color: #334155; text-transform: uppercase;">Switch Dataset:</label>
+              <select id="studioRecordSelect" class="form-input" style="width: auto; min-width: 250px; font-weight: 700; color: #0F172A;"></select>
+            </div>
+          </div>
+        </div>
+
+        <!-- Studio 2-Column Split View: Source Document (Left) vs Live Chart & Field Studio (Right) -->
+        <div class="studio-grid">
+          
+          <!-- LEFT COLUMN: Scanned Document Reference (Copy Source) -->
+          <div class="studio-left-card">
+            <div class="studio-card-title" style="display: flex; justify-content: space-between; align-items: center;">
+              <span>📄 Scanned Source Reference</span>
+              <span class="badge badge-low" style="font-size: 0.7rem;">Click to Copy Value</span>
+            </div>
+            <p style="font-size: 0.8rem; color: #64748B; margin-bottom: 0.85rem;">
+              Click any token badge below or highlight text to copy and paste directly into your charts and fields.
+            </p>
+
+            <!-- Sheet selector for spreadsheets -->
+            <div id="studioDocSheetSelectorContainer" style="display: none; margin-bottom: 0.75rem; align-items: center; gap: 0.5rem;">
+              <label style="font-size: 0.78rem; font-weight: 800; color: var(--clsu-green);">Worksheet:</label>
+              <select id="studioDocSheetSelect" class="form-input" style="padding: 0.3rem 0.6rem; font-size: 0.8rem; font-weight: 600;"></select>
+            </div>
+
+            <!-- Reference Content Area -->
+            <div id="studioDocContentArea" class="studio-ref-scroll">
+              <div style="color: #94A3B8; font-size: 0.85rem; padding: 1.5rem; text-align: center;">Select a dataset above to inspect extracted source values.</div>
+            </div>
+          </div>
+
+          <!-- RIGHT COLUMN: Live Chart & Field Editor -->
+          <div class="studio-right-card">
+            
+            <!-- Live Chart Visualization Card -->
+            <div class="studio-chart-box">
+              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.85rem; flex-wrap: wrap; gap: 0.5rem;">
+                <div>
+                  <h3 id="studioChartTitleDisplay" style="font-size: 1.15rem; font-weight: 800; color: var(--clsu-green);">Chart Preview</h3>
+                  <p id="studioChartSubtitleDisplay" style="font-size: 0.78rem; color: #64748B;">Live interactive rendering from data fields below</p>
+                </div>
+                
+                <!-- Chart Controls -->
+                <div style="display: flex; gap: 0.5rem; align-items: center;">
+                  <label style="font-size: 0.8rem; font-weight: 800; color: #334155; text-transform: uppercase;">Chart Type:</label>
+                  <select id="studioChartTypeSelect" class="form-input" style="width: auto; padding: 0.35rem 0.75rem; font-size: 0.82rem; font-weight: 700; color: #0F172A;">
+                    <option value="bar">Bar Chart</option>
+                    <option value="line">Line Chart</option>
+                    <option value="pie">Pie Chart</option>
+                  </select>
+                </div>
+              </div>
+
+              <!-- Chart Canvas -->
+              <div style="height: 280px; position: relative; width: 100%; margin-bottom: 0.75rem;">
+                <canvas id="studioChartCanvas"></canvas>
+              </div>
+            </div>
+
+            <!-- Field & Table Data Manager -->
+            <div class="studio-data-manager">
+              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem; flex-wrap: wrap; gap: 0.5rem;">
+                <div>
+                  <h4 style="font-size: 0.95rem; font-weight: 800; color: #0F172A;">📊 Editable Data Grid & Custom Fields</h4>
+                  <p style="font-size: 0.78rem; color: #64748B;">Edit cell values directly, add new columns/metrics, or paste copied values.</p>
+                </div>
+
+                <div style="display: flex; gap: 0.5rem;">
+                  <button id="studioBtnAddField" type="button" class="btn-studio-action" style="background: #EFF6FF; border: 1.5px solid #3B82F6; color: #1D4ED8;">
+                    ➕ Add Field / Column
+                  </button>
+                  <button id="studioBtnAddRow" type="button" class="btn-studio-action" style="background: #ECFDF5; border: 1.5px solid #10B981; color: #065F46;">
+                    ➕ Add Row
+                  </button>
+                </div>
+              </div>
+
+              <!-- Live Editable Table Grid -->
+              <div id="studioTableContainer" class="table-container" style="max-height: 280px; margin-bottom: 1.25rem;">
+                <!-- Dynamically rendered editable data grid -->
+              </div>
+
+              <!-- Record Metadata & Status Settings -->
+              <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem; margin-bottom: 1.25rem; background: #F8FAF8; padding: 1.25rem; border-radius: var(--radius-md); border: 1px solid var(--border-light);">
+                <div>
+                  <label class="form-label" style="font-weight: 800; font-size: 0.78rem; color: #334155; text-transform: uppercase; margin-bottom: 0.35rem; display: block;">Classification Category</label>
+                  <input type="text" id="studioDocTypeInput" class="form-input" style="font-weight: 600; color: #0F172A;">
+                </div>
+                <div>
+                  <label class="form-label" style="font-weight: 800; font-size: 0.78rem; color: #334155; text-transform: uppercase; margin-bottom: 0.35rem; display: block;">Approval Status</label>
+                  <select id="studioStatusSelect" class="form-input" style="font-weight: 600; color: #0F172A;">
+                    <option value="Pending Review">Pending Review</option>
+                    <option value="Approved">Approved for Dashboard</option>
+                    <option value="Needs Revision">Needs Revision</option>
+                  </select>
+                </div>
+                <div style="grid-column: 1 / -1;">
+                  <label class="form-label" style="font-weight: 800; font-size: 0.78rem; color: #334155; text-transform: uppercase; margin-bottom: 0.35rem; display: block;">Admin Verification Notes</label>
+                  <textarea id="studioNotesInput" class="form-input" rows="2" placeholder="Add verification logs and approval notes..." style="font-weight: 500; color: #0F172A; line-height: 1.5;"></textarea>
+                </div>
+              </div>
+
+              <!-- Studio Action Footer -->
+              <div style="display: flex; justify-content: flex-end; gap: 0.85rem; padding-top: 1rem; border-top: 1px solid var(--border-light);">
+                <button id="studioBtnSave" type="button" class="btn-save-modal">
+                  💾 Save Dashboard Changes
+                </button>
+                <button id="studioBtnApprove" type="button" class="btn-approve-modal">
+                  ✅ Approve for Observatory
+                </button>
+              </div>
+
+            </div>
+
+          </div>
+
+        </div>
+
+      </div>
+
+      <!-- Database Archive Section Title -->
+      <div class="clsu-section-title" style="margin-top: 2rem;">
+        <span>📁</span> Scanned Records Archive & Ingestion Logs
+      </div>
+
       <!-- Admin Search & Filter Bar -->
       <div style="display: flex; gap: 1rem; margin-bottom: 1rem; flex-wrap: wrap;">
         <input type="text" id="adminSearchInput" class="form-input" placeholder="Search records by filename, category, or values..." style="flex: 1; min-width: 250px;">
