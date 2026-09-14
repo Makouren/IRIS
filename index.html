@@ -289,45 +289,91 @@
               Read the full file directly side-by-side. Click any cell or word to copy value directly into your dashboard fields.
             </p>
 
-            <!-- Document Window Screen Frame -->
+            <!-- Document Window Screen Frame (MS Office / PDF Reader Theme) -->
             <div class="doc-window-container">
               <!-- Window Titlebar -->
               <div class="doc-window-titlebar">
-                <div class="doc-window-dots">
-                  <span class="doc-window-dot red"></span>
-                  <span class="doc-window-dot yellow"></span>
-                  <span class="doc-window-dot green"></span>
+                <div class="doc-window-quick-tools">
+                  <span title="Save">💾</span>
+                  <span title="Undo">↩</span>
+                  <span title="Redo">↪</span>
+                  <span style="color: #64748B;">|</span>
                 </div>
-                <div class="doc-window-title" id="docWindowTitle">document_source.xlsx</div>
-                <div style="font-size: 0.68rem; color: #94A3B8; font-family: var(--font-mono);" id="docWindowMeta">READY</div>
+                <div class="doc-window-title" id="docWindowTitle">document.docx - Word</div>
+                <div class="doc-window-controls">
+                  <span style="font-size: 0.7rem; color: #94A3B8;">Makouren</span>
+                  <span>🗕</span>
+                  <span>🗖</span>
+                  <span style="color: #EF4444; font-weight: 800;">✕</span>
+                </div>
               </div>
 
-              <!-- Window Toolbar -->
-              <div class="doc-window-toolbar">
-                <div style="display: flex; gap: 0.35rem; align-items: center;">
-                  <button type="button" id="btnDocViewSheet" class="doc-window-view-btn active" title="View as Spreadsheet Grid">📊 Sheet</button>
-                  <button type="button" id="btnDocViewText" class="doc-window-view-btn" title="View as Formatted Document Reader">📄 Text</button>
-                </div>
+              <!-- Ribbon Menu Tabs -->
+              <div class="doc-ribbon-tabs">
+                <button type="button" class="doc-ribbon-tab active">File</button>
+                <button type="button" class="doc-ribbon-tab active">Home</button>
+                <button type="button" class="doc-ribbon-tab">Insert</button>
+                <button type="button" class="doc-ribbon-tab">Layout</button>
+                <button type="button" class="doc-ribbon-tab">References</button>
+                <button type="button" class="doc-ribbon-tab">Review</button>
+                <button type="button" class="doc-ribbon-tab">View</button>
+              </div>
 
-                <!-- Sheet dropdown (when applicable) -->
+              <!-- Ribbon Toolbar Group -->
+              <div class="doc-ribbon-toolbar">
+                <div class="ribbon-group">
+                  <span title="Clipboard" style="font-size: 0.8rem; cursor: pointer;">📋 Paste</span>
+                </div>
+                <div class="ribbon-group">
+                  <span class="ribbon-badge" style="font-family: serif;">Times New Roman ▼</span>
+                  <span class="ribbon-badge">10 ▼</span>
+                  <span style="font-weight: 800; cursor: pointer; padding: 0 2px;">B</span>
+                  <span style="font-style: italic; cursor: pointer; padding: 0 2px;">I</span>
+                  <span style="text-decoration: underline; cursor: pointer; padding: 0 2px;">U</span>
+                </div>
+                <div class="ribbon-group">
+                  <span>≡</span>
+                  <span>⋮≡</span>
+                </div>
+                <!-- Worksheet Tab Dropdown (if spreadsheet) -->
                 <div id="studioDocSheetSelectorContainer" style="display: none; align-items: center; gap: 0.3rem;">
-                  <span style="font-size: 0.7rem; font-weight: 700; color: #334155;">Tab:</span>
-                  <select id="studioDocSheetSelect" class="form-input" style="padding: 0.2rem 0.4rem; font-size: 0.72rem; font-weight: 600; width: auto; max-width: 120px;"></select>
+                  <span style="font-size: 0.68rem; color: #94A3B8;">Sheet:</span>
+                  <select id="studioDocSheetSelect" class="form-input" style="padding: 0.15rem 0.4rem; font-size: 0.72rem; font-weight: 600; width: auto; max-width: 110px; background: #383838; color: #FFF; border-color: #555;"></select>
                 </div>
-
-                <!-- Window Quick Search / Filter -->
-                <input type="text" id="docWindowSearchInput" class="doc-window-search" placeholder="🔍 Search file...">
               </div>
 
-              <!-- Window Body Area -->
+              <!-- Document Page Canvas Body -->
               <div id="studioDocContentArea" class="doc-window-body">
-                <div style="color: #94A3B8; font-size: 0.82rem; padding: 2rem; text-align: center;">Loading scanned source document...</div>
+                <div class="word-doc-page">
+                  <p style="color: #64748B; text-align: center;">Loading authentic document text...</p>
+                </div>
+              </div>
+
+              <!-- Word Bottom Status Bar -->
+              <div class="doc-window-statusbar">
+                <div class="doc-status-group">
+                  <span id="docWindowPageCount">Page 1 of 1</span>
+                  <span>•</span>
+                  <span id="docWindowWordCount">450 words</span>
+                  <span>•</span>
+                  <span>English (United States)</span>
+                </div>
+                <div class="doc-status-group">
+                  <span title="Print Layout">📄</span>
+                  <span title="Web Layout">🌐</span>
+                  <div class="zoom-slider-fake">
+                    <span>—</span>
+                    <span style="font-size: 0.6rem; color: #64748B;">[ ──●── ]</span>
+                    <span>+</span>
+                    <span>100%</span>
+                  </div>
+                </div>
               </div>
             </div>
 
             <!-- Quick copy helper note -->
             <div style="margin-top: 0.65rem; font-size: 0.74rem; color: #64748B; display: flex; align-items: center; justify-content: space-between;">
-              <span>💡 <strong>Tip:</strong> Click any cell/line to copy its value.</span>
+              <span>💡 <strong>Tip:</strong> Highlight or click any text to copy directly.</span>
               <span id="docWindowCopyStatus" style="color: var(--clsu-green); font-weight: 700;"></span>
             </div>
           </div>

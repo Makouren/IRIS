@@ -599,111 +599,195 @@ body {
 }
 
 /* ====================================================================
-   Mini Document Window Screen Component
+   Authentic MS Office Word / Document Reader Window Screen
    ==================================================================== */
 .doc-window-container {
   display: flex;
   flex-direction: column;
-  border: 1.5px solid #CBD5E1;
   border-radius: 8px;
   overflow: hidden;
-  background: #F8FAFC;
-  box-shadow: 0 4px 14px rgba(15, 23, 42, 0.08);
+  background: #2B2B2B;
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.25);
+  border: 1px solid #404040;
 }
 
 .doc-window-titlebar {
-  background: #1E293B;
-  color: #F8FAFC;
-  padding: 0.5rem 0.75rem;
+  background: #1F1F1F;
+  color: #E2E8F0;
+  padding: 0.4rem 0.75rem;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  border-bottom: 1px solid #334155;
+  border-bottom: 1px solid #333333;
+  font-family: var(--font-sans);
 }
 
-.doc-window-dots {
+.doc-window-quick-tools {
   display: flex;
-  gap: 5px;
+  gap: 0.4rem;
   align-items: center;
+  color: #94A3B8;
+  font-size: 0.75rem;
 }
-
-.doc-window-dot {
-  width: 10px;
-  height: 10px;
-  border-radius: 50%;
-  display: inline-block;
-}
-
-.doc-window-dot.red { background: #EF4444; }
-.doc-window-dot.yellow { background: #F59E0B; }
-.doc-window-dot.green { background: #10B981; }
 
 .doc-window-title {
-  font-size: 0.76rem;
+  font-size: 0.78rem;
   font-weight: 700;
-  color: #E2E8F0;
-  font-family: var(--font-mono);
+  color: #F8FAFC;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  max-width: 250px;
+  max-width: 260px;
 }
 
-.doc-window-toolbar {
-  background: #F1F5F9;
-  border-bottom: 1px solid #E2E8F0;
-  padding: 0.45rem 0.65rem;
+.doc-window-controls {
   display: flex;
-  align-items: center;
-  justify-content: space-between;
   gap: 0.5rem;
-  flex-wrap: wrap;
+  align-items: center;
+  color: #94A3B8;
+  font-size: 0.75rem;
 }
 
-.doc-window-view-btn {
-  background: #FFFFFF;
-  border: 1px solid #CBD5E1;
-  color: #334155;
+.doc-ribbon-tabs {
+  background: #1F1F1F;
+  display: flex;
+  gap: 0.15rem;
+  padding: 0 0.5rem;
+  border-bottom: 1px solid #333333;
+}
+
+.doc-ribbon-tab {
+  background: transparent;
+  border: none;
+  color: #CBD5E1;
   font-size: 0.72rem;
-  font-weight: 700;
-  padding: 0.2rem 0.5rem;
-  border-radius: 4px;
+  padding: 0.25rem 0.55rem;
   cursor: pointer;
+  border-bottom: 2px solid transparent;
   transition: all 0.15s ease;
 }
 
-.doc-window-view-btn:hover {
-  background: #E2E8F0;
-  color: var(--clsu-green);
-}
-
-.doc-window-view-btn.active {
-  background: var(--clsu-green);
+.doc-ribbon-tab:hover {
+  background: #333333;
   color: #FFFFFF;
-  border-color: var(--clsu-green);
 }
 
-.doc-window-search {
-  background: #FFFFFF;
-  border: 1px solid #CBD5E1;
-  border-radius: 4px;
-  padding: 0.2rem 0.5rem;
-  font-size: 0.75rem;
-  color: #0F172A;
-  width: 130px;
-  outline: none;
+.doc-ribbon-tab.active {
+  background: #2B2B2B;
+  color: #FFFFFF;
+  border-bottom: 2px solid #3B82F6;
+  font-weight: 700;
 }
 
-.doc-window-search:focus {
-  border-color: var(--clsu-green);
-  box-shadow: 0 0 0 2px rgba(20, 108, 54, 0.15);
+.doc-ribbon-toolbar {
+  background: #2B2B2B;
+  border-bottom: 1px solid #383838;
+  padding: 0.35rem 0.75rem;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  color: #E2E8F0;
+  font-size: 0.72rem;
+  flex-wrap: wrap;
+}
+
+.ribbon-group {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding-right: 0.6rem;
+  border-right: 1px solid #404040;
+}
+
+.ribbon-badge {
+  background: #383838;
+  border: 1px solid #4A4A4A;
+  color: #F1F5F9;
+  padding: 0.15rem 0.4rem;
+  border-radius: 3px;
+  font-size: 0.7rem;
 }
 
 .doc-window-body {
-  height: 480px;
-  overflow: auto;
-  background: #FFFFFF;
+  height: 520px;
+  overflow-y: auto;
+  background: #4A4A4A;
+  padding: 1.25rem 0.85rem;
   position: relative;
+  scrollbar-width: thin;
+}
+
+/* Authentic Document Page Sheet */
+.word-doc-page {
+  background: #FFFFFF;
+  color: #0F172A;
+  width: 96%;
+  max-width: 440px;
+  margin: 0 auto 1.5rem auto;
+  padding: 2rem 1.75rem;
+  box-shadow: 0 4px 18px rgba(0, 0, 0, 0.35);
+  border-radius: 2px;
+  font-family: 'Times New Roman', Times, 'Cambria', Georgia, serif;
+  font-size: 0.86rem;
+  line-height: 1.65;
+  user-select: text;
+}
+
+.word-doc-page h3, .word-doc-page h4 {
+  font-family: 'Times New Roman', Times, serif;
+  font-weight: 800;
+  color: #0F172A;
+  margin-top: 1rem;
+  margin-bottom: 0.4rem;
+  line-height: 1.3;
+}
+
+.word-doc-page p {
+  margin-bottom: 0.75rem;
+  text-align: justify;
+  text-justify: inter-word;
+  color: #111827;
+}
+
+.word-doc-page strong {
+  color: #000000;
+  font-weight: 700;
+}
+
+.word-doc-page ul, .word-doc-page ol {
+  margin-bottom: 0.75rem;
+  padding-left: 1.25rem;
+}
+
+.word-doc-page li {
+  margin-bottom: 0.35rem;
+  color: #111827;
+}
+
+/* Word Bottom Status Bar */
+.doc-window-statusbar {
+  background: #1F1F1F;
+  border-top: 1px solid #333333;
+  color: #94A3B8;
+  padding: 0.3rem 0.75rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 0.68rem;
+  font-family: var(--font-sans);
+}
+
+.doc-status-group {
+  display: flex;
+  gap: 0.6rem;
+  align-items: center;
+}
+
+.zoom-slider-fake {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  color: #CBD5E1;
 }
 
 /* Mini Spreadsheet Table View */
@@ -722,7 +806,7 @@ body {
   font-size: 0.72rem;
   text-transform: uppercase;
   padding: 0.4rem 0.55rem;
-  border: 1px solid #E2E8F0;
+  border: 1px solid #CBD5E1;
   position: sticky;
   top: 0;
   z-index: 5;
@@ -731,11 +815,12 @@ body {
 }
 
 .mini-sheet-table tbody tr {
+  background: #FFFFFF;
   transition: background 0.1s ease;
 }
 
 .mini-sheet-table tbody tr:nth-child(even) {
-  background: #FAFCFA;
+  background: #F8FAF8;
 }
 
 .mini-sheet-table tbody tr:hover {
@@ -777,52 +862,6 @@ body {
   color: #FFFFFF !important;
   font-weight: 800;
 }
-
-/* Mini Document Text View */
-.mini-doc-page {
-  padding: 1.25rem;
-  font-family: var(--font-mono);
-  font-size: 0.8rem;
-  line-height: 1.7;
-  color: #1E293B;
-  background: #FFFFFF;
-  min-height: 100%;
-}
-
-.mini-doc-page p {
-  margin-bottom: 0.75rem;
-}
-
-.mini-doc-line {
-  display: flex;
-  gap: 0.5rem;
-  padding: 0.15rem 0;
-  border-bottom: 1px solid #F1F5F9;
-  align-items: baseline;
-}
-
-.mini-doc-line:hover {
-  background: #F0FDF4;
-}
-
-.mini-doc-line .line-no {
-  color: #94A3B8;
-  font-size: 0.7rem;
-  min-width: 24px;
-  user-select: none;
-}
-
-.mini-doc-line .line-text {
-  color: #0F172A;
-  cursor: pointer;
-  flex: 1;
-}
-
-.mini-doc-line .line-text:hover {
-  color: var(--clsu-green);
-  font-weight: 600;
-}
-
 
 .studio-chart-box {
   background: #F8FAF8;

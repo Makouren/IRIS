@@ -778,7 +778,8 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   function renderDocWindowBody(record) {
     const docContentArea = document.getElementById('studioDocContentArea');
-    const docWindowMeta = document.getElementById('docWindowMeta');
+    const docWindowPageCount = document.getElementById('docWindowPageCount');
+    const docWindowWordCount = document.getElementById('docWindowWordCount');
     const copyStatus = document.getElementById('docWindowCopyStatus');
     if (!docContentArea) return;
 
@@ -787,9 +788,8 @@ document.addEventListener('DOMContentLoaded', async () => {
       const headers = sheet.headers || [];
       const rows = sheet.rows || [];
 
-      if (docWindowMeta) {
-        docWindowMeta.textContent = `${rows.length} ROWS • ${(record.fileType || 'SHEET').toUpperCase()}`;
-      }
+      if (docWindowPageCount) docWindowPageCount.textContent = `Sheet: ${docWindowActiveSheetKey}`;
+      if (docWindowWordCount) docWindowWordCount.textContent = `${rows.length} rows • ${headers.length} cols`;
 
       // Filter rows if search active
       const filteredRows = rows.map((row, origIdx) => ({ row, origIdx })).filter(item => {
@@ -802,7 +802,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         return;
       }
 
-      let html = `<table class="mini-sheet-table"><thead><tr>`;
+      let html = `<div style="background: #FFFFFF; border-radius: 4px; overflow: hidden; box-shadow: 0 4px 16px rgba(0,0,0,0.3); margin: 0 auto; max-width: 100%;"><table class="mini-sheet-table"><thead><tr>`;
       html += `<th style="width: 32px; text-align: center; position: sticky; left: 0; z-index: 6; background: #F1F5F9;">#</th>`;
       headers.forEach((h, cIdx) => {
         const colLetter = String.fromCharCode(65 + (cIdx % 26));
@@ -822,7 +822,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         html += `</tr>`;
       });
 
-      html += `</tbody></table>`;
+      html += `</tbody></table></div>`;
       docContentArea.innerHTML = html;
 
       // Wire 1-Click Copy on Table Cells
@@ -843,58 +843,68 @@ document.addEventListener('DOMContentLoaded', async () => {
       });
 
     } else {
-      // Document Text Reader View
+      // Authentic Word Document Page Layout
       const rawText = record.rawText || '';
-      const lines = rawText.split('\n').map(l => l.trim()).filter(Boolean);
+      const words = rawText.split(/\s+/).filter(Boolean);
+      const totalWords = words.length;
+      const estimatedPages = Math.max(1, Math.ceil(totalWords / 280));
 
-      if (docWindowMeta) {
-        docWindowMeta.textContent = `${lines.length} LINES • ${(record.fileType || 'DOC').toUpperCase()}`;
-      }
+      if (docWindowPageCount) docWindowPageCount.textContent = `Page 1 of ${estimatedPages}`;
+      if (docWindowWordCount) docWindowWordCount.textContent = `${totalWords.toLocaleString()} words`;
 
-      if (lines.length === 0) {
-        docContentArea.innerHTML = `<div style="color: #94A3B8; font-size: 0.82rem; padding: 2rem; text-align: center;">No raw document text available.</div>`;
+      if (!rawText.trim()) {
+        docContentArea.innerHTML = `<div class="word-doc-page"><p style="color: #94A3B8; text-align: center;">No document content available.</p></div>`;
         return;
       }
 
-      const filteredLines = lines.map((l, origIdx) => ({ l, origIdx })).filter(item => {
-        if (!docWindowSearchQuery) return true;
-        return item.l.toLowerCase().includes(docWindowSearchQuery);
-      });
+      // Group into paragraphs by blank lines or carriage returns
+      const paragraphs = rawText.split(/\n\s*\n/).map(p => p.trim()).filter(Boolean);
 
-      let html = `<div class="mini-doc-page">`;
-      filteredLines.forEach(({ l, origIdx }) => {
-        const safeVal = l.replace(/"/g, '&quot;');
-        html += `
-          <div class="mini-doc-line">
-            <span class="line-no">${origIdx + 1}</span>
-            <span class="line-text" data-val="${safeVal}" title="Click to copy full line">${l}</span>
-          </div>
-        `;
-      });
-      html += `</div>`;
-      docContentArea.innerHTML = html;
+      let docHtml = `<div class="word-doc-page">`;
 
-      // Wire 1-Click Copy on Text Lines
-      docContentArea.querySelectorAll('.line-text').forEach(el => {
-        el.onclick = (e) => {
-          const val = el.getAttribute('data-val');
-          if (val) {
-            navigator.clipboard.writeText(val).then(() => {
-              el.style.color = '#047857';
-              el.style.fontWeight = '800';
-              if (copyStatus) {
-                copyStatus.textContent = `✓ Copied line ${el.previousElementSibling ? el.previousElementSibling.textContent : ''}`;
-                setTimeout(() => { if (copyStatus) copyStatus.textContent = ''; }, 2000);
-              }
-              setTimeout(() => {
-                el.style.color = '';
-                el.style.fontWeight = '';
-              }, 700);
-            });
+      paragraphs.forEach(para => {
+        const lines = para.split('\n').map(l => l.trim()).filter(Boolean);
+        
+        lines.forEach(line => {
+          // Check if line is a Heading / Title
+          const isHeading = line.length < 75 && (line.endsWith(':') || line.toUpperCase() === line || /^(\d+\.|\b(Section|Chapter|Title|Summary|Overview|Background|Techniques|Methodology|Backlog|Findings)\b)/i.test(line));
+          
+          // Check if line is a numbered/bullet item e.g. "1. Interview - ..."
+          const isNumberedItem = /^\d+[\.\)]\s+/.test(line);
+
+          if (isHeading) {
+            docHtml += `<h4 style="font-family: 'Times New Roman', serif; font-size: 0.95rem; font-weight: 800; color: #000000; margin: 1.1rem 0 0.35rem 0; line-height: 1.35;">${escapeHtml(line)}</h4>`;
+          } else if (isNumberedItem) {
+            // Bold prefix e.g. "1. Interview —"
+            const match = line.match(/^(\d+[\.\)]\s+[^—\-\:]+[\—\-\:])(.*)$/);
+            if (match) {
+              docHtml += `<p style="margin-bottom: 0.65rem; padding-left: 0.75rem; text-indent: -0.75rem;"><strong>${escapeHtml(match[1])}</strong>${escapeHtml(match[2])}</p>`;
+            } else {
+              docHtml += `<p style="margin-bottom: 0.65rem; padding-left: 0.75rem; text-indent: -0.75rem;">${escapeHtml(line)}</p>`;
+            }
+          } else {
+            docHtml += `<p style="margin-bottom: 0.75rem; text-align: justify; text-justify: inter-word;">${escapeHtml(line)}</p>`;
           }
-        };
+        });
+      });
+
+      docHtml += `</div>`;
+      docContentArea.innerHTML = docHtml;
+
+      // Enable text selection and click-to-copy on paragraphs
+      docContentArea.querySelectorAll('.word-doc-page p, .word-doc-page h4').forEach(el => {
+        el.style.cursor = 'text';
       });
     }
+  }
+
+  function escapeHtml(text) {
+    return String(text)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#039;');
   }
 
   function ensureTableDataStructure(record) {
