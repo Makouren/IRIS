@@ -838,9 +838,273 @@ body {
   padding-left: 1.25rem;
 }
 
-.acrobat-page-card li {
-  margin-bottom: 0.35rem;
-  color: #1F2937;
+/* ====================================================================
+   Mozilla PDF.js Component Styling (PdfViewerComponent)
+   ==================================================================== */
+.pdf-viewer-root {
+  display: flex;
+  flex-direction: column;
+  border-radius: var(--radius-md, 8px);
+  overflow: hidden;
+  background: #323639;
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.22);
+  border: 1px solid #282B2E;
+  width: 100%;
+}
+
+.pdf-viewer-toolbar {
+  background: #2B2E31;
+  color: #E2E8F0;
+  padding: 0.45rem 0.75rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid #1E2124;
+  font-family: var(--font-sans);
+  gap: 0.5rem;
+  user-select: none;
+  flex-wrap: wrap;
+}
+
+.pdf-tb-left {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  overflow: hidden;
+  max-width: 38%;
+}
+
+.pdf-brand-badge {
+  background: #E5252A;
+  color: #FFFFFF;
+  font-size: 0.62rem;
+  font-weight: 800;
+  padding: 0.15rem 0.38rem;
+  border-radius: 3px;
+  letter-spacing: 0.04em;
+}
+
+.pdf-tb-filename {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: #F8FAFC;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pdf-tb-center {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  background: #202225;
+  padding: 0.15rem 0.45rem;
+  border-radius: 4px;
+  border: 1px solid #3A3E42;
+}
+
+.pdf-page-indicator {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  font-size: 0.72rem;
+  color: #CBD5E1;
+  font-weight: 600;
+}
+
+.pdf-page-num-input {
+  width: 34px;
+  text-align: center;
+  background: #141618;
+  border: 1px solid #4A4E53;
+  color: #FFFFFF;
+  font-size: 0.72rem;
+  padding: 0.1rem 0.2rem;
+  border-radius: 3px;
+  font-weight: 600;
+}
+
+.pdf-tb-right {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.pdf-btn {
+  background: transparent;
+  border: none;
+  color: #CBD5E1;
+  cursor: pointer;
+  padding: 0.2rem 0.4rem;
+  border-radius: 3px;
+  font-size: 0.72rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.15s ease;
+  line-height: 1;
+}
+
+.pdf-btn:hover {
+  background: #40444B;
+  color: #FFFFFF;
+}
+
+.pdf-btn.active {
+  background: #047857;
+  color: #FFFFFF;
+}
+
+.pdf-zoom-val {
+  font-size: 0.72rem;
+  color: #CBD5E1;
+  min-width: 36px;
+  text-align: center;
+  font-weight: 600;
+}
+
+.pdf-tb-sep {
+  color: #4A4E53;
+  font-size: 0.75rem;
+  margin: 0 0.2rem;
+}
+
+.pdf-copy-toast {
+  display: none;
+  font-size: 0.68rem;
+  background: #10B981;
+  color: #FFFFFF;
+  padding: 0.15rem 0.45rem;
+  border-radius: 3px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.pdf-copy-toast.visible {
+  display: inline-block;
+  animation: fadeInToast 0.2s ease;
+}
+
+@keyframes fadeInToast {
+  from { opacity: 0; transform: translateY(-3px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* Scrollable Viewport Canvas Area */
+.pdf-viewer-viewport {
+  height: 520px;
+  overflow-y: auto;
+  overflow-x: auto;
+  background: #525659;
+  padding: 1.5rem 1rem;
+  position: relative;
+  scrollbar-width: thin;
+  scrollbar-color: #767A7E #323639;
+}
+
+.pdf-viewer-viewport::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+.pdf-viewer-viewport::-webkit-scrollbar-track {
+  background: #2D3033;
+}
+
+.pdf-viewer-viewport::-webkit-scrollbar-thumb {
+  background: #767A7E;
+  border-radius: 5px;
+}
+
+.pdf-viewer-viewport::-webkit-scrollbar-thumb:hover {
+  background: #9AA0A6;
+}
+
+/* Page Stack */
+.pdf-pages-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 1.75rem;
+  width: 100%;
+  align-items: center;
+}
+
+.pdf-pages-stack.single-mode {
+  gap: 0;
+}
+
+/* Individual PDF Page Wrapper (Canvas + TextLayer) */
+.pdf-page-card {
+  position: relative;
+  background: #FFFFFF;
+  box-shadow: 0 4px 18px rgba(0, 0, 0, 0.45), 0 0 2px rgba(0, 0, 0, 0.3);
+  margin: 0 auto;
+  user-select: text;
+}
+
+.pdf-canvas {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+/* Text Layer for native selection & clicking */
+.pdf-page-card .textLayer {
+  position: absolute;
+  left: 0;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  overflow: hidden;
+  opacity: 1;
+  line-height: 1.0;
+  pointer-events: auto;
+}
+
+.pdf-page-card .textLayer ::selection {
+  background: rgba(16, 185, 129, 0.35);
+  color: transparent;
+}
+
+.pdf-page-card .textLayer span {
+  color: transparent;
+  position: absolute;
+  white-space: pre;
+  cursor: text;
+  transform-origin: 0% 0%;
+}
+
+.pdf-page-footer-tag {
+  position: absolute;
+  bottom: -1.25rem;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 0.65rem;
+  color: #CBD5E1;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+}
+
+.pdf-loading-state, .pdf-error-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 4rem 2rem;
+  color: #CBD5E1;
+  font-size: 0.85rem;
+  text-align: center;
+}
+
+.pdf-spinner {
+  width: 32px;
+  height: 32px;
+  border: 3px solid rgba(255, 255, 255, 0.2);
+  border-top-color: #10B981;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+  margin-bottom: 1rem;
 }
 
 /* Spreadsheet Horizontal Scroll Container */

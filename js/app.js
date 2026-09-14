@@ -946,7 +946,36 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     } else {
       docContentArea.classList.remove('sheet-mode');
-      // Authentic Adobe Acrobat PDF Document Page Layout
+
+      // 1. Direct Mozilla PDF.js rendering if PDF data is present
+      if ((record.type === 'pdf' || record.fileType === 'pdf') && (record.pdfBuffer || record.pdfDocReference || record.previewUrl) && typeof PdfViewerComponent !== 'undefined') {
+        const pdfViewer = new PdfViewerComponent(docContentArea, {
+          showToolbar: false,
+          scrollMode: 'continuous',
+          onTextSelect: (text) => {
+            navigator.clipboard.writeText(text).catch(() => {});
+            if (copyStatus) {
+              copyStatus.textContent = `✓ Copied: "${text.length > 25 ? text.substr(0, 25) + '...' : text}"`;
+              setTimeout(() => { if (copyStatus) copyStatus.textContent = ''; }, 2000);
+            }
+          },
+          onPageChange: (current, total) => {
+            acrobatCurrentPage = current;
+            acrobatTotalPages = total;
+            if (acrobatCurrentPageInput) {
+              acrobatCurrentPageInput.value = String(current);
+              acrobatCurrentPageInput.max = String(total);
+            }
+            if (acrobatTotalPagesSpan) acrobatTotalPagesSpan.textContent = String(total);
+            if (docWindowPageCount) docWindowPageCount.textContent = `${total} page${total > 1 ? 's' : ''}`;
+          }
+        });
+
+        pdfViewer.loadDocument(record.pdfBuffer || record.pdfDocReference || record.previewUrl, record.fileName || 'document.pdf');
+        return;
+      }
+
+      // 2. Authentic Adobe Acrobat Page Card Layout for Word DOCX / Text / Scanned Documents
       const rawText = record.rawText || '';
       const words = rawText.split(/\s+/).filter(Boolean);
       const totalWords = words.length;

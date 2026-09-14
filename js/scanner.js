@@ -97,6 +97,7 @@ class ScannerOrchestrator {
       previewUrl: parsedResult.previewUrl,
       sheetsData: parsedResult.sheetsData,
       pages: parsedResult.pages,
+      pdfBuffer: parsedResult.pdfBuffer,
       pdfDocReference: parsedResult.pdfDocReference,
       graphDrafts,
       status: 'Pending Review'

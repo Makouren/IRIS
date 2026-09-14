@@ -104,6 +104,7 @@ class PdfParser {
       rawText: fullText.trim(),
       metadata,
       pages: pagesData,
+      pdfBuffer: arrayBuffer,
       pdfDocReference: pdfDoc
     };
   }

@@ -24,95 +24,95 @@
           ],
           "rows": [
             [
-              2025,
-              "801-1000",
-              2,
-              "Zero Hunger",
-              "301-400"
-            ],
-            [
-              2025,
-              "801-1000",
-              4,
-              "Quality Education",
-              "401-600"
-            ],
-            [
-              2025,
-              "801-1000",
-              5,
-              "Gender Equality",
-              "401-600"
-            ],
-            [
-              2025,
-              "801-1000",
-              7,
-              "Affordable and Clean Energy",
-              "401-600"
-            ],
-            [
-              2025,
-              "801-1000",
-              11,
-              "Sustainable Cities and Communities",
-              "601-800"
-            ],
-            [
-              2025,
-              "801-1000",
-              13,
-              "Climate Action",
-              "401-600"
-            ],
-            [
-              2025,
-              "801-1000",
-              14,
-              "Life Below Water",
-              "101-200"
-            ],
-            [
-              2025,
-              "801-1000",
-              15,
-              "Life on Land",
-              "201-300"
-            ],
-            [
-              2025,
-              "801-1000",
-              17,
-              "Partnerships for the Goals",
-              "401-600"
-            ],
-            [
-              2022,
-              "601-800",
-              "",
-              "",
-              ""
-            ],
-            [
-              2023,
-              "801-1000",
-              "",
-              "",
-              ""
-            ],
-            [
+              "Doctor of Veterinary Medicine",
               2024,
-              "801-1000",
-              "",
-              "",
-              ""
+              "July 9-11",
+              "Expected Learning Outcomes",
+              4
             ],
             [
-              "",
-              "",
-              "",
-              "",
-              ""
+              "Doctor of Veterinary Medicine",
+              2024,
+              "July 9-11",
+              "Programme Structure and Content",
+              4
+            ],
+            [
+              "Doctor of Veterinary Medicine",
+              2024,
+              "July 9-11",
+              "Teaching and Learning Approach",
+              5
+            ],
+            [
+              "Doctor of Veterinary Medicine",
+              2024,
+              "July 9-11",
+              "Student Assessment",
+              4
+            ],
+            [
+              "Doctor of Veterinary Medicine",
+              2024,
+              "July 9-11",
+              "Academic Staff",
+              5
+            ],
+            [
+              "Doctor of Veterinary Medicine",
+              2024,
+              "July 9-11",
+              "Student Support Services",
+              4
+            ],
+            [
+              "Doctor of Veterinary Medicine",
+              2024,
+              "July 9-11",
+              "Facilities and Infrastructure",
+              4
+            ],
+            [
+              "Doctor of Veterinary Medicine",
+              2024,
+              "July 9-11",
+              "Output and Outcomes",
+              4
+            ],
+            [
+              "Doctor of Veterinary Medicine",
+              2024,
+              "July 9-11",
+              "Overall Verdict",
+              "Adequate as Expected"
+            ],
+            [
+              "Bachelor of Science in Agriculture",
+              2024,
+              "July 9-11",
+              "Expected Learning Outcomes",
+              4
+            ],
+            [
+              "Bachelor of Science in Agriculture",
+              2024,
+              "July 9-11",
+              "Programme Structure and Content",
+              4
+            ],
+            [
+              "Bachelor of Science in Agriculture",
+              2024,
+              "July 9-11",
+              "Teaching and Learning Approach",
+              5
+            ],
+            [
+              "Bachelor of Science in Agriculture",
+              2024,
+              "July 9-11",
+              "Student Assessment",
+              4
             ]
           ],
           "numericStats": {
@@ -996,413 +996,11 @@
       },
       "graphDrafts": [
         {
-          "id": "draft_1789426770813_0",
-          "title": "Year — Spreadsheet: The Impact Rankings",
-          "source": "Spreadsheet: The Impact Rankings",
+          "id": "draft_1789428081454",
+          "title": "Score — AUN-QA Programs",
+          "source": "Studio Data Editor: The Impact Rankings",
           "primaryType": "bar",
-          "recommendation": "Bar Chart recommended to compare distinct categories side-by-side.",
-          "isDraft": true,
-          "chartData": {
-            "labels": [
-              "801-1000",
-              "801-1000",
-              "801-1000",
-              "801-1000",
-              "801-1000",
-              "801-1000",
-              "801-1000",
-              "801-1000",
-              "801-1000",
-              "601-800",
-              "801-1000",
-              "801-1000",
-              "Item"
-            ],
-            "datasets": [
-              {
-                "label": "Year",
-                "data": [
-                  2025,
-                  2025,
-                  2025,
-                  2025,
-                  2025,
-                  2025,
-                  2025,
-                  2025,
-                  2025,
-                  2022,
-                  2023,
-                  2024,
-                  0
-                ],
-                "backgroundColor": "rgba(20, 108, 54, 0.45)",
-                "borderColor": "#146C36",
-                "borderWidth": 2,
-                "tension": 0.35,
-                "fill": false
-              }
-            ]
-          }
-        },
-        {
-          "id": "draft_1789426770813_1",
-          "title": "SDG. No — Spreadsheet: The Impact Rankings",
-          "source": "Spreadsheet: The Impact Rankings",
-          "primaryType": "bar",
-          "recommendation": "Bar Chart recommended to compare distinct categories side-by-side.",
-          "isDraft": true,
-          "chartData": {
-            "labels": [
-              "801-1000",
-              "801-1000",
-              "801-1000",
-              "801-1000",
-              "801-1000",
-              "801-1000",
-              "801-1000",
-              "801-1000",
-              "801-1000",
-              "601-800",
-              "801-1000",
-              "801-1000",
-              "Item"
-            ],
-            "datasets": [
-              {
-                "label": "SDG. No",
-                "data": [
-                  2,
-                  4,
-                  5,
-                  7,
-                  11,
-                  13,
-                  14,
-                  15,
-                  17,
-                  0,
-                  0,
-                  0,
-                  0
-                ],
-                "backgroundColor": "rgba(245, 158, 11, 0.45)",
-                "borderColor": "#F59E0B",
-                "borderWidth": 2,
-                "tension": 0.35,
-                "fill": false
-              }
-            ]
-          }
-        },
-        {
-          "id": "draft_1789426770813_0",
-          "title": "Year — Spreadsheet: WURI",
-          "source": "Spreadsheet: WURI",
-          "primaryType": "bar",
-          "recommendation": "Bar Chart recommended to compare distinct categories side-by-side.",
-          "isDraft": true,
-          "chartData": {
-            "labels": [
-              "Funding for Sustainability",
-              "Cost-Benefit Management",
-              "SDG-Based Responses to Global Challenges",
-              "Industrial Application",
-              "Crisis Management",
-              "Entrepreneurial Spirit",
-              "Industrial Application",
-              "Ethical Value",
-              "Fourth Industrial Revolution"
-            ],
-            "datasets": [
-              {
-                "label": "Year",
-                "data": [
-                  2025,
-                  2025,
-                  2025,
-                  2024,
-                  2024,
-                  2024,
-                  2023,
-                  2023,
-                  2023
-                ],
-                "backgroundColor": "rgba(20, 108, 54, 0.45)",
-                "borderColor": "#146C36",
-                "borderWidth": 2,
-                "tension": 0.35,
-                "fill": false
-              }
-            ]
-          }
-        },
-        {
-          "id": "draft_1789426770813_1",
-          "title": "Overall Rank — Spreadsheet: WURI",
-          "source": "Spreadsheet: WURI",
-          "primaryType": "bar",
-          "recommendation": "Bar Chart recommended to compare distinct categories side-by-side.",
-          "isDraft": true,
-          "chartData": {
-            "labels": [
-              "Funding for Sustainability",
-              "Cost-Benefit Management",
-              "SDG-Based Responses to Global Challenges",
-              "Industrial Application",
-              "Crisis Management",
-              "Entrepreneurial Spirit",
-              "Industrial Application",
-              "Ethical Value",
-              "Fourth Industrial Revolution"
-            ],
-            "datasets": [
-              {
-                "label": "Overall Rank",
-                "data": [
-                  118,
-                  118,
-                  118,
-                  135,
-                  135,
-                  135,
-                  86,
-                  86,
-                  86
-                ],
-                "backgroundColor": "rgba(245, 158, 11, 0.45)",
-                "borderColor": "#F59E0B",
-                "borderWidth": 2,
-                "tension": 0.35,
-                "fill": false
-              }
-            ]
-          }
-        },
-        {
-          "id": "draft_1789426770813_2",
-          "title": "Category Rank — Spreadsheet: WURI",
-          "source": "Spreadsheet: WURI",
-          "primaryType": "bar",
-          "recommendation": "Bar Chart recommended to compare distinct categories side-by-side.",
-          "isDraft": true,
-          "chartData": {
-            "labels": [
-              "Funding for Sustainability",
-              "Cost-Benefit Management",
-              "SDG-Based Responses to Global Challenges",
-              "Industrial Application",
-              "Crisis Management",
-              "Entrepreneurial Spirit",
-              "Industrial Application",
-              "Ethical Value",
-              "Fourth Industrial Revolution"
-            ],
-            "datasets": [
-              {
-                "label": "Category Rank",
-                "data": [
-                  5,
-                  5,
-                  23,
-                  14,
-                  22,
-                  26,
-                  27,
-                  25,
-                  19
-                ],
-                "backgroundColor": "rgba(13, 148, 136, 0.45)",
-                "borderColor": "#0D9488",
-                "borderWidth": 2,
-                "tension": 0.35,
-                "fill": false
-              }
-            ]
-          }
-        },
-        {
-          "id": "draft_1789426770813_0",
-          "title": "Year (Edition) — Spreadsheet: The World University Rankings",
-          "source": "Spreadsheet: The World University Rankings",
-          "primaryType": "bar",
-          "recommendation": "Bar Chart recommended to compare distinct categories side-by-side.",
-          "isDraft": true,
-          "chartData": {
-            "labels": [
-              "Reporter Status",
-              "Reporter Status"
-            ],
-            "datasets": [
-              {
-                "label": "Year (Edition)",
-                "data": [
-                  2024,
-                  2025
-                ],
-                "backgroundColor": "rgba(20, 108, 54, 0.45)",
-                "borderColor": "#146C36",
-                "borderWidth": 2,
-                "tension": 0.35,
-                "fill": false
-              }
-            ]
-          }
-        },
-        {
-          "id": "draft_1789426770813_0",
-          "title": "Year — Spreadsheet: QS Rankings ",
-          "source": "Spreadsheet: QS Rankings ",
-          "primaryType": "bar",
-          "recommendation": "Bar Chart recommended to compare distinct categories side-by-side.",
-          "isDraft": true,
-          "chartData": {
-            "labels": [
-              "601+",
-              "601-650",
-              "701-750",
-              "Not listed",
-              "851-900"
-            ],
-            "datasets": [
-              {
-                "label": "Year",
-                "data": [
-                  2021,
-                  2022,
-                  2023,
-                  2024,
-                  2025
-                ],
-                "backgroundColor": "rgba(20, 108, 54, 0.45)",
-                "borderColor": "#146C36",
-                "borderWidth": 2,
-                "tension": 0.35,
-                "fill": false
-              }
-            ]
-          }
-        },
-        {
-          "id": "draft_1789426770813_0",
-          "title": "Year — Spreadsheet: QS Stars",
-          "source": "Spreadsheet: QS Stars",
-          "primaryType": "bar",
-          "recommendation": "Bar Chart recommended to compare distinct categories side-by-side.",
-          "isDraft": true,
-          "chartData": {
-            "labels": [
-              "Teaching",
-              "Employability",
-              "Inclusiveness",
-              "Social Responsibility",
-              "Facilities",
-              "Research",
-              "Internationalization",
-              "Program Strength",
-              "OVERALL",
-              "Teaching",
-              "Employability",
-              "Inclusiveness",
-              "Social Responsibility",
-              "Facilities",
-              "Research"
-            ],
-            "datasets": [
-              {
-                "label": "Year",
-                "data": [
-                  2020,
-                  2020,
-                  2020,
-                  2020,
-                  2020,
-                  2020,
-                  2020,
-                  2020,
-                  2020,
-                  2023,
-                  2023,
-                  2023,
-                  2023,
-                  2023,
-                  2023
-                ],
-                "backgroundColor": "rgba(20, 108, 54, 0.45)",
-                "borderColor": "#146C36",
-                "borderWidth": 2,
-                "tension": 0.35,
-                "fill": false
-              }
-            ]
-          }
-        },
-        {
-          "id": "draft_1789426770813_0",
-          "title": "Year — Spreadsheet: AppliedHE",
-          "source": "Spreadsheet: AppliedHE",
-          "primaryType": "bar",
-          "recommendation": "Bar Chart recommended to compare distinct categories side-by-side.",
-          "isDraft": true,
-          "chartData": {
-            "labels": [
-              "Gloabal Ranking",
-              "Philippines Ranking",
-              "Asia (Public Universities)"
-            ],
-            "datasets": [
-              {
-                "label": "Year",
-                "data": [
-                  2026,
-                  2026,
-                  2026
-                ],
-                "backgroundColor": "rgba(20, 108, 54, 0.45)",
-                "borderColor": "#146C36",
-                "borderWidth": 2,
-                "tension": 0.35,
-                "fill": false
-              }
-            ]
-          }
-        },
-        {
-          "id": "draft_1789426770813_1",
-          "title": "Rank — Spreadsheet: AppliedHE",
-          "source": "Spreadsheet: AppliedHE",
-          "primaryType": "bar",
-          "recommendation": "Bar Chart recommended to compare distinct categories side-by-side.",
-          "isDraft": true,
-          "chartData": {
-            "labels": [
-              "Gloabal Ranking",
-              "Philippines Ranking",
-              "Asia (Public Universities)"
-            ],
-            "datasets": [
-              {
-                "label": "Rank",
-                "data": [
-                  69,
-                  2,
-                  201
-                ],
-                "backgroundColor": "rgba(245, 158, 11, 0.45)",
-                "borderColor": "#F59E0B",
-                "borderWidth": 2,
-                "tension": 0.35,
-                "fill": false
-              }
-            ]
-          }
-        },
-        {
-          "id": "draft_1789426770813_0",
-          "title": "Year — Spreadsheet: AUN-QA Programs",
-          "source": "Spreadsheet: AUN-QA Programs",
-          "primaryType": "bar",
-          "recommendation": "Bar Chart recommended to compare distinct categories side-by-side.",
+          "recommendation": "Administrator configured bar visualization.",
           "isDraft": true,
           "chartData": {
             "labels": [
@@ -1420,65 +1018,26 @@
               "Bachelor of Science in Agriculture",
               "Bachelor of Science in Agriculture",
               "Bachelor of Science in Agriculture",
-              "Bachelor of Science in Agriculture"
+              "Bachelor of Science in Agriculture",
+              "Bachelor of Science in Agriculture",
+              "Bachelor of Science in Agriculture",
+              "Bachelor of Science in Agriculture",
+              "Bachelor of Science in Development Communication",
+              "Bachelor of Science in Development Communication",
+              "Bachelor of Science in Development Communication",
+              "Bachelor of Science in Development Communication",
+              "Bachelor of Science in Development Communication",
+              "Bachelor of Science in Development Communication",
+              "Bachelor of Science in Development Communication",
+              "Bachelor of Science in Development Communication",
+              "Bachelor of Science in Development Communication",
+              "Bachelor of Secondary Education",
+              "Bachelor of Secondary Education",
+              "Bachelor of Secondary Education"
             ],
             "datasets": [
               {
-                "label": "Year",
-                "data": [
-                  2024,
-                  2024,
-                  2024,
-                  2024,
-                  2024,
-                  2024,
-                  2024,
-                  2024,
-                  2024,
-                  2024,
-                  2024,
-                  2024,
-                  2024,
-                  2024,
-                  2024
-                ],
-                "backgroundColor": "rgba(20, 108, 54, 0.45)",
-                "borderColor": "#146C36",
-                "borderWidth": 2,
-                "tension": 0.35,
-                "fill": false
-              }
-            ]
-          }
-        },
-        {
-          "id": "draft_1789426770813_1",
-          "title": "Score — Spreadsheet: AUN-QA Programs",
-          "source": "Spreadsheet: AUN-QA Programs",
-          "primaryType": "bar",
-          "recommendation": "Bar Chart recommended to compare distinct categories side-by-side.",
-          "isDraft": true,
-          "chartData": {
-            "labels": [
-              "Doctor of Veterinary Medicine",
-              "Doctor of Veterinary Medicine",
-              "Doctor of Veterinary Medicine",
-              "Doctor of Veterinary Medicine",
-              "Doctor of Veterinary Medicine",
-              "Doctor of Veterinary Medicine",
-              "Doctor of Veterinary Medicine",
-              "Doctor of Veterinary Medicine",
-              "Doctor of Veterinary Medicine",
-              "Bachelor of Science in Agriculture",
-              "Bachelor of Science in Agriculture",
-              "Bachelor of Science in Agriculture",
-              "Bachelor of Science in Agriculture",
-              "Bachelor of Science in Agriculture",
-              "Bachelor of Science in Agriculture"
-            ],
-            "datasets": [
-              {
-                "label": "Score",
+                "label": "Score (AUN-QA Programs)",
                 "data": [
                   4,
                   4,
@@ -1494,10 +1053,25 @@
                   5,
                   4,
                   4,
-                  4
+                  4,
+                  4,
+                  4,
+                  0,
+                  4,
+                  4,
+                  5,
+                  4,
+                  4,
+                  4,
+                  4,
+                  4,
+                  0,
+                  4,
+                  4,
+                  5
                 ],
-                "backgroundColor": "rgba(245, 158, 11, 0.45)",
-                "borderColor": "#F59E0B",
+                "backgroundColor": "rgba(20, 108, 54, 0.7)",
+                "borderColor": "#146C36",
                 "borderWidth": 2,
                 "tension": 0.35,
                 "fill": false
@@ -1524,7 +1098,8 @@
         "activeSheet": "The Impact Rankings",
         "embeddedImagesScanned": 0,
         "embeddedImageSources": []
-      }
+      },
+      "updatedAt": "2026-09-14T23:21:21.482Z"
     },
     {
       "id": "scan_1789426770717_q2r49q",
