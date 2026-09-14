@@ -3,8 +3,8 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>IRIS AI - Intelligent Multi-Format File Scanner & Data Audit Portal</title>
-  <meta name="description" content="AI File Scanner for Images, Excel, DOCX, and PDF with OCR, PII detection, graph visualization drafts, and Admin database management.">
+  <title>IRIS AI — File Scanner & Draft Visualization Portal</title>
+  <meta name="description" content="AI File Scanner for Images, Excel, DOCX, and PDF with layout-aware parsing, draft chart suggestions, and Admin data editor.">
   
   <!-- CSS Stylesheet -->
   <link rel="stylesheet" href="css/styles.css">
@@ -26,27 +26,21 @@
       <div>
         <div style="display: flex; align-items: center; gap: 0.5rem;">
           <span class="brand-title">IRIS AI</span>
-          <span class="brand-badge">File Scanner v1.0</span>
+          <span class="brand-badge">File Scanner & Ingestion</span>
         </div>
-        <div style="font-size: 0.75rem; color: var(--text-dim);">Intelligent Audit & Data Graph Engine</div>
+        <div style="font-size: 0.75rem; color: var(--text-dim);">International Rapport Insight System</div>
       </div>
     </div>
 
-    <!-- Navigation Switcher: Scanner Workspace vs Admin Database -->
+    <!-- Navigation Switcher: Scanner Workspace vs Admin Data Portal -->
     <nav class="header-nav">
       <button id="navScannerBtn" class="nav-btn active">
         <span>🔍</span> Scanner Workspace
       </button>
       <button id="navAdminBtn" class="nav-btn">
-        <span>🗄️</span> Admin Database Portal
+        <span>🗄️</span> Admin Data Dashboard
       </button>
     </nav>
-
-    <div class="header-actions">
-      <button id="btnSettings" class="btn-icon">
-        <span>⚙️</span> Gemini API Settings
-      </button>
-    </div>
   </header>
 
   <!-- App Main Container -->
@@ -65,14 +59,14 @@
           </svg>
         </div>
 
-        <h1 class="dropzone-title">Drop Images, Excel, DOCX, or PDF Files Here</h1>
-        <p class="dropzone-subtitle">Instant OCR, Multi-sheet data parsing, PII threat audit, AI graph drafts & Q&A</p>
+        <h1 class="dropzone-title">Upload Spreadsheets, PDFs, DOCX, or Images</h1>
+        <p class="dropzone-subtitle">Multi-sheet parsing, layout-aware OCR, tabular field extraction, and draft chart suggestions</p>
 
         <div class="format-badges">
+          <span class="format-chip excel">📊 Spreadsheets (XLSX, XLS, CSV)</span>
+          <span class="format-chip pdf">📄 PDF Documents (Native & Scanned)</span>
+          <span class="format-chip docx">📝 Word (DOCX + Media Extraction)</span>
           <span class="format-chip image">🖼️ Images (PNG, JPG, WEBP)</span>
-          <span class="format-chip excel">📊 Excel (XLSX, XLS, CSV)</span>
-          <span class="format-chip docx">📝 Word (DOCX)</span>
-          <span class="format-chip pdf">📄 PDF Documents</span>
         </div>
 
         <input type="file" id="fileInput" multiple accept="image/*,.xlsx,.xls,.csv,.docx,.doc,.pdf" style="display: none;">
@@ -83,20 +77,20 @@
           </button>
         </div>
 
-        <!-- 1-Click Pre-loaded Demo Samples -->
+        <!-- 1-Click Pre-loaded Institutional Samples -->
         <div class="samples-container">
-          <span class="samples-label">Test 1-Click Interactive Demos:</span>
-          <button class="sample-btn" data-sample="invoice">
-            <span>🖼️</span> Sample Invoice Image
-          </button>
+          <span class="samples-label">Test 1-Click Sample Documents:</span>
           <button class="sample-btn" data-sample="payroll">
-            <span>📊</span> Sample Payroll Excel
-          </button>
-          <button class="sample-btn" data-sample="contract">
-            <span>📝</span> Sample NDA DOCX
+            <span>📊</span> QAO Evaluation Scores (.xlsx)
           </button>
           <button class="sample-btn" data-sample="pdf">
-            <span>📄</span> Sample Audit PDF
+            <span>📄</span> OAD Infograph Stats (.pdf)
+          </button>
+          <button class="sample-btn" data-sample="contract">
+            <span>📝</span> Program Accreditation (.docx)
+          </button>
+          <button class="sample-btn" data-sample="invoice">
+            <span>🖼️</span> Performance Certificate (.png)
           </button>
         </div>
       </div>
@@ -132,60 +126,48 @@
           <!-- Workspace Tabs -->
           <div class="workspace-tabs">
             <button class="tab-btn active" data-tab="tabOverview">
-              <span>📊</span> Executive Overview & Risk
+              <span>📋</span> Extracted Fields & Overview
             </button>
             <button class="tab-btn" data-tab="tabViewer">
-              <span>👁️</span> Data & Content Viewer
-            </button>
-            <button class="tab-btn" data-tab="tabSecurity">
-              <span>🛡️</span> Sensitive PII Audit (<span id="piiBadgeCount">0</span>)
+              <span>👁️</span> Document & Data Viewer
             </button>
             <button class="tab-btn" data-tab="tabGraphs">
-              <span>📈</span> Data Graph Drafts & AI Suggestions
-            </button>
-            <button class="tab-btn" data-tab="tabChat">
-              <span>💬</span> Chat with Document
+              <span>📈</span> Draft Visualizations (<span id="draftsCountBadge">0</span>)
             </button>
           </div>
 
-          <!-- TAB 1: EXECUTIVE OVERVIEW -->
+          <!-- TAB 1: EXTRACTED FIELDS & OVERVIEW -->
           <div id="tabOverview" class="tab-panel active">
-            <div class="metrics-row">
-              <div class="risk-card">
-                <div id="riskGauge" class="risk-gauge">
-                  <div class="risk-inner">
-                    <span id="riskScoreVal" class="risk-score-val">0</span>
-                    <span class="risk-score-label">RISK SCORE</span>
-                  </div>
-                </div>
-                <div id="riskLevelBadge" class="badge badge-low">SAFE DOCUMENT</div>
-              </div>
-
+            <div class="metrics-row" style="grid-template-columns: 1fr;">
               <div class="summary-card">
                 <div class="summary-title">
-                  <span>AI Executive Document Summary</span>
-                  <span id="aiModelBadge" style="font-size: 0.75rem; color: var(--accent-cyan);">IRIS Local Heuristic AI</span>
+                  <span id="summaryDocTitle">Extracted Document Analysis</span>
+                  <span id="docFormatBadge" class="format-chip excel">Format</span>
                 </div>
-                <p id="executiveSummaryText" class="summary-text">Select or scan a file to generate AI executive analysis.</p>
+                <p id="executiveSummaryText" class="summary-text">Select or scan a file to inspect extracted fields.</p>
                 
-                <h4 style="font-size: 0.9rem; font-weight: 700; margin-bottom: 0.5rem; color: var(--text-muted);">Key Document Takeaways</h4>
+                <h4 style="font-size: 0.9rem; font-weight: 700; margin-bottom: 0.75rem; color: var(--text-muted);">Extracted Data Fields & Key Metrics</h4>
+                <div id="extractedFieldsGrid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 0.75rem; margin-bottom: 1.25rem;">
+                  <!-- Dynamically populated field cards -->
+                </div>
+
+                <h4 style="font-size: 0.9rem; font-weight: 700; margin-bottom: 0.5rem; color: var(--text-muted);">Identified Structure Highlights</h4>
                 <ul id="takeawayList" class="takeaway-list">
-                  <!-- Takeaways dynamically populated -->
+                  <!-- Highlights dynamically populated -->
                 </ul>
               </div>
             </div>
 
             <!-- Quick Action Toolbar -->
-            <div style="display: flex; gap: 0.75rem; flex-wrap: wrap; padding-top: 1rem; border-top: 1px solid var(--border-light);">
-              <button id="btnRedactCopy" class="btn-icon">
-                <span>✂️</span> Copy Redacted Content
-              </button>
-              <button id="btnExportJson" class="btn-icon">
-                <span>💾</span> Export Audit (JSON)
-              </button>
-              <button id="btnExportMd" class="btn-icon">
-                <span>📝</span> Export Audit (Markdown)
-              </button>
+            <div style="display: flex; gap: 0.75rem; flex-wrap: wrap; padding-top: 1rem; border-top: 1px solid var(--border-light); justify-content: space-between; align-items: center;">
+              <div style="font-size: 0.82rem; color: var(--text-muted);">
+                Status: <span class="badge badge-low" style="display: inline-block;">Draft (Pending Admin Review)</span>
+              </div>
+              <div style="display: flex; gap: 0.75rem;">
+                <button id="btnOpenInEditor" class="btn-icon" style="background: var(--accent-violet); border: none;">
+                  <span>✏️</span> Edit in Admin Dashboard
+                </button>
+              </div>
             </div>
           </div>
 
@@ -204,49 +186,18 @@
             </div>
           </div>
 
-          <!-- TAB 3: SECURITY & PII AUDIT -->
-          <div id="tabSecurity" class="tab-panel">
-            <div style="margin-bottom: 1rem; display: flex; justify-content: space-between; align-items: center;">
-              <div>
-                <h3 style="font-size: 1.1rem; font-weight: 700;">Sensitive PII & Credentials Audit</h3>
-                <p style="font-size: 0.85rem; color: var(--text-muted);">Detected financial numbers, credentials, social security, and identity tokens.</p>
-              </div>
-              <button id="btnMaskToggle" class="btn-icon">
-                <span>👁️</span> Mask / Reveal Sensitive Values
-              </button>
-            </div>
-
-            <div id="piiFindingsList" class="pii-list">
-              <!-- Itemized PII Findings -->
-            </div>
-          </div>
-
-          <!-- TAB 4: DATA GRAPH VISUALIZATION DRAFTS -->
+          <!-- TAB 3: DATA GRAPH VISUALIZATION DRAFTS -->
           <div id="tabGraphs" class="tab-panel">
-            <div style="margin-bottom: 1.5rem;">
-              <h3 style="font-size: 1.1rem; font-weight: 700;">Data Graph Visualization Drafts & AI Suggestions</h3>
-              <p style="font-size: 0.85rem; color: var(--text-muted);">Automated numerical distribution parsing, chart suggestions, and draft rendering.</p>
+            <div style="margin-bottom: 1.5rem; display: flex; justify-content: space-between; align-items: center;">
+              <div>
+                <h3 style="font-size: 1.1rem; font-weight: 700;">Draft Visualization Suggestions</h3>
+                <p style="font-size: 0.85rem; color: var(--text-muted);">Automatic chart suggestions (Bar, Line, Pie) pending Admin review & approval.</p>
+              </div>
+              <span class="badge badge-low">Draft Only — Not Auto-Published</span>
             </div>
 
             <div id="graphDraftsContainer">
               <!-- Graph Cards dynamically populated -->
-            </div>
-          </div>
-
-          <!-- TAB 5: DOCUMENT Q&A CHAT -->
-          <div id="tabChat" class="tab-panel">
-            <div class="chat-container">
-              <div id="chatMessages" class="chat-messages">
-                <div class="chat-bubble ai">
-                  Hello! I am your IRIS Document Assistant. Ask me anything about the scanned file (e.g., totals, obligations, parties, or key terms).
-                </div>
-              </div>
-              <div class="chat-input-bar">
-                <input type="text" id="chatInput" class="chat-input" placeholder="Ask a question about this document...">
-                <button id="btnSendChat" class="btn-icon" style="background: var(--accent-violet); border: none; border-radius: var(--radius-full);">
-                  <span>✈️</span> Send
-                </button>
-              </div>
             </div>
           </div>
 
@@ -255,56 +206,45 @@
 
     </section>
 
-    <!-- ================= ADMIN DATABASE PORTAL VIEW ================= -->
+    <!-- ================= ADMIN DATA DASHBOARD VIEW ================= -->
     <section id="adminDatabaseView" style="display: none;">
       
       <!-- Admin Header Banner -->
       <div style="background: var(--bg-surface); backdrop-filter: blur(16px); border: 1px solid var(--border-light); border-radius: var(--radius-lg); padding: 1.5rem 2rem; margin-bottom: 1.5rem; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem;">
         <div>
-          <h2 style="font-size: 1.5rem; font-weight: 800;">Admin Record Review & Database Management</h2>
-          <p style="font-size: 0.9rem; color: var(--text-muted);">Inspect, verify, edit extracted cells, add custom data rows, and manage document compliance statuses.</p>
-        </div>
-        <div style="display: flex; gap: 0.75rem;">
-          <button id="btnExportDbJson" class="btn-icon">
-            <span>💾</span> Export JSON
-          </button>
-          <button id="btnExportDbCsv" class="btn-icon">
-            <span>📊</span> Export CSV
-          </button>
-          <button id="btnExportDbSql" class="btn-icon">
-            <span>🗄️</span> Download SQL Dump
-          </button>
+          <h2 style="font-size: 1.5rem; font-weight: 800;">Admin Record Review & Data Editor</h2>
+          <p style="font-size: 0.9rem; color: var(--text-muted);">Review extracted fields, edit tabular cells, update draft status, and approve visualizations for the IRIS dashboard.</p>
         </div>
       </div>
 
       <!-- Admin Stats Summary Bar -->
       <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem; margin-bottom: 1.5rem;">
         <div style="background: var(--bg-card); border: 1px solid var(--border-light); padding: 1rem 1.25rem; border-radius: var(--radius-md);">
-          <div style="font-size: 0.75rem; color: var(--text-muted); font-weight: 700;">TOTAL DB RECORDS</div>
+          <div style="font-size: 0.75rem; color: var(--text-muted); font-weight: 700;">TOTAL SCANNED FILES</div>
           <div id="statTotalDb" style="font-size: 1.6rem; font-weight: 800; font-family: var(--font-mono); color: var(--accent-cyan);">0</div>
         </div>
         <div style="background: var(--bg-card); border: 1px solid var(--border-light); padding: 1rem 1.25rem; border-radius: var(--radius-md);">
-          <div style="font-size: 0.75rem; color: var(--text-muted); font-weight: 700;">PENDING REVIEW</div>
+          <div style="font-size: 0.75rem; color: var(--text-muted); font-weight: 700;">PENDING DRAFTS</div>
           <div id="statPendingDb" style="font-size: 1.6rem; font-weight: 800; font-family: var(--font-mono); color: var(--accent-amber);">0</div>
         </div>
         <div style="background: var(--bg-card); border: 1px solid var(--border-light); padding: 1rem 1.25rem; border-radius: var(--radius-md);">
-          <div style="font-size: 0.75rem; color: var(--text-muted); font-weight: 700;">VERIFIED & APPROVED</div>
+          <div style="font-size: 0.75rem; color: var(--text-muted); font-weight: 700;">APPROVED FOR DASHBOARD</div>
           <div id="statVerifiedDb" style="font-size: 1.6rem; font-weight: 800; font-family: var(--font-mono); color: var(--accent-emerald);">0</div>
         </div>
         <div style="background: var(--bg-card); border: 1px solid var(--border-light); padding: 1rem 1.25rem; border-radius: var(--radius-md);">
-          <div style="font-size: 0.75rem; color: var(--text-muted); font-weight: 700;">HIGH / CRITICAL LEAKS</div>
-          <div id="statLeaksDb" style="font-size: 1.6rem; font-weight: 800; font-family: var(--font-mono); color: var(--accent-rose);">0</div>
+          <div style="font-size: 0.75rem; color: var(--text-muted); font-weight: 700;">EXTRACTED TABLES</div>
+          <div id="statTablesDb" style="font-size: 1.6rem; font-weight: 800; font-family: var(--font-mono); color: var(--accent-violet);">0</div>
         </div>
       </div>
 
       <!-- Admin Search & Filter Bar -->
       <div style="display: flex; gap: 1rem; margin-bottom: 1rem; flex-wrap: wrap;">
-        <input type="text" id="adminSearchInput" class="form-input" placeholder="Search records by name, doc type, or contents..." style="flex: 1; min-width: 250px;">
+        <input type="text" id="adminSearchInput" class="form-input" placeholder="Search records by filename, category, or values..." style="flex: 1; min-width: 250px;">
         <select id="adminStatusFilter" class="form-input" style="width: auto;">
           <option value="all">All Statuses</option>
           <option value="Pending Review">Pending Review</option>
-          <option value="Verified & Approved">Verified & Approved</option>
-          <option value="Flagged / Needs Revision">Flagged / Needs Revision</option>
+          <option value="Approved">Approved for Dashboard</option>
+          <option value="Needs Revision">Needs Revision</option>
         </select>
       </div>
 
@@ -316,11 +256,11 @@
               <th>Record ID</th>
               <th>File Name</th>
               <th>Format</th>
-              <th>Doc Category</th>
-              <th>Risk Score</th>
+              <th>Category</th>
+              <th>Suggested Chart</th>
               <th>Review Status</th>
               <th>Scanned Date</th>
-              <th>Actions / Review</th>
+              <th>Actions</th>
             </tr>
           </thead>
           <tbody id="adminRecordsTableBody">
@@ -333,49 +273,16 @@
 
   </main>
 
-  <!-- Settings Modal (Gemini API Key) -->
-  <div id="settingsModal" class="modal-overlay">
-    <div class="modal-card">
-      <div class="modal-header">
-        <h3 class="modal-title">⚙️ Google Gemini AI Integration Settings</h3>
-        <button id="btnCloseSettings" style="background: none; border: none; color: var(--text-muted); font-size: 1.4rem; cursor: pointer;">&times;</button>
-      </div>
-      <p style="font-size: 0.88rem; color: var(--text-muted); margin-bottom: 1.25rem;">
-        IRIS includes a built-in zero-config local heuristic scanner. Connecting your Google Gemini API Key unlocks deep cloud reasoning, multimodal analysis, and natural language document Q&A.
-      </p>
-
-      <div class="form-group">
-        <label class="form-label">Google Gemini API Key</label>
-        <input type="password" id="geminiApiKeyInput" class="form-input" placeholder="AIzaSy...">
-      </div>
-
-      <div class="form-group">
-        <label class="form-label">Gemini Model Choice</label>
-        <select id="geminiModelSelect" class="form-input">
-          <option value="gemini-1.5-flash">Gemini 1.5 Flash (Fast & Recommended)</option>
-          <option value="gemini-2.0-flash">Gemini 2.0 Flash</option>
-          <option value="gemini-1.5-pro">Gemini 1.5 Pro (Deep Reasoning)</option>
-        </select>
-      </div>
-
-      <div style="display: flex; justify-content: flex-end; gap: 0.75rem; margin-top: 1.5rem;">
-        <button id="btnSaveSettings" class="btn-icon" style="background: var(--accent-violet); border: none;">
-          Save Settings
-        </button>
-      </div>
-    </div>
-  </div>
-
   <!-- Admin Record Detail / Editor Modal -->
   <div id="recordEditModal" class="modal-overlay">
-    <div class="modal-card" style="max-width: 900px; width: 95%;">
+    <div class="modal-card" style="max-width: 950px; width: 95%;">
       <div class="modal-header">
         <h3 id="recordEditTitle" class="modal-title">Edit Record Data</h3>
         <button id="btnCloseRecordModal" style="background: none; border: none; color: var(--text-muted); font-size: 1.4rem; cursor: pointer;">&times;</button>
       </div>
       
-      <div id="recordEditBody" style="max-height: 70vh; overflow-y: auto; padding-right: 0.5rem;">
-        <!-- Dynamic record editor fields & data table -->
+      <div id="recordEditBody" style="max-height: 75vh; overflow-y: auto; padding-right: 0.5rem;">
+        <!-- Dynamic record editor fields & editable data table -->
       </div>
     </div>
   </div>
@@ -386,8 +293,6 @@
   <script src="js/parsers/excelParser.js"></script>
   <script src="js/parsers/docxParser.js"></script>
   <script src="js/parsers/pdfParser.js"></script>
-  <script src="js/ai/piiScanner.js"></script>
-  <script src="js/ai/geminiService.js"></script>
   <script src="js/ai/graphEngine.js"></script>
   <script src="js/database/dbManager.js"></script>
   <script src="js/samples.js"></script>

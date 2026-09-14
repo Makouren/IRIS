@@ -522,61 +522,12 @@ body {
   to { opacity: 1; transform: translateY(0); }
 }
 
-/* Risk Meter & Executive Summary Cards */
+/* Executive Summary Cards */
 .metrics-row {
   display: grid;
-  grid-template-columns: 280px 1fr;
+  grid-template-columns: 1fr;
   gap: 1.5rem;
   margin-bottom: 1.5rem;
-}
-
-.risk-card {
-  background: var(--bg-card);
-  border: 1px solid var(--border-light);
-  border-radius: var(--radius-md);
-  padding: 1.5rem;
-  text-align: center;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-}
-
-.risk-gauge {
-  width: 120px;
-  height: 120px;
-  border-radius: 50%;
-  background: conic-gradient(var(--accent-emerald) 0deg, var(--accent-rose) 360deg);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  position: relative;
-  margin-bottom: 1rem;
-  box-shadow: 0 0 20px rgba(0,0,0,0.5);
-}
-
-.risk-inner {
-  width: 96px;
-  height: 96px;
-  border-radius: 50%;
-  background: var(--bg-deep);
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-}
-
-.risk-score-val {
-  font-size: 1.8rem;
-  font-weight: 800;
-  font-family: var(--font-mono);
-}
-
-.risk-score-label {
-  font-size: 0.65rem;
-  font-weight: 700;
-  text-transform: uppercase;
-  color: var(--text-muted);
 }
 
 .summary-card {
@@ -661,62 +612,6 @@ body {
   background: rgba(139, 92, 246, 0.08);
 }
 
-.editable-cell {
-  cursor: pointer;
-  position: relative;
-}
-
-.editable-cell:hover::after {
-  content: "✏️";
-  position: absolute;
-  right: 4px;
-  top: 50%;
-  transform: translateY(-50%);
-  font-size: 0.75rem;
-}
-
-/* PII Findings List */
-.pii-list {
-  display: flex;
-  flex-direction: column;
-  gap: 0.75rem;
-}
-
-.pii-card {
-  background: var(--bg-card);
-  border: 1px solid var(--border-light);
-  border-radius: var(--radius-md);
-  padding: 1rem 1.25rem;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 1rem;
-}
-
-.pii-info {
-  display: flex;
-  flex-direction: column;
-  gap: 0.2rem;
-}
-
-.pii-title {
-  font-weight: 700;
-  font-size: 0.95rem;
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-}
-
-.pii-context {
-  font-family: var(--font-mono);
-  font-size: 0.8rem;
-  color: var(--text-muted);
-  background: rgba(0, 0, 0, 0.4);
-  padding: 0.35rem 0.65rem;
-  border-radius: var(--radius-sm);
-  margin-top: 0.35rem;
-}
-
 /* Graph Draft Card */
 .graph-card {
   background: var(--bg-card);
@@ -726,85 +621,22 @@ body {
   margin-bottom: 1.5rem;
 }
 
-.graph-header {
+.graph-card-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
   margin-bottom: 1rem;
 }
 
-.chart-canvas-container {
-  height: 380px;
+.graph-card-title {
+  font-size: 1.15rem;
+  font-weight: 700;
+}
+
+.graph-canvas-container {
+  height: 340px;
   position: relative;
   width: 100%;
-}
-
-/* Chat Widget */
-.chat-container {
-  display: flex;
-  flex-direction: column;
-  height: 520px;
-  background: var(--bg-card);
-  border: 1px solid var(--border-light);
-  border-radius: var(--radius-md);
-  overflow: hidden;
-}
-
-.chat-messages {
-  flex: 1;
-  padding: 1.25rem;
-  overflow-y: auto;
-  display: flex;
-  flex-direction: column;
-  gap: 1rem;
-}
-
-.chat-bubble {
-  max-width: 80%;
-  padding: 0.85rem 1.1rem;
-  border-radius: 16px;
-  font-size: 0.9rem;
-  line-height: 1.5;
-}
-
-.chat-bubble.user {
-  align-self: flex-end;
-  background: linear-gradient(135deg, var(--accent-violet), #6D28D9);
-  color: #fff;
-  border-bottom-right-radius: 4px;
-}
-
-.chat-bubble.ai {
-  align-self: flex-start;
-  background: rgba(30, 41, 59, 0.9);
-  border: 1px solid var(--border-light);
-  color: var(--text-main);
-  border-bottom-left-radius: 4px;
-}
-
-.chat-input-bar {
-  display: flex;
-  padding: 0.75rem 1rem;
-  background: rgba(15, 23, 42, 0.95);
-  border-top: 1px solid var(--border-light);
-  gap: 0.5rem;
-}
-
-.chat-input {
-  flex: 1;
-  background: var(--bg-input);
-  border: 1px solid var(--border-light);
-  border-radius: var(--radius-full);
-  padding: 0.6rem 1.2rem;
-  color: #fff;
-  font-family: var(--font-sans);
-  font-size: 0.9rem;
-  outline: none;
-}
-
-.chat-input:focus {
-  border-color: var(--accent-violet);
-  box-shadow: 0 0 10px var(--accent-violet-glow);
 }
 
 /* Modals */

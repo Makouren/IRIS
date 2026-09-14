@@ -1,5 +1,6 @@
 /**
  * IRIS AI - Main Web Application Controller & User Interface Core
+ * Clean, lightweight, focused on AI File Scanning, Draft Chart Suggestions, and Admin Data Editor.
  */
 
 document.addEventListener('DOMContentLoaded', async () => {
@@ -10,8 +11,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   // State Management
   let queue = [];
   let activeScan = null;
-  let isMasked = true;
-  let currentChatHistory = [];
+  let chartInstances = {};
 
   // DOM Elements - Navigation & Views
   const navScannerBtn = document.getElementById('navScannerBtn');
@@ -37,15 +37,13 @@ document.addEventListener('DOMContentLoaded', async () => {
   const tabPanels = document.querySelectorAll('.tab-panel');
 
   // DOM Elements - Overview Tab
-  const riskGauge = document.getElementById('riskGauge');
-  const riskScoreVal = document.getElementById('riskScoreVal');
-  const riskLevelBadge = document.getElementById('riskLevelBadge');
+  const summaryDocTitle = document.getElementById('summaryDocTitle');
+  const docFormatBadge = document.getElementById('docFormatBadge');
   const executiveSummaryText = document.getElementById('executiveSummaryText');
+  const extractedFieldsGrid = document.getElementById('extractedFieldsGrid');
   const takeawayList = document.getElementById('takeawayList');
-  const aiModelBadge = document.getElementById('aiModelBadge');
-  const btnRedactCopy = document.getElementById('btnRedactCopy');
-  const btnExportJson = document.getElementById('btnExportJson');
-  const btnExportMd = document.getElementById('btnExportMd');
+  const btnOpenInEditor = document.getElementById('btnOpenInEditor');
+  const draftsCountBadge = document.getElementById('draftsCountBadge');
 
   // DOM Elements - Viewer Tab
   const viewerContentArea = document.getElementById('viewerContentArea');
@@ -53,38 +51,17 @@ document.addEventListener('DOMContentLoaded', async () => {
   const sheetSelectorContainer = document.getElementById('sheetSelectorContainer');
   const sheetSelect = document.getElementById('sheetSelect');
 
-  // DOM Elements - Security Tab
-  const piiBadgeCount = document.getElementById('piiBadgeCount');
-  const piiFindingsList = document.getElementById('piiFindingsList');
-  const btnMaskToggle = document.getElementById('btnMaskToggle');
-
   // DOM Elements - Graphs Tab
   const graphDraftsContainer = document.getElementById('graphDraftsContainer');
-
-  // DOM Elements - Chat Tab
-  const chatMessages = document.getElementById('chatMessages');
-  const chatInput = document.getElementById('chatInput');
-  const btnSendChat = document.getElementById('btnSendChat');
-
-  // DOM Elements - Settings Modal
-  const btnSettings = document.getElementById('btnSettings');
-  const settingsModal = document.getElementById('settingsModal');
-  const btnCloseSettings = document.getElementById('btnCloseSettings');
-  const btnSaveSettings = document.getElementById('btnSaveSettings');
-  const geminiApiKeyInput = document.getElementById('geminiApiKeyInput');
-  const geminiModelSelect = document.getElementById('geminiModelSelect');
 
   // DOM Elements - Admin Portal
   const statTotalDb = document.getElementById('statTotalDb');
   const statPendingDb = document.getElementById('statPendingDb');
   const statVerifiedDb = document.getElementById('statVerifiedDb');
-  const statLeaksDb = document.getElementById('statLeaksDb');
+  const statTablesDb = document.getElementById('statTablesDb');
   const adminSearchInput = document.getElementById('adminSearchInput');
   const adminStatusFilter = document.getElementById('adminStatusFilter');
   const adminRecordsTableBody = document.getElementById('adminRecordsTableBody');
-  const btnExportDbJson = document.getElementById('btnExportDbJson');
-  const btnExportDbCsv = document.getElementById('btnExportDbCsv');
-  const btnExportDbSql = document.getElementById('btnExportDbSql');
 
   // Record Edit Modal
   const recordEditModal = document.getElementById('recordEditModal');
@@ -165,35 +142,48 @@ document.addEventListener('DOMContentLoaded', async () => {
   });
 
   // ----------------------------------------------------
-  // Scan Execution Pipeline
+  // Batch File Ingestion Pipeline
   // ----------------------------------------------------
   async function handleFiles(files) {
+    if (!files || files.length === 0) return;
+
     progressCard.style.display = 'block';
     workspaceGrid.style.display = 'grid';
 
     for (let i = 0; i < files.length; i++) {
       const file = files[i];
       try {
-        const scanPackage = await scanner.scanFile(file, ({ status, progress }) => {
-          progressStatus.textContent = `[${i + 1}/${files.length}] ${status}`;
-          progressPercent.textContent = `${progress}%`;
-          progressFill.style.width = `${progress}%`;
+        updateProgress(`Scanning ${file.name} (${i + 1}/${files.length})...`, 10);
+
+        const scanResult = await scanner.scanFile(file, (progressObj) => {
+          updateProgress(progressObj.status, progressObj.progress);
         });
 
-        queue.unshift(scanPackage);
+        queue.unshift(scanResult);
         renderQueue();
-        setActiveScan(scanPackage);
+        setActiveScan(scanResult);
+
       } catch (err) {
-        alert(`Error scanning ${file.name}: ${err.message}`);
+        console.error('Scan Error:', err);
+        alert(`Failed to scan file ${file.name}: ${err.message}`);
       }
     }
 
     setTimeout(() => {
       progressCard.style.display = 'none';
-    }, 1200);
+      updateProgress('Scan complete!', 100);
+    }, 800);
   }
 
-  // Render Queue List
+  function updateProgress(statusText, percent) {
+    progressStatus.textContent = statusText;
+    progressPercent.textContent = `${percent}%`;
+    progressFill.style.width = `${percent}%`;
+  }
+
+  // ----------------------------------------------------
+  // Workspace Sidebar Queue
+  // ----------------------------------------------------
   function renderQueue() {
     queueCount.textContent = queue.length;
     queueList.innerHTML = '';
@@ -202,16 +192,23 @@ document.addEventListener('DOMContentLoaded', async () => {
       const div = document.createElement('div');
       div.className = `queue-item ${activeScan && activeScan.id === item.id ? 'active' : ''}`;
       
-      const badgeClass = (item.piiResult.riskLevel || 'SAFE').toLowerCase();
+      const typeIcons = {
+        excel: '📊',
+        pdf: '📄',
+        docx: '📝',
+        image: '🖼️',
+        unknown: '📁'
+      };
+      const icon = typeIcons[item.type] || '📁';
 
       div.innerHTML = `
-        <div class="queue-item-header">
-          <span class="queue-file-name" title="${item.name}">${item.name}</span>
-          <span class="queue-badge ${badgeClass}">${item.piiResult.riskLevel}</span>
-        </div>
-        <div style="font-size: 0.72rem; color: var(--text-muted); display: flex; justify-content: space-between;">
-          <span>${item.type.toUpperCase()} • ${(item.size / 1024).toFixed(1)} KB</span>
-          <span>${item.piiResult.totalFindings} Leaks</span>
+        <div class="queue-icon">${icon}</div>
+        <div class="queue-info">
+          <div class="queue-name" title="${item.name}">${item.name}</div>
+          <div class="queue-meta">
+            <span>${(item.size / 1024).toFixed(1)} KB</span>
+            <span class="queue-badge low">Draft</span>
+          </div>
         </div>
       `;
 
@@ -223,400 +220,295 @@ document.addEventListener('DOMContentLoaded', async () => {
   btnClearQueue.addEventListener('click', () => {
     queue = [];
     activeScan = null;
-    renderQueue();
     workspaceGrid.style.display = 'none';
+    renderQueue();
   });
 
   // ----------------------------------------------------
-  // Set Active Scan & Render Workspace Tabs
+  // Set Active Scan & Render Tabs
   // ----------------------------------------------------
   function setActiveScan(scan) {
     activeScan = scan;
-    currentChatHistory = [];
     renderQueue();
 
-    // Render Tab 1 Overview
-    const score = scan.piiResult.riskScore;
-    riskScoreVal.textContent = score;
+    // 1. Render Overview Tab
+    renderOverviewTab(scan);
+
+    // 2. Render Viewer Tab
+    renderViewerTab(scan);
+
+    // 3. Render Graph Drafts Tab
+    renderGraphsTab(scan);
+  }
+
+  // TAB 1: Overview & Fields Renderer
+  function renderOverviewTab(scan) {
+    summaryDocTitle.textContent = scan.name;
+    docFormatBadge.textContent = scan.type.toUpperCase();
+    docFormatBadge.className = `format-chip ${scan.type}`;
+
+    const rawLen = scan.rawText ? scan.rawText.length : 0;
+    const words = scan.rawText ? scan.rawText.split(/\s+/).filter(Boolean).length : 0;
+
+    executiveSummaryText.textContent = `Document parsed successfully. Identified ${words} words, ${rawLen} characters, with ${(scan.graphDrafts || []).length} draft visualization suggestions.`;
+
+    // Render Extracted Fields Grid
+    extractedFieldsGrid.innerHTML = '';
+    const fields = extractKeyFields(scan);
     
-    let color = '#10B981';
-    if (score >= 70) color = '#EF4444';
-    else if (score >= 40) color = '#F59E0B';
-    else if (score >= 15) color = '#06B6D4';
+    if (fields.length > 0) {
+      fields.forEach(f => {
+        const card = document.createElement('div');
+        card.style.cssText = 'background: var(--bg-card); border: 1px solid var(--border-light); border-radius: var(--radius-sm); padding: 0.75rem 1rem;';
+        card.innerHTML = `
+          <div style="font-size: 0.75rem; color: var(--text-muted); text-transform: uppercase; font-weight: 700; margin-bottom: 0.25rem;">${f.label}</div>
+          <div style="font-size: 1.1rem; font-weight: 800; color: var(--accent-cyan); font-family: var(--font-mono);">${f.value}</div>
+        `;
+        extractedFieldsGrid.appendChild(card);
+      });
+    } else {
+      extractedFieldsGrid.innerHTML = '<div style="color: var(--text-dim); font-size: 0.85rem;">No discrete tabular fields identified.</div>';
+    }
 
-    riskGauge.style.background = `conic-gradient(${color} ${score * 3.6}deg, rgba(30,41,59,0.9) ${score * 3.6}deg)`;
-    riskLevelBadge.textContent = `${scan.piiResult.riskLevel} RISK (${score}/100)`;
-    riskLevelBadge.className = `badge badge-${scan.piiResult.riskLevel.toLowerCase()}`;
-
-    executiveSummaryText.textContent = scan.aiAnalysis.summary;
-    aiModelBadge.textContent = scan.aiAnalysis.source || 'IRIS Local AI';
-
+    // Render Structure Takeaways
     takeawayList.innerHTML = '';
-    (scan.aiAnalysis.takeaways || []).forEach(t => {
+    const takeaways = generateTakeaways(scan);
+    takeaways.forEach(t => {
       const li = document.createElement('li');
       li.className = 'takeaway-item';
-      li.textContent = t;
+      li.innerHTML = `<span>🔹</span> <div>${t}</div>`;
       takeawayList.appendChild(li);
     });
 
-    // Security PII Tab Badge
-    piiBadgeCount.textContent = scan.piiResult.totalFindings;
-    renderPIIFindings();
-
-    // Render Data & Content Viewer
-    renderViewer();
-
-    // Render Graph Drafts
-    renderGraphDrafts();
-
-    // Reset Chat
-    chatMessages.innerHTML = `
-      <div class="chat-bubble ai">
-        Ready to analyze <strong>${scan.name}</strong>. Ask any question about extracted values, compliance, or insights.
-      </div>
-    `;
+    draftsCountBadge.textContent = (scan.graphDrafts || []).length;
   }
 
-  // ----------------------------------------------------
-  // TAB 2: Data & Content Viewer Renderer
-  // ----------------------------------------------------
-  function renderViewer() {
-    if (!activeScan) return;
+  function extractKeyFields(scan) {
+    const fields = [];
 
-    viewerFileMeta.textContent = `${activeScan.name} (${activeScan.type.toUpperCase()}) • Scanned ${new Date(activeScan.scannedAt).toLocaleTimeString()}`;
-    sheetSelectorContainer.style.display = 'none';
+    if (scan.type === 'excel' && scan.sheetsData) {
+      Object.keys(scan.sheetsData).forEach(sheetName => {
+        const s = scan.sheetsData[sheetName];
+        fields.push({ label: `Sheet: ${sheetName}`, value: `${s.rows ? s.rows.length : 0} Rows` });
+        if (s.headers) {
+          s.headers.slice(0, 3).forEach(h => {
+            if (h) fields.push({ label: 'Column Header', value: h });
+          });
+        }
+      });
+    } else if (scan.rawText) {
+      const pattern = /([A-Za-z\s\(\)\-\/]{3,30})\s*[:\-\=]\s*([0-9\.,]+%?)/g;
+      let m;
+      let count = 0;
+      while ((m = pattern.exec(scan.rawText)) !== null && count < 6) {
+        fields.push({ label: m[1].trim(), value: m[2].trim() });
+        count++;
+      }
+    }
+
+    if (fields.length === 0) {
+      fields.push({ label: 'Format Type', value: scan.type.toUpperCase() });
+      fields.push({ label: 'File Size', value: `${(scan.size / 1024).toFixed(1)} KB` });
+    }
+
+    return fields;
+  }
+
+  function generateTakeaways(scan) {
+    const items = [];
+    items.push(`Source Format: <strong>${scan.type.toUpperCase()}</strong> (${(scan.size / 1024).toFixed(1)} KB).`);
+    
+    if (scan.type === 'excel' && scan.sheetsData) {
+      const sheetCount = Object.keys(scan.sheetsData).length;
+      items.push(`Multi-sheet spreadsheet containing <strong>${sheetCount} worksheet(s)</strong>.`);
+    } else if (scan.type === 'pdf') {
+      items.push(`Layout-aware PDF parsing completed with structured stat-card extraction.`);
+    } else if (scan.type === 'docx') {
+      items.push(`Word document paragraphs and embedded media unpacked.`);
+    } else if (scan.type === 'image') {
+      items.push(`Optical Character Recognition (OCR) extracted text and metric indicators.`);
+    }
+
+    items.push(`Draft status assigned as <strong>Pending Admin Review</strong> before publication to ECharts dashboard.`);
+    return items;
+  }
+
+  btnOpenInEditor.addEventListener('click', () => {
+    if (activeScan) {
+      navAdminBtn.click();
+      openRecordEditModal(activeScan.id);
+    }
+  });
+
+  // TAB 2: Viewer Tab Renderer
+  function renderViewerTab(scan) {
+    viewerFileMeta.textContent = `${scan.name} • ${scan.type.toUpperCase()} • ${(scan.size / 1024).toFixed(1)} KB`;
     viewerContentArea.innerHTML = '';
+    sheetSelectorContainer.style.display = 'none';
 
-    if (activeScan.type === 'image') {
-      const imgContainer = document.createElement('div');
-      imgContainer.style.textAlign = 'center';
-      
+    if (scan.type === 'image' && scan.previewUrl) {
       const img = document.createElement('img');
-      img.src = activeScan.previewUrl;
+      img.src = scan.previewUrl;
       img.style.maxWidth = '100%';
-      img.style.maxHeight = '420px';
       img.style.borderRadius = 'var(--radius-md)';
       img.style.border = '1px solid var(--border-light)';
+      viewerContentArea.appendChild(img);
 
-      const ocrBox = document.createElement('div');
-      ocrBox.style.marginTop = '1rem';
-      ocrBox.style.textAlign = 'left';
-      ocrBox.style.background = 'var(--bg-card)';
-      ocrBox.style.padding = '1rem';
-      ocrBox.style.borderRadius = 'var(--radius-md)';
-      ocrBox.style.fontFamily = 'var(--font-mono)';
-      ocrBox.style.fontSize = '0.85rem';
-      ocrBox.innerHTML = `<strong>OCR Extracted Text (Confidence: ${activeScan.metadata.ocrConfidence}%):</strong><br><br>${(activeScan.rawText || 'No text recognized').replace(/\n/g, '<br>')}`;
+    } else if (scan.type === 'excel' && scan.sheetsData) {
+      sheetSelectorContainer.style.display = 'flex';
+      sheetSelect.innerHTML = '';
 
-      imgContainer.appendChild(img);
-      imgContainer.appendChild(ocrBox);
-      viewerContentArea.appendChild(imgContainer);
+      Object.keys(scan.sheetsData).forEach(sheetName => {
+        const opt = document.createElement('option');
+        opt.value = sheetName;
+        opt.textContent = sheetName;
+        sheetSelect.appendChild(opt);
+      });
 
-    } else if (activeScan.type === 'excel') {
-      const sheets = activeScan.sheetsData || {};
-      const sheetNames = Object.keys(sheets);
+      function displaySheet(sheetName) {
+        const sheet = scan.sheetsData[sheetName];
+        if (!sheet) return;
 
-      if (sheetNames.length > 0) {
-        sheetSelectorContainer.style.display = 'block';
-        sheetSelect.innerHTML = '';
-        sheetNames.forEach(name => {
-          const opt = document.createElement('option');
-          opt.value = name;
-          opt.textContent = `${name} (${sheets[name].rowCount} rows)`;
-          sheetSelect.appendChild(opt);
+        let html = '<div class="table-container" style="max-height: 500px;"><table class="data-table"><thead><tr>';
+        (sheet.headers || []).forEach(h => {
+          html += `<th>${h || ''}</th>`;
+        });
+        html += '</tr></thead><tbody>';
+
+        (sheet.rows || []).slice(0, 50).forEach(row => {
+          html += '<tr>';
+          (row || []).forEach(cell => {
+            html += `<td>${cell !== null && cell !== undefined ? cell : ''}</td>`;
+          });
+          html += '</tr>';
         });
 
-        const renderSheetTable = (sheetName) => {
-          const sheet = sheets[sheetName];
-          if (!sheet) return;
-
-          let html = `
-            <div class="table-container" style="max-height: 480px;">
-              <table class="data-table">
-                <thead>
-                  <tr>
-                    <th style="width: 50px;">#</th>
-                    ${(sheet.headers || []).map(h => `<th>${h}</th>`).join('')}
-                  </tr>
-                </thead>
-                <tbody>
-                  ${(sheet.rows || []).map((row, rIdx) => `
-                    <tr>
-                      <td style="color: var(--text-dim);">${rIdx + 1}</td>
-                      ${row.map((cell, cIdx) => `<td class="editable-cell" data-sheet="${sheetName}" data-row="${rIdx}" data-col="${cIdx}">${cell}</td>`).join('')}
-                    </tr>
-                  `).join('')}
-                </tbody>
-              </table>
-            </div>
-          `;
-          viewerContentArea.innerHTML = html;
-
-          // Attach inline edit handlers
-          viewerContentArea.querySelectorAll('.editable-cell').forEach(cellEl => {
-            cellEl.addEventListener('dblclick', () => {
-              const currentVal = cellEl.textContent;
-              const newVal = prompt('Edit cell value:', currentVal);
-              if (newVal !== null && newVal !== currentVal) {
-                cellEl.textContent = newVal;
-                const r = parseInt(cellEl.getAttribute('data-row'), 10);
-                const c = parseInt(cellEl.getAttribute('data-col'), 10);
-                const s = cellEl.getAttribute('data-sheet');
-                dbManager.updateDataCell(activeScan.id, s, r, c, newVal);
-              }
-            });
-          });
-        };
-
-        sheetSelect.onchange = (e) => renderSheetTable(e.target.value);
-        renderSheetTable(sheetNames[0]);
+        html += '</tbody></table></div>';
+        viewerContentArea.innerHTML = html;
       }
 
-    } else if (activeScan.type === 'docx') {
-      const docDiv = document.createElement('div');
-      docDiv.style.background = 'var(--bg-card)';
-      docDiv.style.padding = '1.5rem';
-      docDiv.style.borderRadius = 'var(--radius-md)';
-      docDiv.style.maxHeight = '480px';
-      docDiv.style.overflowY = 'auto';
-      docDiv.innerHTML = activeScan.formattedHtml || `<pre>${activeScan.rawText}</pre>`;
-      viewerContentArea.appendChild(docDiv);
+      sheetSelect.onchange = (e) => displaySheet(e.target.value);
+      displaySheet(sheetSelect.value);
 
-    } else if (activeScan.type === 'pdf') {
-      const pdfWrapper = document.createElement('div');
-      pdfWrapper.style.textAlign = 'center';
-
-      const canvas = document.createElement('canvas');
-      canvas.style.maxWidth = '100%';
-      canvas.style.borderRadius = 'var(--radius-md)';
-      canvas.style.border = '1px solid var(--border-light)';
-
-      const controls = document.createElement('div');
-      controls.style.marginTop = '1rem';
-      controls.style.display = 'flex';
-      controls.style.justifyContent = 'center';
-      controls.style.gap = '1rem';
-      controls.style.alignItems = 'center';
-
-      let currentPage = 1;
-      const totalPages = activeScan.metadata.pageCount || 1;
-
-      const pageIndicator = document.createElement('span');
-      pageIndicator.style.fontSize = '0.85rem';
-      pageIndicator.textContent = `Page ${currentPage} of ${totalPages}`;
-
-      const prevBtn = document.createElement('button');
-      prevBtn.className = 'btn-icon';
-      prevBtn.textContent = '◀ Previous';
-      prevBtn.onclick = () => {
-        if (currentPage > 1) {
-          currentPage--;
-          pageIndicator.textContent = `Page ${currentPage} of ${totalPages}`;
-          scanner.pdfParser.renderPageToCanvas(activeScan.pdfDocReference, currentPage, canvas);
-        }
-      };
-
-      const nextBtn = document.createElement('button');
-      nextBtn.className = 'btn-icon';
-      nextBtn.textContent = 'Next ▶';
-      nextBtn.onclick = () => {
-        if (currentPage < totalPages) {
-          currentPage++;
-          pageIndicator.textContent = `Page ${currentPage} of ${totalPages}`;
-          scanner.pdfParser.renderPageToCanvas(activeScan.pdfDocReference, currentPage, canvas);
-        }
-      };
-
-      controls.appendChild(prevBtn);
-      controls.appendChild(pageIndicator);
-      controls.appendChild(nextBtn);
-
-      pdfWrapper.appendChild(canvas);
-      pdfWrapper.appendChild(controls);
-      viewerContentArea.appendChild(pdfWrapper);
-
-      if (activeScan.pdfDocReference) {
-        scanner.pdfParser.renderPageToCanvas(activeScan.pdfDocReference, 1, canvas);
-      }
-    }
-  }
-
-  // ----------------------------------------------------
-  // TAB 3: Security & PII Audit Findings
-  // ----------------------------------------------------
-  function renderPIIFindings() {
-    if (!activeScan) return;
-    piiFindingsList.innerHTML = '';
-
-    const findings = activeScan.piiResult.findings || [];
-
-    if (findings.length === 0) {
-      piiFindingsList.innerHTML = `
-        <div style="text-align: center; padding: 3rem; color: var(--accent-emerald);">
-          <div style="font-size: 2.5rem; margin-bottom: 0.5rem;">🛡️</div>
-          <h3 style="font-size: 1.1rem; font-weight: 700;">No Sensitive Data Leaks Detected</h3>
-          <p style="font-size: 0.85rem; color: var(--text-muted);">This document is clean of credit card numbers, SSNs, API tokens, and passwords.</p>
-        </div>
-      `;
-      return;
-    }
-
-    findings.forEach(item => {
+    } else if (scan.formattedHtml) {
       const div = document.createElement('div');
-      div.className = 'pii-card';
+      div.className = 'docx-reader-container';
+      div.innerHTML = scan.formattedHtml;
+      viewerContentArea.appendChild(div);
 
-      const displayVal = isMasked ? item.masked : item.raw;
-      const severityClass = `badge-${item.severity}`;
-
-      div.innerHTML = `
-        <div class="pii-info">
-          <div class="pii-title">
-            <span>${item.name}</span>
-            <span class="badge ${severityClass}">${item.severity.toUpperCase()}</span>
-            <span style="font-size: 0.72rem; color: var(--text-dim); font-weight: 400;">(${item.compliance})</span>
-          </div>
-          <div style="font-family: var(--font-mono); font-size: 0.9rem; color: var(--accent-cyan); margin-top: 0.2rem;">
-            ${displayVal}
-          </div>
-          <div class="pii-context">
-            Context: "${item.context}"
-          </div>
-        </div>
-      `;
-
-      piiFindingsList.appendChild(div);
-    });
+    } else {
+      const pre = document.createElement('pre');
+      pre.style.cssText = 'background: rgba(15, 23, 42, 0.7); padding: 1.25rem; border-radius: var(--radius-md); font-family: var(--font-mono); font-size: 0.85rem; color: var(--text-light); overflow-x: auto; white-space: pre-wrap;';
+      pre.textContent = scan.rawText || 'No readable text extracted.';
+      viewerContentArea.appendChild(pre);
+    }
   }
 
-  btnMaskToggle.addEventListener('click', () => {
-    isMasked = !isMasked;
-    btnMaskToggle.innerHTML = isMasked ? '<span>👁️</span> Mask / Reveal Sensitive Values' : '<span>🔒</span> Re-Mask Sensitive Values';
-    renderPIIFindings();
-  });
-
-  btnRedactCopy.addEventListener('click', () => {
-    if (activeScan && activeScan.piiResult.redactedText) {
-      navigator.clipboard.writeText(activeScan.piiResult.redactedText);
-      alert('Redacted text copied to clipboard!');
-    }
-  });
-
-  btnExportJson.addEventListener('click', () => {
-    if (!activeScan) return;
-    const blob = new Blob([JSON.stringify(activeScan, null, 2)], { type: 'application/json' });
-    dbManager.triggerDownload(blob, `${activeScan.name}_audit.json`);
-  });
-
-  btnExportMd.addEventListener('click', () => {
-    if (!activeScan) return;
-    let md = `# IRIS AI File Audit Report: ${activeScan.name}\n`;
-    md += `- **Format**: ${activeScan.type.toUpperCase()}\n`;
-    md += `- **Risk Score**: ${activeScan.piiResult.riskScore}/100 (${activeScan.piiResult.riskLevel})\n`;
-    md += `- **Doc Type**: ${activeScan.aiAnalysis.docType}\n\n`;
-    md += `## Executive Summary\n${activeScan.aiAnalysis.summary}\n\n`;
-    md += `## Sensitive Data Findings (${activeScan.piiResult.totalFindings})\n`;
-    (activeScan.piiResult.findings || []).forEach(f => {
-      md += `- **${f.name}** [${f.severity.toUpperCase()}]: ${f.masked} (${f.compliance})\n`;
-    });
-    const blob = new Blob([md], { type: 'text/markdown' });
-    dbManager.triggerDownload(blob, `${activeScan.name}_report.md`);
-  });
-
-  // ----------------------------------------------------
-  // TAB 4: Data Graph Visualization Drafts
-  // ----------------------------------------------------
-  function renderGraphDrafts() {
-    if (!activeScan) return;
+  // TAB 3: Graph Drafts Tab Renderer
+  function renderGraphsTab(scan) {
     graphDraftsContainer.innerHTML = '';
+    
+    // Destroy previous Chart.js instances
+    Object.values(chartInstances).forEach(c => c && c.destroy && c.destroy());
+    chartInstances = {};
 
-    const drafts = activeScan.graphDrafts || [];
+    const drafts = scan.graphDrafts || [];
 
     if (drafts.length === 0) {
-      graphDraftsContainer.innerHTML = `<p style="color: var(--text-muted);">No numerical data tables available for charting.</p>`;
+      graphDraftsContainer.innerHTML = '<div style="color: var(--text-muted); padding: 2rem; text-align: center;">No numerical series detected to build chart drafts.</div>';
       return;
     }
 
     drafts.forEach((draft, idx) => {
       const card = document.createElement('div');
       card.className = 'graph-card';
-
       const canvasId = `chart_canvas_${idx}`;
 
       card.innerHTML = `
-        <div class="graph-header">
+        <div class="graph-card-header">
           <div>
-            <h4 style="font-size: 1.1rem; font-weight: 700;">${draft.title}</h4>
-            <div style="font-size: 0.8rem; color: var(--accent-cyan); margin-top: 0.2rem;">
-              💡 <strong>AI Graph Recommendation:</strong> ${draft.recommendationReason}
-            </div>
+            <div class="graph-card-title">${draft.title}</div>
+            <div style="font-size: 0.78rem; color: var(--text-muted); margin-top: 0.25rem;">Source: ${draft.source}</div>
           </div>
           <div style="display: flex; gap: 0.5rem; align-items: center;">
-            <label style="font-size: 0.8rem; color: var(--text-muted);">Graph Type:</label>
-            <select class="chart-type-select form-input" data-draft-idx="${idx}" style="width: auto; padding: 0.3rem 0.6rem;">
-              ${(draft.suggestedTypes || ['bar', 'line', 'doughnut', 'radar']).map(t => `
-                <option value="${t}" ${t === draft.config.type ? 'selected' : ''}>${t.toUpperCase()}</option>
-              `).join('')}
+            <span class="badge badge-low">Draft Suggestion</span>
+            <select class="form-input chart-type-select" data-draft-idx="${idx}" style="width: auto; padding: 0.25rem 0.5rem; font-size: 0.8rem;">
+              <option value="bar" ${draft.primaryType === 'bar' ? 'selected' : ''}>Bar Chart</option>
+              <option value="line" ${draft.primaryType === 'line' ? 'selected' : ''}>Line Chart</option>
+              <option value="pie" ${draft.primaryType === 'pie' ? 'selected' : ''}>Pie Chart</option>
             </select>
           </div>
         </div>
-        <div class="chart-canvas-container">
+
+        <div style="font-size: 0.82rem; color: var(--accent-cyan); margin-bottom: 1rem;">
+          💡 <strong>AI Recommendation:</strong> ${draft.recommendation}
+        </div>
+
+        <div class="graph-canvas-container" style="height: 320px; position: relative;">
           <canvas id="${canvasId}"></canvas>
         </div>
       `;
 
       graphDraftsContainer.appendChild(card);
 
+      // Render Chart using Chart.js
       setTimeout(() => {
-        const canvasEl = document.getElementById(canvasId);
-        scanner.graphEngine.renderChart(canvasEl, draft.config);
-
-        // Chart Type Switcher Listener
-        card.querySelector('.chart-type-select').addEventListener('change', (e) => {
-          draft.config.type = e.target.value;
-          scanner.graphEngine.renderChart(canvasEl, draft.config);
-        });
+        const ctx = document.getElementById(canvasId);
+        if (ctx) {
+          chartInstances[canvasId] = createChart(ctx, draft.primaryType, draft.chartData);
+        }
       }, 50);
+    });
+
+    // Chart Type Selector Switcher
+    document.querySelectorAll('.chart-type-select').forEach(select => {
+      select.addEventListener('change', (e) => {
+        const draftIdx = e.target.getAttribute('data-draft-idx');
+        const newType = e.target.value;
+        const canvasId = `chart_canvas_${draftIdx}`;
+        const draft = drafts[draftIdx];
+
+        if (chartInstances[canvasId]) {
+          chartInstances[canvasId].destroy();
+        }
+
+        const ctx = document.getElementById(canvasId);
+        if (ctx && draft) {
+          chartInstances[canvasId] = createChart(ctx, newType, draft.chartData);
+        }
+      });
+    });
+  }
+
+  function createChart(ctx, type, chartData) {
+    return new Chart(ctx, {
+      type: type,
+      data: JSON.parse(JSON.stringify(chartData)),
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: {
+            display: type === 'pie',
+            labels: { color: '#94A3B8', font: { family: 'Outfit, sans-serif' } }
+          }
+        },
+        scales: type === 'pie' ? {} : {
+          x: {
+            ticks: { color: '#94A3B8', font: { family: 'Outfit, sans-serif' } },
+            grid: { color: 'rgba(255,255,255,0.05)' }
+          },
+          y: {
+            ticks: { color: '#94A3B8', font: { family: 'Outfit, sans-serif' } },
+            grid: { color: 'rgba(255,255,255,0.05)' }
+          }
+        }
+      }
     });
   }
 
   // ----------------------------------------------------
-  // TAB 5: Interactive Chat with Document
-  // ----------------------------------------------------
-  async function sendChatMessage() {
-    const q = chatInput.value.trim();
-    if (!q || !activeScan) return;
-
-    chatInput.value = '';
-
-    // Append User Bubble
-    const userDiv = document.createElement('div');
-    userDiv.className = 'chat-bubble user';
-    userDiv.textContent = q;
-    chatMessages.appendChild(userDiv);
-    chatMessages.scrollTop = chatMessages.scrollHeight;
-
-    // Append AI Thinking Bubble
-    const aiDiv = document.createElement('div');
-    aiDiv.className = 'chat-bubble ai';
-    aiDiv.textContent = 'Analyzing document content...';
-    chatMessages.appendChild(aiDiv);
-    chatMessages.scrollTop = chatMessages.scrollHeight;
-
-    const answer = await scanner.geminiService.askQuestion(q, activeScan, currentChatHistory);
-    aiDiv.innerHTML = answer.replace(/\n/g, '<br>');
-    chatMessages.scrollTop = chatMessages.scrollHeight;
-
-    currentChatHistory.push({ sender: 'user', text: q });
-    currentChatHistory.push({ sender: 'ai', text: answer });
-  }
-
-  btnSendChat.addEventListener('click', sendChatMessage);
-  chatInput.addEventListener('keypress', (e) => {
-    if (e.key === 'Enter') sendChatMessage();
-  });
-
-  // ----------------------------------------------------
-  // Workspace Tab Switcher
+  // Tab Switching Logic
   // ----------------------------------------------------
   tabBtns.forEach(btn => {
     btn.addEventListener('click', () => {
@@ -624,119 +516,88 @@ document.addEventListener('DOMContentLoaded', async () => {
       tabPanels.forEach(p => p.classList.remove('active'));
 
       btn.classList.add('active');
-      const targetId = btn.getAttribute('data-tab');
-      document.getElementById(targetId).classList.add('active');
-
-      if (targetId === 'tabGraphs') {
-        renderGraphDrafts();
-      }
+      const targetTab = btn.getAttribute('data-tab');
+      const targetPanel = document.getElementById(targetTab);
+      if (targetPanel) targetPanel.classList.add('active');
     });
   });
 
   // ----------------------------------------------------
-  // Settings Modal Handlers
-  // ----------------------------------------------------
-  btnSettings.addEventListener('click', () => {
-    geminiApiKeyInput.value = scanner.geminiService.apiKey;
-    geminiModelSelect.value = scanner.geminiService.selectedModel;
-    settingsModal.classList.add('active');
-  });
-
-  btnCloseSettings.addEventListener('click', () => {
-    settingsModal.classList.remove('active');
-  });
-
-  btnSaveSettings.addEventListener('click', () => {
-    scanner.geminiService.setApiKey(geminiApiKeyInput.value);
-    scanner.geminiService.setModel(geminiModelSelect.value);
-    settingsModal.classList.remove('active');
-    alert('Settings saved successfully!');
-  });
-
-  // ----------------------------------------------------
-  // ADMIN DATABASE PORTAL RENDERER & ACTIONS
+  // Admin Portal & Data Editor
   // ----------------------------------------------------
   async function renderAdminPortal() {
     const records = await dbManager.getAllRecords();
 
-    // Update Stats
+    // Stats
     statTotalDb.textContent = records.length;
-    statPendingDb.textContent = records.filter(r => r.status === 'Pending Review').length;
-    statVerifiedDb.textContent = records.filter(r => r.status === 'Verified & Approved').length;
-    statLeaksDb.textContent = records.filter(r => r.riskScore >= 40).length;
+    statPendingDb.textContent = records.filter(r => r.status === 'Pending Review' || !r.status).length;
+    statVerifiedDb.textContent = records.filter(r => r.status === 'Approved' || r.status === 'Verified & Approved').length;
+    
+    let totalTables = 0;
+    records.forEach(r => {
+      if (r.extractedData && typeof r.extractedData === 'object') {
+        totalTables += Object.keys(r.extractedData).length;
+      }
+    });
+    statTablesDb.textContent = totalTables;
 
-    // Filter Logic
-    const searchTerm = adminSearchInput.value.toLowerCase().trim();
+    // Filter and Render Table Rows
+    const searchTerm = (adminSearchInput.value || '').toLowerCase();
     const statusFilter = adminStatusFilter.value;
 
     const filtered = records.filter(r => {
-      const matchesSearch = !searchTerm || 
-        r.fileName.toLowerCase().includes(searchTerm) || 
-        r.docType.toLowerCase().includes(searchTerm) || 
-        r.rawText.toLowerCase().includes(searchTerm);
-
-      const matchesStatus = statusFilter === 'all' || r.status === statusFilter;
-      return matchesSearch && matchesStatus;
+      const matchSearch = (r.fileName || '').toLowerCase().includes(searchTerm) ||
+                          (r.docType || '').toLowerCase().includes(searchTerm) ||
+                          (r.rawText || '').toLowerCase().includes(searchTerm);
+      const matchStatus = statusFilter === 'all' || r.status === statusFilter || (statusFilter === 'Pending Review' && !r.status);
+      return matchSearch && matchStatus;
     });
 
     adminRecordsTableBody.innerHTML = '';
 
     if (filtered.length === 0) {
-      adminRecordsTableBody.innerHTML = `
-        <tr>
-          <td colspan="8" style="text-align: center; color: var(--text-dim); padding: 2rem;">
-            No records found in database matching criteria.
-          </td>
-        </tr>
-      `;
+      adminRecordsTableBody.innerHTML = `<tr><td colspan="8" style="text-align: center; color: var(--text-dim); padding: 2rem;">No matching scanned records in database.</td></tr>`;
       return;
     }
 
     filtered.forEach(r => {
       const tr = document.createElement('tr');
+      const suggestedChart = r.graphDrafts && r.graphDrafts.length > 0 ? r.graphDrafts[0].primaryType.toUpperCase() : 'NONE';
+      const statusClass = (r.status === 'Approved' || r.status === 'Verified & Approved') ? 'badge-low' : 'badge-medium';
 
       tr.innerHTML = `
-        <td style="font-family: var(--font-mono); font-size: 0.78rem;">${r.id}</td>
+        <td style="font-family: var(--font-mono); font-size: 0.78rem; color: var(--text-dim);">${r.id.substr(0, 14)}...</td>
         <td style="font-weight: 600;">${r.fileName}</td>
-        <td><span class="format-chip ${r.fileType}">${r.fileType.toUpperCase()}</span></td>
-        <td>${r.docType}</td>
-        <td><span class="badge badge-${r.riskLevel.toLowerCase()}">${r.riskScore}/100</span></td>
+        <td><span class="format-chip ${(r.fileType || '').toLowerCase()}">${(r.fileType || 'UNKNOWN').toUpperCase()}</span></td>
+        <td>${r.docType || 'General'}</td>
+        <td><span class="badge badge-low" style="background: rgba(139, 92, 246, 0.2); color: #C4B5FD;">${suggestedChart}</span></td>
+        <td><span class="badge ${statusClass}">${r.status || 'Pending Review'}</span></td>
+        <td style="font-size: 0.8rem; color: var(--text-muted);">${new Date(r.scannedAt).toLocaleDateString()}</td>
         <td>
-          <select class="admin-status-select form-input" data-id="${r.id}" style="padding: 0.2rem 0.5rem; font-size: 0.8rem;">
-            <option value="Pending Review" ${r.status === 'Pending Review' ? 'selected' : ''}>Pending Review</option>
-            <option value="Verified & Approved" ${r.status === 'Verified & Approved' ? 'selected' : ''}>Verified & Approved</option>
-            <option value="Flagged / Needs Revision" ${r.status === 'Flagged / Needs Revision' ? 'selected' : ''}>Flagged / Needs Revision</option>
-          </select>
-        </td>
-        <td style="font-size: 0.78rem; color: var(--text-muted);">${new Date(r.scannedAt).toLocaleDateString()}</td>
-        <td>
-          <button class="btn-icon btn-edit-record" data-id="${r.id}" style="padding: 0.25rem 0.6rem; font-size: 0.75rem;">✏️ Edit</button>
-          <button class="btn-icon btn-delete-record" data-id="${r.id}" style="padding: 0.25rem 0.6rem; font-size: 0.75rem; border-color: rgba(239,68,68,0.4);">🗑️</button>
+          <div style="display: flex; gap: 0.4rem;">
+            <button class="btn-table-edit" data-id="${r.id}" style="padding: 0.35rem 0.65rem; font-size: 0.75rem; background: var(--accent-violet); border: none; border-radius: var(--radius-sm); color: #fff; cursor: pointer;">
+              ✏️ Edit Data
+            </button>
+            <button class="btn-table-delete" data-id="${r.id}" style="padding: 0.35rem 0.65rem; font-size: 0.75rem; background: rgba(244, 63, 94, 0.2); border: 1px solid var(--accent-rose); border-radius: var(--radius-sm); color: var(--accent-rose); cursor: pointer;">
+              🗑️
+            </button>
+          </div>
         </td>
       `;
 
       adminRecordsTableBody.appendChild(tr);
     });
 
-    // Attach Status Selector Change Handlers
-    document.querySelectorAll('.admin-status-select').forEach(sel => {
-      sel.addEventListener('change', async (e) => {
-        const id = sel.getAttribute('data-id');
-        await dbManager.updateRecord(id, { status: e.target.value });
-        await renderAdminPortal();
-      });
-    });
-
-    // Attach Edit Handlers
-    document.querySelectorAll('.btn-edit-record').forEach(btn => {
+    // Wire Edit Buttons
+    document.querySelectorAll('.btn-table-edit').forEach(btn => {
       btn.addEventListener('click', () => openRecordEditModal(btn.getAttribute('data-id')));
     });
 
-    // Attach Delete Handlers
-    document.querySelectorAll('.btn-delete-record').forEach(btn => {
+    // Wire Delete Buttons
+    document.querySelectorAll('.btn-table-delete').forEach(btn => {
       btn.addEventListener('click', async () => {
         const id = btn.getAttribute('data-id');
-        if (confirm(`Are you sure you want to delete database record ${id}?`)) {
+        if (confirm('Are you sure you want to delete this scanned record?')) {
           await dbManager.deleteRecord(id);
           await renderAdminPortal();
         }
@@ -747,72 +608,178 @@ document.addEventListener('DOMContentLoaded', async () => {
   adminSearchInput.addEventListener('input', renderAdminPortal);
   adminStatusFilter.addEventListener('change', renderAdminPortal);
 
-  // Admin Database Exports
-  btnExportDbJson.addEventListener('click', () => dbManager.exportDatabase('json'));
-  btnExportDbCsv.addEventListener('click', () => dbManager.exportDatabase('csv'));
-  btnExportDbSql.addEventListener('click', () => dbManager.exportDatabase('sql'));
-
   // ----------------------------------------------------
-  // Admin Record Detail & Inline Table Data Editor Modal
+  // Admin Live Data Editor Modal
   // ----------------------------------------------------
-  async function openRecordEditModal(id) {
+  async function openRecordEditModal(recordId) {
     const records = await dbManager.getAllRecords();
-    const record = records.find(r => r.id === id);
+    const record = records.find(r => r.id === recordId);
     if (!record) return;
 
-    recordEditTitle.textContent = `Admin Record Editor - ${record.fileName} (${record.id})`;
+    recordEditTitle.textContent = `Edit Record: ${record.fileName}`;
+    recordEditBody.innerHTML = '';
 
-    recordEditBody.innerHTML = `
-      <div class="form-group">
-        <label class="form-label">Document Title / File Name</label>
+    // Record Metadata Inputs
+    const metaSection = document.createElement('div');
+    metaSection.style.cssText = 'display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem; margin-bottom: 1.5rem; background: var(--bg-surface); padding: 1rem; border-radius: var(--radius-md); border: 1px solid var(--border-light);';
+
+    metaSection.innerHTML = `
+      <div>
+        <label class="form-label">File Name</label>
         <input type="text" id="editFileName" class="form-input" value="${record.fileName}">
       </div>
-
-      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
-        <div class="form-group">
-          <label class="form-label">Document Category</label>
-          <input type="text" id="editDocType" class="form-input" value="${record.docType}">
-        </div>
-        <div class="form-group">
-          <label class="form-label">Review Status</label>
-          <select id="editStatus" class="form-input">
-            <option value="Pending Review" ${record.status === 'Pending Review' ? 'selected' : ''}>Pending Review</option>
-            <option value="Verified & Approved" ${record.status === 'Verified & Approved' ? 'selected' : ''}>Verified & Approved</option>
-            <option value="Flagged / Needs Revision" ${record.status === 'Flagged / Needs Revision' ? 'selected' : ''}>Flagged / Needs Revision</option>
-          </select>
-        </div>
+      <div>
+        <label class="form-label">Category / Classification</label>
+        <input type="text" id="editDocType" class="form-input" value="${record.docType || 'General Institutional Data'}">
       </div>
-
-      <div class="form-group">
-        <label class="form-label">Admin Audit Notes</label>
-        <textarea id="editAdminNotes" class="form-input" rows="3" placeholder="Add custom admin verification notes...">${record.adminNotes || ''}</textarea>
+      <div>
+        <label class="form-label">Approval Status</label>
+        <select id="editStatus" class="form-input">
+          <option value="Pending Review" ${record.status === 'Pending Review' ? 'selected' : ''}>Pending Review</option>
+          <option value="Approved" ${record.status === 'Approved' ? 'selected' : ''}>Approved for Dashboard</option>
+          <option value="Needs Revision" ${record.status === 'Needs Revision' ? 'selected' : ''}>Needs Revision</option>
+        </select>
       </div>
-
-      <div style="display: flex; justify-content: flex-end; gap: 0.75rem; margin-top: 1rem;">
-        <button id="btnSaveRecordEdit" class="btn-icon" style="background: var(--accent-violet); border: none;">
-          Save Record Changes
-        </button>
+      <div style="grid-column: 1 / -1;">
+        <label class="form-label">Admin Notes & Verification Logs</label>
+        <textarea id="editAdminNotes" class="form-input" rows="2" placeholder="Add administrative verification notes...">${record.adminNotes || ''}</textarea>
       </div>
     `;
+    recordEditBody.appendChild(metaSection);
 
-    recordEditModal.classList.add('active');
+    // Interactive Tabular Cell Editor
+    if (record.extractedData && typeof record.extractedData === 'object' && Object.keys(record.extractedData).length > 0) {
+      const tableSection = document.createElement('div');
+      tableSection.innerHTML = `
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem;">
+          <h4 style="font-size: 1rem; font-weight: 700; color: var(--accent-cyan);">📊 Extracted Spreadsheet Cells (Live Editable)</h4>
+          <button id="btnAddRowBtn" style="padding: 0.4rem 0.8rem; font-size: 0.8rem; background: rgba(16, 185, 129, 0.2); border: 1px solid var(--accent-emerald); color: var(--accent-emerald); border-radius: var(--radius-sm); cursor: pointer;">
+            ➕ Add Row
+          </button>
+        </div>
+      `;
 
-    document.getElementById('btnSaveRecordEdit').addEventListener('click', async () => {
-      const updated = {
-        fileName: document.getElementById('editFileName').value,
-        docType: document.getElementById('editDocType').value,
-        status: document.getElementById('editStatus').value,
-        adminNotes: document.getElementById('editAdminNotes').value
-      };
+      const sheetNames = Object.keys(record.extractedData);
+      const activeSheetName = sheetNames[0];
+      const sheet = record.extractedData[activeSheetName];
 
-      await dbManager.updateRecord(id, updated);
-      recordEditModal.classList.remove('active');
-      await renderAdminPortal();
+      if (sheet && sheet.headers) {
+        const tableContainer = document.createElement('div');
+        tableContainer.className = 'table-container';
+        tableContainer.style.maxHeight = '320px';
+
+        let tHtml = `<table class="data-table"><thead><tr>`;
+        sheet.headers.forEach(h => {
+          tHtml += `<th>${h || ''}</th>`;
+        });
+        tHtml += `<th>Action</th></tr></thead><tbody id="editableTableBody">`;
+
+        (sheet.rows || []).slice(0, 30).forEach((row, rIdx) => {
+          tHtml += `<tr>`;
+          sheet.headers.forEach((h, cIdx) => {
+            const cellVal = row[cIdx] !== undefined && row[cIdx] !== null ? row[cIdx] : '';
+            tHtml += `<td><input type="text" class="cell-input" data-row="${rIdx}" data-col="${cIdx}" value="${cellVal}" style="background: rgba(255,255,255,0.05); border: 1px solid var(--border-light); color: var(--text-light); padding: 0.3rem 0.5rem; border-radius: var(--radius-sm); width: 100%; font-size: 0.82rem;"></td>`;
+          });
+          tHtml += `<td><button class="btn-delete-row" data-row="${rIdx}" style="background: none; border: none; color: var(--accent-rose); cursor: pointer; font-size: 0.9rem;">✕</button></td></tr>`;
+        });
+
+        tHtml += `</tbody></table>`;
+        tableContainer.innerHTML = tHtml;
+        tableSection.appendChild(tableContainer);
+        recordEditBody.appendChild(tableSection);
+
+        // Add Row Handler
+        setTimeout(() => {
+          const btnAddRow = document.getElementById('btnAddRowBtn');
+          if (btnAddRow) {
+            btnAddRow.addEventListener('click', () => {
+              const emptyRow = sheet.headers.map(() => '');
+              sheet.rows.unshift(emptyRow);
+              openRecordEditModal(recordId);
+            });
+          }
+
+          // Delete Row Handler
+          document.querySelectorAll('.btn-delete-row').forEach(btn => {
+            btn.addEventListener('click', () => {
+              const rIdx = parseInt(btn.getAttribute('data-row'), 10);
+              sheet.rows.splice(rIdx, 1);
+              openRecordEditModal(recordId);
+            });
+          });
+        }, 50);
+      }
+    }
+
+    // Modal Action Buttons
+    const actionRow = document.createElement('div');
+    actionRow.style.cssText = 'display: flex; justify-content: flex-end; gap: 0.75rem; margin-top: 1.5rem; padding-top: 1rem; border-top: 1px solid var(--border-light);';
+
+    actionRow.innerHTML = `
+      <button id="btnCancelEdit" class="btn-icon" style="background: transparent; border: 1px solid var(--border-light);">Cancel</button>
+      <button id="btnSaveRecordChanges" class="btn-icon" style="background: var(--accent-violet); border: none;">💾 Save Changes</button>
+      <button id="btnApproveDraft" class="btn-icon" style="background: var(--accent-emerald); border: none; color: #fff;">✅ Approve for Dashboard</button>
+    `;
+
+    recordEditBody.appendChild(actionRow);
+
+    // Wire Save Action
+    document.getElementById('btnSaveRecordChanges').addEventListener('click', async () => {
+      await saveModalData(record, recordId, false);
     });
+
+    document.getElementById('btnApproveDraft').addEventListener('click', async () => {
+      await saveModalData(record, recordId, true);
+    });
+
+    document.getElementById('btnCancelEdit').addEventListener('click', () => {
+      recordEditModal.style.display = 'none';
+    });
+
+    recordEditModal.style.display = 'flex';
+  }
+
+  async function saveModalData(record, recordId, forceApprove = false) {
+    const updatedFileName = document.getElementById('editFileName').value.trim();
+    const updatedDocType = document.getElementById('editDocType').value.trim();
+    const updatedStatus = forceApprove ? 'Approved' : document.getElementById('editStatus').value;
+    const updatedAdminNotes = document.getElementById('editAdminNotes').value.trim();
+
+    // Harvest cell input edits if available
+    const cellInputs = document.querySelectorAll('.cell-input');
+    if (cellInputs.length > 0 && record.extractedData) {
+      const activeSheetName = Object.keys(record.extractedData)[0];
+      const sheet = record.extractedData[activeSheetName];
+      if (sheet && sheet.rows) {
+        cellInputs.forEach(input => {
+          const r = parseInt(input.getAttribute('data-row'), 10);
+          const c = parseInt(input.getAttribute('data-col'), 10);
+          let val = input.value.trim();
+          if (!isNaN(parseFloat(val)) && isFinite(val)) {
+            val = parseFloat(val);
+          }
+          if (sheet.rows[r]) {
+            sheet.rows[r][c] = val;
+          }
+        });
+      }
+    }
+
+    await dbManager.updateRecord(recordId, {
+      fileName: updatedFileName,
+      docType: updatedDocType,
+      status: updatedStatus,
+      adminNotes: updatedAdminNotes,
+      extractedData: record.extractedData
+    });
+
+    recordEditModal.style.display = 'none';
+    await renderAdminPortal();
+    alert(`Record ${recordId} successfully updated!`);
   }
 
   btnCloseRecordModal.addEventListener('click', () => {
-    recordEditModal.classList.remove('active');
+    recordEditModal.style.display = 'none';
   });
 
 });

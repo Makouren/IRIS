@@ -1,6 +1,6 @@
 /**
  * IRIS AI - Central Dispatcher & Scanner Orchestrator
- * Integrates Document Parsers, PII Scanner, Graph Engine, Gemini AI, and Database Manager.
+ * Integrates Document Parsers, Graph Engine, and Database Manager.
  */
 
 class ScannerOrchestrator {
@@ -9,8 +9,6 @@ class ScannerOrchestrator {
     this.excelParser = new ExcelParser();
     this.docxParser = new DocxParser();
     this.pdfParser = new PdfParser();
-    this.piiScanner = new PIIScanner();
-    this.geminiService = new GeminiService();
     this.graphEngine = new GraphEngine();
     this.dbManager = new DatabaseManager();
   }
@@ -38,60 +36,46 @@ class ScannerOrchestrator {
   }
 
   /**
-   * Scan single file and return aggregated audit report
+   * Scan single file and return aggregated draft report
    */
   async scanFile(file, onProgress = () => {}) {
     const category = this.getFileCategory(file);
 
     if (category === 'unknown') {
-      throw new Error(`Unsupported file format: ${file.name}. Supported formats: Images, Excel (.xlsx, .csv), DOCX, and PDF.`);
+      throw new Error(`Unsupported file format: ${file.name}. Supported formats: Spreadsheets (.xlsx, .csv), DOCX, PDF, and Images.`);
     }
 
-    onProgress({ status: `Initializing scanner for ${file.name}...`, progress: 5 });
+    onProgress({ status: `Initializing parser for ${file.name}...`, progress: 10 });
 
     let parsedResult = null;
 
     // 1. Format-specific parsing
     switch (category) {
       case 'image':
-        parsedResult = await this.imageParser.parse(file, p => onProgress({ status: p.status, progress: 10 + Math.round(p.progress * 0.4) }));
+        parsedResult = await this.imageParser.parse(file, p => onProgress({ status: p.status, progress: 15 + Math.round(p.progress * 0.45) }));
         break;
       case 'excel':
-        parsedResult = await this.excelParser.parse(file, p => onProgress({ status: p.status, progress: 10 + Math.round(p.progress * 0.4) }));
+        parsedResult = await this.excelParser.parse(file, p => onProgress({ status: p.status, progress: 15 + Math.round(p.progress * 0.45) }));
         break;
       case 'docx':
-        parsedResult = await this.docxParser.parse(file, p => onProgress({ status: p.status, progress: 10 + Math.round(p.progress * 0.4) }));
+        parsedResult = await this.docxParser.parse(file, p => onProgress({ status: p.status, progress: 15 + Math.round(p.progress * 0.45) }));
         break;
       case 'pdf':
-        parsedResult = await this.pdfParser.parse(file, p => onProgress({ status: p.status, progress: 10 + Math.round(p.progress * 0.4) }));
+        parsedResult = await this.pdfParser.parse(file, p => onProgress({ status: p.status, progress: 15 + Math.round(p.progress * 0.45) }));
         break;
     }
 
-    // 2. High-Precision PII & Sensitive Data Audit
-    onProgress({ status: 'Auditing sensitive data & PII leaks...', progress: 60 });
-    const piiResult = this.piiScanner.scanText(parsedResult.rawText, file.name);
-
-    // 3. AI Analysis & Summarization (Local / Gemini Cloud)
-    onProgress({ status: 'Generating AI executive summary & doc classification...', progress: 75 });
-    const aiAnalysis = await this.geminiService.analyzeWithGemini({
-      name: file.name,
-      type: category,
-      rawText: parsedResult.rawText,
-      metadata: parsedResult.metadata
-    });
-
-    // 4. Data Graph Visualization Draft & Suggestions Engine
-    onProgress({ status: 'Drafting data visualization graphs & chart suggestions...', progress: 90 });
+    // 2. Data Graph Visualization Draft & Suggestions Engine
+    onProgress({ status: 'Drafting visualization suggestions (Bar, Line, Pie)...', progress: 75 });
     const graphDrafts = this.graphEngine.generateGraphDrafts({
       name: file.name,
       type: category,
       rawText: parsedResult.rawText,
       sheetsData: parsedResult.sheetsData,
-      metadata: parsedResult.metadata,
-      piiResult
+      metadata: parsedResult.metadata
     });
 
-    onProgress({ status: 'Finalizing audit record & saving to Admin Database...', progress: 95 });
+    onProgress({ status: 'Compiling extracted draft package...', progress: 90 });
 
     // Aggregate Full Scan Package
     const scanPackage = {
@@ -108,8 +92,6 @@ class ScannerOrchestrator {
       pages: parsedResult.pages,
       pdfDocReference: parsedResult.pdfDocReference,
       ocrData: parsedResult.ocrData,
-      piiResult,
-      aiAnalysis,
       graphDrafts,
       status: 'Pending Review'
     };

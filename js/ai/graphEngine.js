@@ -1,7 +1,7 @@
 /**
  * IRIS AI - Data Graph Visualization Draft & Suggestions Engine
  * Detects numerical patterns in spreadsheets, tables, and document text,
- * generates visualization drafts, and provides AI graph type recommendations.
+ * generates visualization drafts, and provides chart type recommendations (Bar, Line, Pie).
  */
 
 class GraphEngine {
@@ -17,7 +17,7 @@ class GraphEngine {
   }
 
   /**
-   * Analyze scanned file data and generate graph visualization drafts & AI suggestions
+   * Analyze scanned file data and generate graph visualization drafts & suggestions
    */
   generateGraphDrafts(fileData) {
     const drafts = [];
@@ -39,7 +39,7 @@ class GraphEngine {
       drafts.push(...textDrafts);
     }
 
-    // Fallback: If no numerical table was automatically detected, create a synthetic metric draft (e.g. Risk & Text Distribution)
+    // Fallback: If no numerical table was automatically detected, create a summary draft
     if (drafts.length === 0) {
       drafts.push(this.createFallbackMetricDraft(fileData));
     }
@@ -82,7 +82,6 @@ class GraphEngine {
     if (labelColIndex === -1) labelColIndex = 0;
 
     if (numericColIndices.length > 0) {
-      // Limit to top 15 rows for readable chart visualization
       const slicedRows = rows.slice(0, 15);
       const labels = slicedRows.map(r => String(r[labelColIndex] || 'Item').trim());
 
@@ -98,49 +97,39 @@ class GraphEngine {
         // Determine recommended graph type
         let primaryType = 'bar';
         let recommendation = 'Bar Chart recommended to compare distinct categories side-by-side.';
-        const isTimeSeries = labels.some(l => /jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec|q1|q2|q3|q4|202\d|201\d/i.test(l));
 
-        if (isTimeSeries) {
+        const temporalKeywords = ['year', 'month', 'date', 'quarter', 'semester', 'time', 'day', 'period', 'yr'];
+        const isTemporal = temporalKeywords.some(kw => String(headers[labelColIndex]).toLowerCase().includes(kw));
+
+        const percentageKeywords = ['%', 'percent', 'share', 'ratio', 'distribution', 'rate', 'portion'];
+        const isPercentage = percentageKeywords.some(kw => headerName.toLowerCase().includes(kw));
+
+        if (isTemporal) {
           primaryType = 'line';
-          recommendation = 'Line Graph recommended because labels indicate a time-series sequence or trend.';
-        } else if (dataValues.length <= 6 && dataValues.every(v => v >= 0)) {
-          primaryType = 'doughnut';
-          recommendation = 'Doughnut Chart recommended for displaying proportional parts of a whole.';
+          recommendation = 'Line Chart recommended to observe chronological trends over time.';
+        } else if (isPercentage && labels.length <= 7) {
+          primaryType = 'pie';
+          recommendation = 'Pie Chart recommended to visualize proportional composition.';
         }
 
         drafts.push({
           id: `draft_${Date.now()}_${datasetIndex}`,
-          title: `${headerName} Visualization Draft`,
+          title: `${headerName} — ${sourceLabel}`,
           source: sourceLabel,
-          recommendedType: primaryType,
-          recommendationReason: recommendation,
-          suggestedTypes: ['bar', 'line', 'doughnut', 'radar', 'polarArea'],
-          config: {
-            type: primaryType,
-            data: {
-              labels: labels,
-              datasets: [{
-                label: headerName,
-                data: dataValues,
-                borderColor: palette.border,
-                backgroundColor: primaryType === 'line' ? 'rgba(139, 92, 246, 0.15)' : palette.bg,
-                borderWidth: 2,
-                borderRadius: 6,
-                fill: primaryType === 'line'
-              }]
-            },
-            options: {
-              responsive: true,
-              maintainAspectRatio: false,
-              plugins: {
-                legend: { labels: { color: '#E2E8F0', font: { family: 'Outfit' } } },
-                title: { display: true, text: `${headerName} Analysis`, color: '#F8FAFC' }
-              },
-              scales: primaryType !== 'doughnut' && primaryType !== 'radar' ? {
-                x: { ticks: { color: '#94A3B8' }, grid: { color: 'rgba(255,255,255,0.05)' } },
-                y: { ticks: { color: '#94A3B8' }, grid: { color: 'rgba(255,255,255,0.08)' } }
-              } : {}
-            }
+          primaryType,
+          recommendation,
+          isDraft: true,
+          chartData: {
+            labels,
+            datasets: [{
+              label: headerName,
+              data: dataValues,
+              backgroundColor: primaryType === 'pie' ? this.colorPalettes.map(c => c.bg) : palette.bg,
+              borderColor: primaryType === 'pie' ? this.colorPalettes.map(c => c.border) : palette.border,
+              borderWidth: 2,
+              tension: 0.35,
+              fill: primaryType === 'line'
+            }]
           }
         });
       });
@@ -150,55 +139,46 @@ class GraphEngine {
   }
 
   /**
-   * Extract key-value numerical pairs from unstructured text (Docx/PDF/OCR)
+   * Extract numbers and entities from unstructured document text
    */
-  extractNumbersFromText(text, fileName) {
+  extractNumbersFromText(text, docName) {
     const drafts = [];
-    const kvRegex = /([A-Za-z\s]{3,25})[:=]\s*\$?\s*([0-9]+(?:\.[0-9]+)?)/g;
+    const pattern = /([A-Za-z\s\(\)\-\/]{3,35})\s*[:\-\=]\s*([0-9\.,]+)\s*([%\w]*)/g;
+    const matches = [];
     let match;
-    const labels = [];
-    const values = [];
 
-    while ((match = kvRegex.exec(text)) !== null && labels.length < 10) {
+    while ((match = pattern.exec(text)) !== null && matches.length < 12) {
       const label = match[1].trim();
-      const val = parseFloat(match[2]);
-      if (label && !isNaN(val) && val > 0) {
-        labels.push(label);
-        values.push(val);
+      const val = parseFloat(match[2].replace(/,/g, ''));
+      const unit = match[3] ? match[3].trim() : '';
+
+      if (!isNaN(val) && label.length > 2) {
+        matches.push({ label: `${label} ${unit ? `(${unit})` : ''}`, val });
       }
     }
 
-    if (labels.length >= 3) {
+    if (matches.length >= 2) {
+      const labels = matches.map(m => m.label);
+      const data = matches.map(m => m.val);
+      const palette = this.colorPalettes[0];
+
       drafts.push({
         id: `draft_text_${Date.now()}`,
-        title: `Extracted Key Numerical Metrics (${fileName})`,
-        source: 'Document Text Parser',
-        recommendedType: 'bar',
-        recommendationReason: 'Bar Chart recommended for displaying extracted numeric attributes.',
-        suggestedTypes: ['bar', 'doughnut', 'line'],
-        config: {
-          type: 'bar',
-          data: {
-            labels: labels,
-            datasets: [{
-              label: 'Extracted Value',
-              data: values,
-              backgroundColor: ['#8B5CF6', '#06B6D4', '#10B981', '#F59E0B', '#EC4899', '#3B82F6'],
-              borderRadius: 6
-            }]
-          },
-          options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            plugins: {
-              legend: { display: false },
-              title: { display: true, text: 'Extracted Numerical Metrics', color: '#F8FAFC' }
-            },
-            scales: {
-              x: { ticks: { color: '#94A3B8' }, grid: { color: 'rgba(255,255,255,0.05)' } },
-              y: { ticks: { color: '#94A3B8' }, grid: { color: 'rgba(255,255,255,0.08)' } }
-            }
-          }
+        title: `Key Extracted Metrics — ${docName}`,
+        source: 'Document Text & Key Values',
+        primaryType: matches.length <= 6 ? 'pie' : 'bar',
+        recommendation: matches.length <= 6 ? 'Pie/Doughnut Chart recommended for key metric breakdown.' : 'Bar Chart recommended for metric comparisons.',
+        isDraft: true,
+        chartData: {
+          labels,
+          datasets: [{
+            label: 'Extracted Value',
+            data,
+            backgroundColor: this.colorPalettes.map(c => c.bg),
+            borderColor: this.colorPalettes.map(c => c.border),
+            borderWidth: 2,
+            tension: 0.3
+          }]
         }
       });
     }
@@ -207,78 +187,36 @@ class GraphEngine {
   }
 
   /**
-   * Fallback draft summarizing risk parameters & document stats
+   * Fallback draft summarizing document structure stats
    */
   createFallbackMetricDraft(fileData) {
-    const rawLen = (fileData.rawText || '').length;
-    const words = rawLen ? fileData.rawText.split(/\s+/).length : 0;
-    const piiCount = fileData.piiResult ? fileData.piiResult.totalFindings : 0;
-    const riskScore = fileData.piiResult ? fileData.piiResult.riskScore : 0;
+    const rawLen = fileData.rawText ? fileData.rawText.length : 0;
+    const wordCount = fileData.rawText ? fileData.rawText.split(/\s+/).filter(Boolean).length : 0;
+    const linesCount = fileData.rawText ? fileData.rawText.split('\n').filter(Boolean).length : 0;
 
     return {
-      id: `draft_fallback_${Date.now()}`,
-      title: `Document Content & Security Distribution`,
-      source: 'IRIS AI Intelligence Audit',
-      recommendedType: 'radar',
-      recommendationReason: 'Radar Chart recommended for comparing multi-variable security and content dimensions.',
-      suggestedTypes: ['radar', 'polarArea', 'bar'],
-      config: {
-        type: 'radar',
-        data: {
-          labels: ['Word Volume (x100)', 'Risk Score', 'PII Exposure', 'Structure Score', 'Readability Index'],
-          datasets: [{
-            label: fileData.name,
-            data: [
-              Math.min(100, Math.round(words / 50)),
-              riskScore,
-              Math.min(100, piiCount * 20),
-              fileData.metadata ? 85 : 40,
-              70
-            ],
-            backgroundColor: 'rgba(6, 182, 212, 0.35)',
-            borderColor: '#06B6D4',
-            pointBackgroundColor: '#8B5CF6',
-            borderWidth: 2
-          }]
-        },
-        options: {
-          responsive: true,
-          maintainAspectRatio: false,
-          plugins: {
-            legend: { labels: { color: '#E2E8F0' } },
-            title: { display: true, text: 'Audit Profile & Metric Dimensions', color: '#F8FAFC' }
-          },
-          scales: {
-            r: {
-              angleLines: { color: 'rgba(255, 255, 255, 0.1)' },
-              grid: { color: 'rgba(255, 255, 255, 0.1)' },
-              pointLabels: { color: '#94A3B8', font: { size: 11 } },
-              ticks: { display: false }
-            }
-          }
-        }
+      id: `draft_metric_${Date.now()}`,
+      title: `Document Content Metrics — ${fileData.name}`,
+      source: 'Document Structural Properties',
+      primaryType: 'bar',
+      recommendation: 'Baseline Bar chart summarizing document content volume and density.',
+      isDraft: true,
+      chartData: {
+        labels: ['Word Count (/10)', 'Character Length (/100)', 'Text Lines', 'Sections Detected'],
+        datasets: [{
+          label: 'Metric Value',
+          data: [
+            Math.round(wordCount / 10),
+            Math.round(rawLen / 100),
+            linesCount,
+            Math.max(1, Math.round(linesCount / 8))
+          ],
+          backgroundColor: 'rgba(139, 92, 246, 0.45)',
+          borderColor: '#8B5CF6',
+          borderWidth: 2
+        }]
       }
     };
-  }
-
-  /**
-   * Render chart into canvas element using Chart.js
-   */
-  renderChart(canvasElement, chartConfig) {
-    if (!canvasElement || typeof Chart === 'undefined') {
-      console.warn('Canvas element or Chart.js missing.');
-      return null;
-    }
-
-    // Destroy existing instance if attached
-    if (canvasElement.chartInstance) {
-      canvasElement.chartInstance.destroy();
-    }
-
-    const ctx = canvasElement.getContext('2d');
-    const chart = new Chart(ctx, JSON.parse(JSON.stringify(chartConfig)));
-    canvasElement.chartInstance = chart;
-    return chart;
   }
 }
 

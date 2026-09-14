@@ -42,7 +42,7 @@ app.use(express.static(path.join(__dirname)));
 app.get('/api/health', (req, res) => {
   res.json({
     status: 'online',
-    service: 'IRIS AI File Scanner & Admin DB Engine',
+    service: 'IRIS AI File Scanner & Admin Data Engine',
     databaseRecords: readDb().records.length,
     timestamp: new Date().toISOString()
   });
@@ -61,19 +61,17 @@ app.post('/api/records', (req, res) => {
   const db = readDb();
   const record = {
     id: req.body.id || `rec_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`,
-    fileName: req.body.fileName || 'Untitled',
-    fileType: req.body.fileType || 'unknown',
-    fileSize: req.body.fileSize || 0,
-    scannedAt: new Date().toISOString(),
+    fileName: req.body.fileName || req.body.name || 'Untitled',
+    fileType: req.body.fileType || req.body.type || 'unknown',
+    fileSize: req.body.fileSize || req.body.size || 0,
+    scannedAt: req.body.scannedAt || new Date().toISOString(),
     status: req.body.status || 'Pending Review',
-    riskScore: req.body.riskScore || 0,
-    riskLevel: req.body.riskLevel || 'SAFE',
-    docType: req.body.docType || 'General Document',
+    docType: req.body.docType || 'General Institutional Data',
     rawText: req.body.rawText || '',
-    extractedData: req.body.extractedData || {},
-    findings: req.body.findings || [],
+    extractedData: req.body.extractedData || req.body.sheetsData || {},
     graphDrafts: req.body.graphDrafts || [],
-    adminNotes: req.body.adminNotes || ''
+    adminNotes: req.body.adminNotes || '',
+    metadata: req.body.metadata || {}
   };
 
   db.records.unshift(record);
@@ -112,33 +110,6 @@ app.delete('/api/records/:id', (req, res) => {
   res.json({ message: 'Record deleted', record: deleted[0] });
 });
 
-// GET export SQL dump
-app.get('/api/export-sql', (req, res) => {
-  const db = readDb();
-  let sql = `-- IRIS AI Database Export\n-- Generated at: ${new Date().toISOString()}\n\n`;
-  sql += `CREATE TABLE IF NOT EXISTS iris_scans (\n`;
-  sql += `  id VARCHAR(64) PRIMARY KEY,\n`;
-  sql += `  file_name VARCHAR(255),\n`;
-  sql += `  file_type VARCHAR(32),\n`;
-  sql += `  doc_type VARCHAR(128),\n`;
-  sql += `  risk_score INT,\n`;
-  sql += `  risk_level VARCHAR(32),\n`;
-  sql += `  status VARCHAR(32),\n`;
-  sql += `  scanned_at DATETIME,\n`;
-  sql += `  admin_notes TEXT\n`;
-  sql += `);\n\n`;
-
-  (db.records || []).forEach(r => {
-    const escName = (r.fileName || '').replace(/'/g, "''");
-    const escNotes = (r.adminNotes || '').replace(/'/g, "''");
-    sql += `INSERT INTO iris_scans (id, file_name, file_type, doc_type, risk_score, risk_level, status, scanned_at, admin_notes) VALUES ('${r.id}', '${escName}', '${r.fileType}', '${r.docType}', ${r.riskScore}, '${r.riskLevel}', '${r.status}', '${r.scannedAt}', '${escNotes}');\n`;
-  });
-
-  res.setHeader('Content-Type', 'text/plain');
-  res.setHeader('Content-Disposition', 'attachment; filename="iris_database_export.sql"');
-  res.send(sql);
-});
-
 // Fallback to index.html
 app.get('*', (req, res) => {
   res.sendFile(path.join(__dirname, 'index.html'));
@@ -149,7 +120,7 @@ function startServer(portToTry) {
   const server = app.listen(portToTry, () => {
     console.log(`====================================================`);
     console.log(`  IRIS AI File Scanner running at: http://localhost:${portToTry}`);
-    console.log(`  Admin Database & Graph Engine Ready!`);
+    console.log(`  Admin Data Engine & Draft Visualization Ready!`);
     console.log(`====================================================`);
   });
 

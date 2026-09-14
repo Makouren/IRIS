@@ -1,13 +1,13 @@
 /**
  * IRIS AI - Admin Database & Record Management System
  * Supports IndexedDB + LocalStorage + REST API synchronization.
- * Allows Admins to review, edit, update status, modify tabular cell data, add rows, and export database records.
+ * Allows Admins to review, edit extracted cells, add rows, update draft approval status, and manage records.
  */
 
 class DatabaseManager {
   constructor() {
     this.dbName = 'IRIS_AI_Database';
-    this.dbVersion = 1;
+    this.dbVersion = 2;
     this.db = null;
     this.initPromise = this.initIndexedDB();
   }
@@ -18,7 +18,6 @@ class DatabaseManager {
   initIndexedDB() {
     return new Promise((resolve) => {
       if (typeof window === 'undefined' || !window.indexedDB) {
-        console.warn('IndexedDB not supported, falling back to LocalStorage & Server API');
         return resolve(false);
       }
 
@@ -57,14 +56,11 @@ class DatabaseManager {
       fileName: record.name || record.fileName || 'Untitled',
       fileType: record.type || record.fileType || 'unknown',
       fileSize: record.size || record.fileSize || 0,
-      scannedAt: new Date().toISOString(),
+      scannedAt: record.scannedAt || new Date().toISOString(),
       status: record.status || 'Pending Review',
-      riskScore: record.piiResult ? record.piiResult.riskScore : (record.riskScore || 0),
-      riskLevel: record.piiResult ? record.piiResult.riskLevel : (record.riskLevel || 'SAFE'),
-      docType: record.aiAnalysis ? record.aiAnalysis.docType : (record.docType || 'General Document'),
+      docType: record.docType || 'General Institutional Data',
       rawText: record.rawText || '',
       extractedData: record.sheetsData || record.formattedHtml || record.ocrData || {},
-      findings: record.piiResult ? record.piiResult.findings : (record.findings || []),
       graphDrafts: record.graphDrafts || [],
       adminNotes: record.adminNotes || '',
       metadata: record.metadata || {}
@@ -72,8 +68,10 @@ class DatabaseManager {
 
     // Save to IndexedDB
     if (this.db) {
-      const tx = this.db.transaction('records', 'readwrite');
-      tx.objectStore('records').put(formattedRecord);
+      try {
+        const tx = this.db.transaction('records', 'readwrite');
+        tx.objectStore('records').put(formattedRecord);
+      } catch (e) {}
     }
 
     // Sync to LocalStorage backup
@@ -99,6 +97,16 @@ class DatabaseManager {
   async getAllRecords() {
     await this.initPromise;
 
+    // First attempt Server API
+    try {
+      const resp = await fetch('/api/records');
+      if (resp.ok) {
+        const data = await resp.json();
+        if (Array.isArray(data) && data.length > 0) return data;
+      }
+    } catch (e) {}
+
+    // Fallback to IndexedDB
     if (this.db) {
       return new Promise((resolve) => {
         const tx = this.db.transaction('records', 'readonly');
@@ -109,20 +117,11 @@ class DatabaseManager {
       });
     }
 
-    // Attempt Server API
-    try {
-      const resp = await fetch('/api/records');
-      if (resp.ok) {
-        const data = await resp.json();
-        if (Array.isArray(data) && data.length > 0) return data;
-      }
-    } catch (e) {}
-
     return this.getLocalStorageRecords();
   }
 
   /**
-   * Update record (Admin edit, status change, notes update)
+   * Update record (Admin edit, status change, cell modifications, notes update)
    */
   async updateRecord(id, updatedFields) {
     await this.initPromise;
@@ -138,8 +137,10 @@ class DatabaseManager {
     };
 
     if (this.db) {
-      const tx = this.db.transaction('records', 'readwrite');
-      tx.objectStore('records').put(merged);
+      try {
+        const tx = this.db.transaction('records', 'readwrite');
+        tx.objectStore('records').put(merged);
+      } catch (e) {}
     }
 
     this.saveToLocalStorage(merged);
@@ -163,8 +164,10 @@ class DatabaseManager {
     await this.initPromise;
 
     if (this.db) {
-      const tx = this.db.transaction('records', 'readwrite');
-      tx.objectStore('records').delete(id);
+      try {
+        const tx = this.db.transaction('records', 'readwrite');
+        tx.objectStore('records').delete(id);
+      } catch (e) {}
     }
 
     const local = this.getLocalStorageRecords().filter(r => r.id !== id);
@@ -222,38 +225,6 @@ class DatabaseManager {
     } catch (e) {
       return [];
     }
-  }
-
-  /**
-   * Export Database to JSON, CSV, or SQL
-   */
-  async exportDatabase(format = 'json') {
-    const records = await this.getAllRecords();
-
-    if (format === 'json') {
-      const blob = new Blob([JSON.stringify(records, null, 2)], { type: 'application/json' });
-      this.triggerDownload(blob, `iris_database_${Date.now()}.json`);
-    } else if (format === 'csv') {
-      let csv = 'ID,File Name,Type,Doc Type,Risk Score,Risk Level,Status,Scanned At,Findings Count,Admin Notes\n';
-      records.forEach(r => {
-        csv += `"${r.id}","${(r.fileName || '').replace(/"/g, '""')}","${r.fileType}","${r.docType}",${r.riskScore},"${r.riskLevel}","${r.status}","${r.scannedAt}",${(r.findings || []).length},"${(r.adminNotes || '').replace(/"/g, '""')}"\n`;
-      });
-      const blob = new Blob([csv], { type: 'text/csv' });
-      this.triggerDownload(blob, `iris_database_${Date.now()}.csv`);
-    } else if (format === 'sql') {
-      window.location.href = '/api/export-sql';
-    }
-  }
-
-  triggerDownload(blob, filename) {
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = filename;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
   }
 }
 
