@@ -5,6 +5,12 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>CLSU Performance Observatory — IRIS AI File Scanner & Ingestion System</title>
   <meta name="description" content="Central Luzon State University (CLSU) IRIS AI File Scanner for Spreadsheets, PDFs, and Word DOCX with draft chart suggestions and Admin data editor.">
+
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = { corePlugins: { preflight: false } };
+  </script>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flowbite@2.5.2/dist/flowbite.min.css">
   
   <!-- CSS Stylesheet -->
   <link rel="stylesheet" href="css/styles.css">
@@ -12,6 +18,7 @@
 
   <!-- External Parsing & Charting CDN Libraries -->
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/echarts@5.5.1/dist/echarts.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/mammoth@1.6.0/mammoth.browser.min.js"></script>
@@ -378,25 +385,56 @@
               <div style="background: #FFFFFF; border: 1.5px solid var(--border-green); border-radius: var(--radius-sm); padding: 0.75rem 1rem; margin-bottom: 0.85rem; display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 0.75rem;">
                 <div style="display: flex; align-items: center; gap: 1rem; flex-wrap: wrap;">
                   <div style="display: flex; align-items: center; gap: 0.4rem;">
-                    <span style="font-size: 0.8rem; font-weight: 800; color: #047857;">🏷️ X-Axis / Label Field:</span>
+                    <span id="studioLabelFieldText" style="font-size: 0.8rem; font-weight: 800; color: #047857;">🏷️ X-Axis / Label Field:</span>
                     <select id="studioLabelColSelect" class="form-input" style="padding: 0.3rem 0.65rem; font-size: 0.82rem; font-weight: 700; color: #0F172A; min-width: 140px;"></select>
                   </div>
                   <div style="display: flex; align-items: center; gap: 0.4rem;">
-                    <span style="font-size: 0.8rem; font-weight: 800; color: #1D4ED8;">📈 Y-Axis / Metric Field:</span>
+                    <span id="studioValueFieldText" style="font-size: 0.8rem; font-weight: 800; color: #1D4ED8;">📈 Y-Axis / Metric Field:</span>
                     <select id="studioValueColSelect" class="form-input" style="padding: 0.3rem 0.65rem; font-size: 0.82rem; font-weight: 700; color: #0F172A; min-width: 140px;"></select>
                   </div>
                 </div>
 
                 <div>
-                  <button id="studioBtnSwapAxes" type="button" class="btn-studio-action" style="background: #F8FAF8; border: 1.5px solid #CBD5E1; color: #334155; font-size: 0.78rem; padding: 0.35rem 0.75rem;" title="Swap X and Y fields">
+                  <button id="studioBtnSwapAxes" type="button" class="btn-studio-action" style="background: #F8FAF8; border: 1.5px solid #CBD5E1; color: #334155; font-size: 0.78rem; padding: 0.35rem 0.75rem;" title="Swap chart fields">
                     🔄 Swap Axes
                   </button>
                 </div>
               </div>
 
+              <div style="background: #F8FAF8; border: 1px solid var(--border-light); border-radius: var(--radius-sm); padding: 0.65rem 1rem; margin-bottom: 0.85rem; display: flex; flex-wrap: wrap; align-items: center; gap: 0.65rem;">
+                <span style="font-size: 0.78rem; font-weight: 800; color: #334155; text-transform: uppercase;">🔎 Filter extracted rows:</span>
+                <select id="studioFilterField" class="form-input" style="width: auto; padding: 0.3rem 0.55rem; font-size: 0.78rem;" aria-label="Filter data scope">
+                  <option value="all">All selected data</option>
+                  <option value="context">Context / label only</option>
+                  <option value="value">Metric / value only</option>
+                </select>
+                <select id="studioFilterOperator" class="form-input" style="width: auto; padding: 0.3rem 0.55rem; font-size: 0.78rem;" aria-label="Filter operator">
+                  <option value="all">All rows</option>
+                  <option value="contains">Contains</option>
+                  <option value="starts-with">Starts with</option>
+                  <option value="ends-with">Ends with</option>
+                  <option value="equals">Equals</option>
+                  <option value="not-equals">Does not equal</option>
+                  <option value="greater-than">Value greater than</option>
+                  <option value="less-than">Value less than</option>
+                  <option value="between">Value between</option>
+                </select>
+                <input id="studioFilterValue" class="form-input" type="search" placeholder="Broad search across selected data..." style="min-width: 190px; flex: 1; padding: 0.3rem 0.65rem; font-size: 0.78rem;" aria-label="Filter value">
+                <input id="studioFilterUpperValue" class="form-input" type="number" placeholder="Maximum" style="display: none; width: 6.5rem; padding: 0.3rem 0.65rem; font-size: 0.78rem;" aria-label="Filter maximum value">
+                <select id="studioSortOrder" class="form-input" style="width: auto; padding: 0.3rem 0.55rem; font-size: 0.78rem;" aria-label="Sort chart rows">
+                  <option value="source">Source order</option>
+                  <option value="value-asc">Metric: low to high</option>
+                  <option value="value-desc">Metric: high to low</option>
+                  <option value="label-asc">Label: A to Z</option>
+                  <option value="label-desc">Label: Z to A</option>
+                </select>
+                <label style="font-size: 0.78rem; color: #334155; font-weight: 700; white-space: nowrap;">Show <input id="studioRowLimit" class="form-input" type="number" min="1" max="100" value="30" style="width: 4.5rem; display: inline-block; padding: 0.3rem 0.45rem; font-size: 0.78rem;"> rows</label>
+                <label style="font-size: 0.78rem; color: #334155; font-weight: 700; white-space: nowrap;"><input id="studioGroupDuplicates" type="checkbox" checked style="accent-color: var(--clsu-green); margin-right: 0.25rem;"> Group duplicate labels</label>
+              </div>
+
               <!-- Chart Canvas -->
               <div style="height: 280px; position: relative; width: 100%; margin-bottom: 0.75rem;">
-                <canvas id="studioChartCanvas"></canvas>
+                <div id="studioChartCanvas" style="height: 100%; width: 100%;"></div>
               </div>
             </div>
 

@@ -1313,7 +1313,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (!canvas || !chartTypeSelect || !record) return;
 
     if (studioChartInstance) {
-      studioChartInstance.destroy();
+      studioChartInstance.dispose();
       studioChartInstance = null;
     }
 
@@ -1330,13 +1330,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (isNaN(labelCol) || labelCol >= sheet.headers.length) labelCol = 0;
     if (isNaN(numCol) || numCol >= sheet.headers.length) numCol = sheet.headers.length > 1 ? 1 : 0;
 
-    const labels = sheet.rows.map(r => String(r[labelCol] !== undefined && r[labelCol] !== null ? r[labelCol] : `Item`).trim());
-    const dataValues = sheet.rows.map(r => {
-      const val = parseFloat(r[numCol]);
-      return isNaN(val) ? 0 : val;
-    });
-
     const currentType = chartTypeSelect.value || 'bar';
+    updateStudioChartControlLabels(currentType);
     const headerName = sheet.headers[numCol] || 'Metric Value';
 
     if (chartSubtitleDisplay) {
@@ -1349,57 +1344,98 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     const currentChartTitle = chartTitleInput ? chartTitleInput.value : `${headerName} — ${sheetName}`;
 
-    const clsuPalettes = [
-      { border: '#146C36', bg: 'rgba(20, 108, 54, 0.75)' },
-      { border: '#F59E0B', bg: 'rgba(245, 158, 11, 0.75)' },
-      { border: '#0D9488', bg: 'rgba(13, 148, 136, 0.75)' },
-      { border: '#10B981', bg: 'rgba(16, 185, 129, 0.75)' },
-      { border: '#D97706', bg: 'rgba(217, 119, 6, 0.75)' },
-      { border: '#2563EB', bg: 'rgba(37, 99, 235, 0.75)' },
-      { border: '#8B5CF6', bg: 'rgba(139, 92, 246, 0.75)' },
-      { border: '#EC4899', bg: 'rgba(236, 72, 153, 0.75)' }
-    ];
+    if (studioChartInstance) {
+      studioChartInstance.dispose();
+      studioChartInstance = null;
+    }
+    if (typeof echarts === 'undefined') return;
 
-    const ctx = canvas.getContext('2d');
-    studioChartInstance = new Chart(ctx, {
-      type: currentType,
-      data: {
-        labels: labels.slice(0, 30),
-        datasets: [{
-          label: `${headerName} (${sheetName})`,
-          data: dataValues.slice(0, 30),
-          backgroundColor: (currentType === 'pie' || currentType === 'doughnut' || currentType === 'polarArea') ? clsuPalettes.map(c => c.bg) : 'rgba(20, 108, 54, 0.7)',
-          borderColor: (currentType === 'pie' || currentType === 'doughnut' || currentType === 'polarArea') ? clsuPalettes.map(c => c.border) : '#146C36',
-          borderWidth: 2,
-          tension: 0.35,
-          fill: currentType === 'line'
-        }]
-      },
-      options: {
-        responsive: true,
-        maintainAspectRatio: false,
-        plugins: {
-          title: {
-            display: false,
-            text: currentChartTitle
-          },
-          legend: {
-            display: (currentType === 'pie' || currentType === 'doughnut' || currentType === 'polarArea'),
-            labels: { color: '#334155', font: { family: 'Inter, sans-serif', weight: '600' } }
-          }
-        },
-        scales: (currentType === 'pie' || currentType === 'doughnut' || currentType === 'polarArea') ? {} : {
-          x: {
-            ticks: { color: '#334155', font: { family: 'Inter, sans-serif', weight: '600' } },
-            grid: { color: '#E2E8E2' }
-          },
-          y: {
-            ticks: { color: '#334155', font: { family: 'Inter, sans-serif', weight: '600' } },
-            grid: { color: '#E2E8E2' }
-          }
-        }
-      }
+    const filterField = document.getElementById('studioFilterField')?.value || 'all';
+    const filterOperator = document.getElementById('studioFilterOperator')?.value || 'all';
+    const filterValue = (document.getElementById('studioFilterValue')?.value || '').trim().toLowerCase();
+    const filterUpperValue = Number(document.getElementById('studioFilterUpperValue')?.value);
+    const sortOrder = document.getElementById('studioSortOrder')?.value || 'source';
+    const rowLimit = Math.max(1, Math.min(100, Number(document.getElementById('studioRowLimit')?.value) || 30));
+    const groupDuplicates = document.getElementById('studioGroupDuplicates')?.checked !== false;
+
+    const parseNumber = value => {
+      const normalized = String(value ?? '').replace(/[%,$,\s]/g, '');
+      const parsed = Number(normalized);
+      return Number.isFinite(parsed) ? parsed : null;
+    };
+
+    let chartRows = sheet.rows.map((row, index) => ({
+      sourceIndex: index,
+      label: String(row[labelCol] ?? `Item ${index + 1}`).trim() || `Item ${index + 1}`,
+      value: parseNumber(row[numCol]),
+      rawValue: row[numCol]
+    })).filter(row => row.value !== null);
+
+    if (filterOperator !== 'all' && filterValue) {
+      const numericFilter = Number(filterValue);
+      chartRows = chartRows.filter(row => {
+        const labelMatch = row.label.toLowerCase();
+        const valueMatch = String(row.rawValue ?? row.value).toLowerCase();
+        const searchableText = filterField === 'context' ? labelMatch : filterField === 'value' ? valueMatch : `${labelMatch} ${valueMatch}`;
+        if (filterOperator === 'contains') return searchableText.includes(filterValue);
+        if (filterOperator === 'starts-with') return searchableText.startsWith(filterValue);
+        if (filterOperator === 'ends-with') return searchableText.endsWith(filterValue);
+        if (filterOperator === 'equals') return searchableText === filterValue;
+        if (filterOperator === 'not-equals') return searchableText !== filterValue;
+        if (filterOperator === 'greater-than') return Number.isFinite(numericFilter) && row.value > numericFilter;
+        if (filterOperator === 'less-than') return Number.isFinite(numericFilter) && row.value < numericFilter;
+        if (filterOperator === 'between') return Number.isFinite(numericFilter) && Number.isFinite(filterUpperValue) && row.value >= numericFilter && row.value <= filterUpperValue;
+        return true;
+      });
+    }
+
+    if (sortOrder === 'value-asc') chartRows.sort((a, b) => a.value - b.value);
+    if (sortOrder === 'value-desc') chartRows.sort((a, b) => b.value - a.value);
+    if (sortOrder === 'label-asc') chartRows.sort((a, b) => a.label.localeCompare(b.label));
+    if (sortOrder === 'label-desc') chartRows.sort((a, b) => b.label.localeCompare(a.label));
+    chartRows = chartRows.slice(0, rowLimit);
+
+    const isCircular = ['pie', 'doughnut', 'polarArea'].includes(currentType);
+    if (groupDuplicates && isCircular) {
+      const grouped = new Map();
+      chartRows.forEach(row => grouped.set(row.label, (grouped.get(row.label) || 0) + row.value));
+      chartRows = Array.from(grouped, ([label, value]) => ({ label, value }));
+    }
+
+    const labels = chartRows.map(row => row.label);
+    const dataValues = chartRows.map(row => row.value);
+    const chartSeriesType = currentType === 'doughnut' ? 'pie' : currentType;
+    studioChartInstance = echarts.init(canvas);
+    studioChartInstance.setOption({
+      animationDuration: 350,
+      title: { text: currentChartTitle, left: 'center', textStyle: { color: '#334155', fontSize: 14 } },
+      tooltip: { trigger: isCircular ? 'item' : 'axis' },
+      legend: { show: isCircular, bottom: 0 },
+      grid: { left: 48, right: 24, top: 48, bottom: 48, containLabel: true },
+      xAxis: isCircular ? undefined : { type: 'category', data: labels, axisLabel: { rotate: labels.length > 6 ? 30 : 0 } },
+      yAxis: isCircular ? undefined : { type: 'value' },
+      series: [isCircular
+        ? { type: chartSeriesType, radius: currentType === 'doughnut' ? ['45%', '72%'] : currentType === 'polarArea' ? ['15%', '72%'] : '68%', data: labels.map((label, index) => ({ name: label, value: dataValues[index] })) }
+        : { type: chartSeriesType, smooth: currentType === 'line', data: dataValues, itemStyle: { color: '#146C36' } }]
     });
+    if (typeof ResizeObserver !== 'undefined') {
+      if (canvas._studioResizeObserver) canvas._studioResizeObserver.disconnect();
+      canvas._studioResizeObserver = new ResizeObserver(() => studioChartInstance && studioChartInstance.resize());
+      canvas._studioResizeObserver.observe(canvas);
+    }
+  }
+
+  function updateStudioChartControlLabels(chartType) {
+    const isCircular = ['pie', 'doughnut', 'polarArea'].includes(chartType);
+    const labelText = document.getElementById('studioLabelFieldText');
+    const valueText = document.getElementById('studioValueFieldText');
+    const swapButton = document.getElementById('studioBtnSwapAxes');
+    if (labelText) labelText.textContent = isCircular ? '🏷️ Context / Group Field:' : '🏷️ X-Axis / Label Field:';
+    if (valueText) valueText.textContent = isCircular ? '📊 Data / Value Field:' : '📈 Y-Axis / Metric Field:';
+    if (swapButton) {
+      swapButton.textContent = isCircular ? '🔄 Swap Context & Value' : '🔄 Swap Axes';
+      swapButton.title = isCircular ? 'Swap the context and value fields' : 'Swap X and Y fields';
+    }
   }
 
   function updateStudioChart() {
@@ -1411,7 +1447,10 @@ document.addEventListener('DOMContentLoaded', async () => {
   // Chart Controls Event Listeners
   const studioChartTypeSelect = document.getElementById('studioChartTypeSelect');
   if (studioChartTypeSelect) {
-    studioChartTypeSelect.addEventListener('change', updateStudioChart);
+    studioChartTypeSelect.addEventListener('change', () => {
+      updateStudioChartControlLabels(studioChartTypeSelect.value);
+      updateStudioChart();
+    });
   }
 
   const studioLabelColSelect = document.getElementById('studioLabelColSelect');
@@ -1436,6 +1475,27 @@ document.addEventListener('DOMContentLoaded', async () => {
       studioChartTitleInput.setAttribute('data-customized', 'true');
       updateStudioChart();
     });
+  }
+
+  ['studioFilterField', 'studioFilterOperator', 'studioFilterValue', 'studioFilterUpperValue', 'studioSortOrder', 'studioRowLimit', 'studioGroupDuplicates'].forEach(controlId => {
+    const control = document.getElementById(controlId);
+    if (control) {
+      control.addEventListener(control.type === 'search' || control.type === 'number' ? 'input' : 'change', updateStudioChart);
+    }
+  });
+
+  const studioFilterOperator = document.getElementById('studioFilterOperator');
+  const studioFilterValue = document.getElementById('studioFilterValue');
+  const studioFilterUpperValue = document.getElementById('studioFilterUpperValue');
+  if (studioFilterOperator && studioFilterValue && studioFilterUpperValue) {
+    const updateFilterInputs = () => {
+      const isNumeric = ['greater-than', 'less-than', 'between'].includes(studioFilterOperator.value);
+      studioFilterUpperValue.style.display = studioFilterOperator.value === 'between' ? 'inline-block' : 'none';
+      studioFilterValue.type = isNumeric ? 'number' : 'search';
+      studioFilterValue.placeholder = isNumeric ? 'Minimum' : studioFilterOperator.value === 'all' ? 'Broad search across selected data...' : 'Narrow the selected data...';
+    };
+    studioFilterOperator.addEventListener('change', updateFilterInputs);
+    updateFilterInputs();
   }
 
   // Swap Axes Button
@@ -1533,6 +1593,12 @@ document.addEventListener('DOMContentLoaded', async () => {
       const chartType = chartTypeSelect ? chartTypeSelect.value : 'bar';
       const chartTitleInput = document.getElementById('studioChartTitleInput');
       const finalTitle = chartTitleInput ? chartTitleInput.value : `${sheet.headers[1] || 'Metric'} — Observatory Draft`;
+      const chartOptions = studioChartInstance.getOption();
+      const chartSeries = chartOptions.series?.[0] || {};
+      const savedPoints = (chartSeries.data || []).map((point, index) => ({
+        label: typeof point === 'object' ? point.name : chartOptions.xAxis?.[0]?.data?.[index],
+        value: typeof point === 'object' ? point.value : point
+      }));
 
       studioActiveRecord.graphDrafts = [{
         id: `draft_${Date.now()}`,
@@ -1541,7 +1607,13 @@ document.addEventListener('DOMContentLoaded', async () => {
         primaryType: chartType,
         recommendation: `Administrator configured ${chartType} visualization.`,
         isDraft: !forceApprove,
-        chartData: JSON.parse(JSON.stringify(studioChartInstance.data))
+        chartData: {
+          labels: savedPoints.map(point => point.label),
+          datasets: [{
+            label: chartSeries.name || headerName,
+            data: savedPoints.map(point => point.value)
+          }]
+        }
       }];
     }
 
