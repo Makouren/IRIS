@@ -73,6 +73,7 @@ class DocxParser {
       size: file.size,
       rawText,
       formattedHtml: html,
+      docxBuffer: arrayBuffer,  // Raw ArrayBuffer for docx-preview renderAsync
       metadata,
       warnings: htmlResult.messages || []
     };

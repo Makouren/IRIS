@@ -388,7 +388,17 @@ document.addEventListener('DOMContentLoaded', async () => {
       sheetSelect.onchange = (e) => displaySheet(e.target.value);
       displaySheet(sheetSelect.value);
 
+    } else if (scan.type === 'docx' && scan.docxBuffer && typeof DocxViewerComponent !== 'undefined') {
+      // Rich DOCX preview via docx-preview (fonts, tables, images, page breaks)
+      const docxViewerWrap = document.createElement('div');
+      docxViewerWrap.style.cssText = 'width:100%;height:100%;min-height:400px;';
+      viewerContentArea.appendChild(docxViewerWrap);
+
+      const docxViewer = new DocxViewerComponent(docxViewerWrap, { showToolbar: true });
+      docxViewer.loadDocument(scan.docxBuffer, scan.name || 'document.docx');
+
     } else if (scan.formattedHtml) {
+      // Fallback: mammoth.js HTML dump (legacy)
       const div = document.createElement('div');
       div.className = 'docx-reader-container';
       div.innerHTML = scan.formattedHtml;
@@ -975,7 +985,23 @@ document.addEventListener('DOMContentLoaded', async () => {
         return;
       }
 
-      // 2. Authentic Adobe Acrobat Page Card Layout for Word DOCX / Text / Scanned Documents
+      // 2. Rich DOCX rendering via docx-preview when raw buffer is available
+      if ((record.type === 'docx' || record.fileType === 'docx') && record.docxBuffer && typeof DocxViewerComponent !== 'undefined') {
+        const docxViewer = new DocxViewerComponent(docContentArea, {
+          showToolbar: false,
+          onReady: () => {
+            if (docWindowPageCount) docWindowPageCount.textContent = 'Word Document';
+            if (docWindowWordCount) {
+              const wc = record.metadata && record.metadata.wordCount ? record.metadata.wordCount : (record.rawText || '').split(/\s+/).filter(Boolean).length;
+              docWindowWordCount.textContent = `${wc.toLocaleString()} words`;
+            }
+          }
+        });
+        docxViewer.loadDocument(record.docxBuffer, record.fileName || 'document.docx');
+        return;
+      }
+
+      // 3. Authentic Adobe Acrobat Page Card Layout for Word DOCX / Text / Scanned Documents
       const rawText = record.rawText || '';
       const words = rawText.split(/\s+/).filter(Boolean);
       const totalWords = words.length;

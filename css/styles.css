@@ -1613,3 +1613,158 @@ body {
   border-color: #CBD5E1 !important;
 }
 
+/* ====================================================================
+   IRIS AI — DOCX Viewer Component (DocxViewerComponent)
+   Wraps docx-preview (docx.renderAsync) with CLSU institutional chrome
+   ==================================================================== */
+
+/* ── Root Container ───────────────────────────────────────────────── */
+.docx-viewer-root {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  height: 100%;
+  min-height: 360px;
+  background: #525659;
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  font-family: var(--font-sans);
+}
+
+/* ── Toolbar ──────────────────────────────────────────────────────── */
+.docx-viewer-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.45rem 1rem;
+  background: #2D2D2D;
+  border-bottom: 1px solid rgba(255,255,255,0.08);
+  flex-shrink: 0;
+  min-height: 40px;
+}
+
+.docx-tb-left,
+.docx-tb-right {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+}
+
+.docx-brand-badge {
+  background: #295498;
+  color: #fff;
+  font-size: 0.65rem;
+  font-weight: 800;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  padding: 0.18rem 0.5rem;
+  border-radius: 3px;
+  flex-shrink: 0;
+}
+
+.docx-tb-filename {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: #CBD5E1;
+  max-width: 280px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.docx-status-chip {
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: #94A3B8;
+  background: rgba(255,255,255,0.06);
+  border: 1px solid rgba(255,255,255,0.1);
+  padding: 0.12rem 0.55rem;
+  border-radius: 20px;
+  transition: color 0.2s, background 0.2s;
+}
+
+/* ── Viewport ─────────────────────────────────────────────────────── */
+.docx-viewer-viewport {
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: auto;
+  background: #525659;
+  padding: 1.5rem 1rem;
+  scroll-behavior: smooth;
+}
+
+/* ── Render Target ────────────────────────────────────────────────── */
+.docx-render-target {
+  width: 100%;
+}
+
+/* ── Loading State ────────────────────────────────────────────────── */
+.docx-loading-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.75rem;
+  padding: 3rem 1rem;
+  color: #CBD5E1;
+  font-size: 0.88rem;
+  font-weight: 500;
+}
+
+.docx-spinner {
+  width: 34px;
+  height: 34px;
+  border: 3px solid rgba(41, 84, 152, 0.3);
+  border-top-color: #295498;
+  border-radius: 50%;
+  animation: docxSpin 0.75s linear infinite;
+}
+
+@keyframes docxSpin {
+  to { transform: rotate(360deg); }
+}
+
+/* ── Error State ──────────────────────────────────────────────────── */
+.docx-error-state {
+  text-align: center;
+  padding: 2.5rem 1rem;
+  color: #94A3B8;
+}
+
+/* ── docx-preview Page Overrides ─────────────────────────────────── */
+.docx-viewer-viewport .docx-wrapper {
+  background: #525659 !important;
+  padding: 0 !important;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1.5rem;
+}
+
+.docx-viewer-viewport .docx-wrapper > section.docx {
+  background: #ffffff !important;
+  box-shadow:
+    0 4px 24px rgba(0,0,0,0.5),
+    0 1px 6px rgba(0,0,0,0.35) !important;
+  border-radius: 3px !important;
+  margin: 0 auto !important;
+}
+
+.docx-viewer-viewport .docx-wrapper p,
+.docx-viewer-viewport .docx-wrapper span,
+.docx-viewer-viewport .docx-wrapper td,
+.docx-viewer-viewport .docx-wrapper th,
+.docx-viewer-viewport .docx-wrapper li {
+  color: inherit;
+  line-height: inherit;
+}
+
+.docx-viewer-viewport table {
+  border-collapse: collapse;
+}
+
+.docx-viewer-viewport::-webkit-scrollbar { width: 8px; height: 8px; }
+.docx-viewer-viewport::-webkit-scrollbar-track { background: #3D3D3D; }
+.docx-viewer-viewport::-webkit-scrollbar-thumb { background: #5A6170; border-radius: 4px; }
+.docx-viewer-viewport::-webkit-scrollbar-thumb:hover { background: #7A8190; }

@@ -99,6 +99,7 @@ class ScannerOrchestrator {
       pages: parsedResult.pages,
       pdfBuffer: parsedResult.pdfBuffer,
       pdfDocReference: parsedResult.pdfDocReference,
+      docxBuffer: parsedResult.docxBuffer,   // Raw ArrayBuffer for docx-preview
       graphDrafts,
       status: 'Pending Review'
     };
