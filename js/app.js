@@ -416,8 +416,8 @@ document.addEventListener('DOMContentLoaded', async () => {
   function renderGraphsTab(scan) {
     graphDraftsContainer.innerHTML = '';
     
-    // Destroy previous Chart.js instances
-    Object.values(chartInstances).forEach(c => c && c.destroy && c.destroy());
+    // Dispose previous chart instances before rebuilding the analyst controls.
+    Object.values(chartInstances).forEach(c => c && c.dispose && c.dispose());
     chartInstances = {};
 
     const drafts = scan.graphDrafts || [];
@@ -427,10 +427,13 @@ document.addEventListener('DOMContentLoaded', async () => {
       return;
     }
 
+    const tables = Object.entries(scan.sheetsData || {}).filter(([, table]) => table && table.headers && table.rows);
+
     drafts.forEach((draft, idx) => {
       const card = document.createElement('div');
       card.className = 'graph-card';
-      const canvasId = `chart_canvas_${idx}`;
+      const chartId = `chart_canvas_${idx}`;
+      const defaultTableIndex = Math.max(0, tables.findIndex(([, table]) => table.headers.includes(draft.chartData && draft.chartData.xAxis)));
 
       card.innerHTML = `
         <div class="graph-card-header">
@@ -438,81 +441,143 @@ document.addEventListener('DOMContentLoaded', async () => {
             <div class="graph-card-title">${draft.title}</div>
             <div style="font-size: 0.78rem; color: var(--text-muted); margin-top: 0.25rem;">Source: ${draft.source}</div>
           </div>
-          <div style="display: flex; gap: 0.5rem; align-items: center;">
-            <span class="badge badge-low">Draft Suggestion</span>
-            <select class="form-input chart-type-select" data-draft-idx="${idx}" style="width: auto; padding: 0.25rem 0.5rem; font-size: 0.8rem;">
-              <option value="bar" ${draft.primaryType === 'bar' ? 'selected' : ''}>Bar Chart</option>
-              <option value="line" ${draft.primaryType === 'line' ? 'selected' : ''}>Line Chart</option>
-              <option value="pie" ${draft.primaryType === 'pie' ? 'selected' : ''}>Pie Chart</option>
-            </select>
-          </div>
+          <span class="badge badge-low">Analyst Draft</span>
         </div>
 
         <div style="font-size: 0.82rem; color: var(--accent-cyan); margin-bottom: 1rem;">
           💡 <strong>AI Recommendation:</strong> ${draft.recommendation}
         </div>
 
-        <div class="graph-canvas-container" style="height: 320px; position: relative;">
-          <canvas id="${canvasId}"></canvas>
+        <div class="grid grid-cols-1 gap-3 rounded-lg border border-slate-200 bg-slate-50 p-4 md:grid-cols-2 xl:grid-cols-3" data-chart-controls="${idx}">
+          ${createChartSelect(`chart-table-${idx}`, 'Source table', tables.map(([name], tableIndex) => ({ value: tableIndex, label: name })), defaultTableIndex, 'chart-table-select')}
+          <label class="block text-sm font-medium text-slate-700">Chart type
+            <select data-draft-idx="${idx}" class="form-input chart-type-select mt-1 block w-full rounded-lg border border-slate-300 bg-white p-2.5 text-sm text-slate-900 focus:border-green-600 focus:ring-green-600">
+              <option value="bar" ${draft.primaryType === 'bar' ? 'selected' : ''}>Bar</option>
+              <option value="line" ${draft.primaryType === 'line' ? 'selected' : ''}>Line</option>
+              <option value="pie" ${draft.primaryType === 'pie' ? 'selected' : ''}>Pie</option>
+              <option value="doughnut" ${draft.primaryType === 'doughnut' ? 'selected' : ''}>Doughnut</option>
+              <option value="polar" ${draft.primaryType === 'polar' ? 'selected' : ''}>Polar area</option>
+              <option value="scatter">Scatter</option>
+            </select>
+          </label>
+          <label class="block text-sm font-medium text-slate-700">Sort rows
+            <select data-draft-idx="${idx}" class="form-input chart-sort-select mt-1 block w-full rounded-lg border border-slate-300 bg-white p-2.5 text-sm text-slate-900 focus:border-green-600 focus:ring-green-600">
+              <option value="none">Source order</option>
+              <option value="asc">Value: low to high</option>
+              <option value="desc">Value: high to low</option>
+            </select>
+          </label>
+          <label class="block text-sm font-medium text-slate-700">Rows to show
+            <input data-draft-idx="${idx}" class="form-input chart-limit-input mt-1 block w-full rounded-lg border border-slate-300 bg-white p-2.5 text-sm text-slate-900 focus:border-green-600 focus:ring-green-600" type="number" min="1" max="100" value="10">
+          </label>
+          <label class="block text-sm font-medium text-slate-700">Find matching data
+            <input data-draft-idx="${idx}" class="form-input chart-filter-input mt-1 block w-full rounded-lg border border-slate-300 bg-white p-2.5 text-sm text-slate-900 focus:border-green-600 focus:ring-green-600" type="search" placeholder="Search labels or values">
+          </label>
+          <label class="block text-sm font-medium text-slate-700">Minimum value
+            <input data-draft-idx="${idx}" class="form-input chart-min-input mt-1 block w-full rounded-lg border border-slate-300 bg-white p-2.5 text-sm text-slate-900 focus:border-green-600 focus:ring-green-600" type="number" step="any" placeholder="No minimum">
+          </label>
+          <label class="block text-sm font-medium text-slate-700">Maximum value
+            <input data-draft-idx="${idx}" class="form-input chart-max-input mt-1 block w-full rounded-lg border border-slate-300 bg-white p-2.5 text-sm text-slate-900 focus:border-green-600 focus:ring-green-600" type="number" step="any" placeholder="No maximum">
+          </label>
+          <label class="chart-category-field block text-sm font-medium text-slate-700"><span class="category-field-label">Category / X axis</span>
+            <select data-draft-idx="${idx}" class="form-input chart-category-select mt-1 block w-full rounded-lg border border-slate-300 bg-white p-2.5 text-sm text-slate-900 focus:border-green-600 focus:ring-green-600"></select>
+          </label>
+          <label class="chart-value-field block text-sm font-medium text-slate-700"><span class="value-field-label">Metric / Y axis</span>
+            <select data-draft-idx="${idx}" class="form-input chart-value-select mt-1 block w-full rounded-lg border border-slate-300 bg-white p-2.5 text-sm text-slate-900 focus:border-green-600 focus:ring-green-600"></select>
+          </label>
+        </div>
+
+        <div class="graph-canvas-container" style="height: 360px; position: relative;">
+          <div id="${chartId}" class="h-full w-full"></div>
         </div>
       `;
 
       graphDraftsContainer.appendChild(card);
 
-      // Render Chart using Chart.js
-      setTimeout(() => {
-        const ctx = document.getElementById(canvasId);
-        if (ctx) {
-          chartInstances[canvasId] = createChart(ctx, draft.primaryType, draft.chartData);
-        }
-      }, 50);
-    });
+      const tableSelect = card.querySelector('.chart-table-select');
+      const categorySelect = card.querySelector('.chart-category-select');
+      const valueSelect = card.querySelector('.chart-value-select');
+      const syncControls = () => {
+        const table = tables[Number(tableSelect.value)]?.[1];
+        const headers = table ? table.headers : [];
+        populateSelect(categorySelect, headers, draft.chartData?.xAxis);
+        populateSelect(valueSelect, headers, draft.chartData?.yAxis || headers[1]);
+        updateChartFieldSemantics(card);
+        renderEChart(card, chartId, tables, idx);
+      };
 
-    // Chart Type Selector Switcher
-    document.querySelectorAll('.chart-type-select').forEach(select => {
-      select.addEventListener('change', (e) => {
-        const draftIdx = e.target.getAttribute('data-draft-idx');
-        const newType = e.target.value;
-        const canvasId = `chart_canvas_${draftIdx}`;
-        const draft = drafts[draftIdx];
-
-        if (chartInstances[canvasId]) {
-          chartInstances[canvasId].destroy();
-        }
-
-        const ctx = document.getElementById(canvasId);
-        if (ctx && draft) {
-          chartInstances[canvasId] = createChart(ctx, newType, draft.chartData);
-        }
-      });
+      [tableSelect, categorySelect, valueSelect].forEach(control => control.addEventListener('change', syncControls));
+      card.querySelectorAll('.chart-type-select, .chart-sort-select, .chart-limit-input, .chart-filter-input, .chart-min-input, .chart-max-input').forEach(control => control.addEventListener('input', () => {
+        updateChartFieldSemantics(card);
+        renderEChart(card, chartId, tables, idx);
+      }));
+      syncControls();
     });
   }
 
-  function createChart(ctx, type, chartData) {
-    return new Chart(ctx, {
-      type: type,
-      data: JSON.parse(JSON.stringify(chartData)),
-      options: {
-        responsive: true,
-        maintainAspectRatio: false,
-        plugins: {
-          legend: {
-            display: type === 'pie',
-            labels: { color: '#94A3B8', font: { family: 'Outfit, sans-serif' } }
-          }
-        },
-        scales: type === 'pie' ? {} : {
-          x: {
-            ticks: { color: '#94A3B8', font: { family: 'Outfit, sans-serif' } },
-            grid: { color: 'rgba(255,255,255,0.05)' }
-          },
-          y: {
-            ticks: { color: '#94A3B8', font: { family: 'Outfit, sans-serif' } },
-            grid: { color: 'rgba(255,255,255,0.05)' }
-          }
-        }
-      }
+  function createChartSelect(id, label, options, selectedValue, className) {
+    return `<label class="block text-sm font-medium text-slate-700">${label}<select id="${id}" class="${className} form-input mt-1 block w-full rounded-lg border border-slate-300 bg-white p-2.5 text-sm text-slate-900 focus:border-green-600 focus:ring-green-600">${options.length ? options.map(option => `<option value="${option.value}" ${String(option.value) === String(selectedValue) ? 'selected' : ''}>${option.label}</option>`).join('') : '<option value="0">No tables available</option>'}</select></label>`;
+  }
+
+  function populateSelect(select, headers, preferred) {
+    select.innerHTML = headers.map((header, index) => `<option value="${index}" ${header === preferred ? 'selected' : ''}>${header}</option>`).join('');
+  }
+
+  function updateChartFieldSemantics(card) {
+    const type = card.querySelector('.chart-type-select').value;
+    const isPartOfWhole = ['pie', 'doughnut', 'polar'].includes(type);
+    card.querySelector('.category-field-label').textContent = isPartOfWhole ? 'Category / slice label' : 'Category / X axis';
+    card.querySelector('.value-field-label').textContent = isPartOfWhole ? 'Value / slice size' : 'Metric / Y axis';
+  }
+
+  function renderEChart(card, chartId, tables, draftIndex) {
+    if (typeof echarts === 'undefined') return;
+    const tableIndex = Number(card.querySelector('.chart-table-select').value);
+    const table = tables[tableIndex]?.[1];
+    if (!table) return;
+
+    const categoryIndex = Number(card.querySelector('.chart-category-select').value || 0);
+    const valueIndex = Number(card.querySelector('.chart-value-select').value || 1);
+    const chartType = card.querySelector('.chart-type-select').value;
+    const sortMode = card.querySelector('.chart-sort-select').value;
+    const limit = Math.max(1, Math.min(100, Number(card.querySelector('.chart-limit-input').value) || 10));
+    const query = card.querySelector('.chart-filter-input').value.trim().toLowerCase();
+    const minimum = Number(card.querySelector('.chart-min-input').value);
+    const maximum = Number(card.querySelector('.chart-max-input').value);
+    let points = table.rows.map((row, rowIndex) => ({
+      label: row[categoryIndex] === undefined || row[categoryIndex] === null ? `Row ${rowIndex + 1}` : String(row[categoryIndex]),
+      value: Number(String(row[valueIndex] ?? 0).replace(/[%,$,]/g, ''))
+    })).filter(point => Number.isFinite(point.value))
+      .filter(point => !query || `${point.label} ${point.value}`.toLowerCase().includes(query))
+      .filter(point => !Number.isFinite(minimum) || point.value >= minimum)
+      .filter(point => !Number.isFinite(maximum) || point.value <= maximum);
+
+    if (sortMode !== 'none') points.sort((a, b) => sortMode === 'asc' ? a.value - b.value : b.value - a.value);
+    points = points.slice(0, limit);
+    const element = document.getElementById(chartId);
+    if (!element) return;
+    if (chartInstances[chartId]) chartInstances[chartId].dispose();
+    const chart = echarts.init(element);
+    chartInstances[chartId] = chart;
+    const isCircular = ['pie', 'doughnut', 'polar'].includes(chartType);
+    const series = chartType === 'pie' || chartType === 'doughnut'
+      ? [{ type: 'pie', radius: chartType === 'doughnut' ? ['42%', '72%'] : '68%', data: points.map(point => ({ name: point.label, value: point.value })) }]
+      : chartType === 'polar'
+        ? [{ type: 'bar', coordinateSystem: 'polar', data: points.map(point => point.value), itemStyle: { color: '#146C36' } }]
+      : [{ type: chartType, smooth: chartType === 'line', data: points.map(point => chartType === 'scatter' ? [point.label, point.value] : point.value), itemStyle: { color: '#146C36' } }];
+    chart.setOption({
+      animationDuration: 500,
+      tooltip: { trigger: isCircular ? 'item' : 'axis' },
+      legend: { show: chartType === 'pie' || chartType === 'doughnut', bottom: 0 },
+      grid: { left: 48, right: 24, top: 24, bottom: 48, containLabel: true },
+      xAxis: isCircular ? undefined : { type: 'category', data: points.map(point => point.label), axisLabel: { rotate: points.length > 6 ? 30 : 0 } },
+      yAxis: isCircular ? undefined : { type: 'value' },
+      polar: chartType === 'polar' ? {} : undefined,
+      angleAxis: chartType === 'polar' ? { type: 'category', data: points.map(point => point.label) } : undefined,
+      radiusAxis: chartType === 'polar' ? {} : undefined,
+      series
     });
+    window.addEventListener('resize', () => chart.resize(), { once: true });
   }
 
   // ----------------------------------------------------
@@ -1310,10 +1375,18 @@ document.addEventListener('DOMContentLoaded', async () => {
     const chartSubtitleDisplay = document.getElementById('studioChartSubtitleDisplay');
     const labelSelect = document.getElementById('studioLabelColSelect');
     const valueSelect = document.getElementById('studioValueColSelect');
+    const labelCaption = document.getElementById('studioLabelFieldCaption');
+    const valueCaption = document.getElementById('studioValueFieldCaption');
+    const swapAxesButton = document.getElementById('studioBtnSwapAxes');
+    const filterInput = document.getElementById('studioDataFilterInput');
+    const minInput = document.getElementById('studioDataMinInput');
+    const maxInput = document.getElementById('studioDataMaxInput');
+    const sortSelect = document.getElementById('studioDataSortSelect');
+    const limitInput = document.getElementById('studioDataLimitInput');
     if (!canvas || !chartTypeSelect || !record) return;
 
     if (studioChartInstance) {
-      studioChartInstance.destroy();
+      studioChartInstance.dispose();
       studioChartInstance = null;
     }
 
@@ -1330,13 +1403,11 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (isNaN(labelCol) || labelCol >= sheet.headers.length) labelCol = 0;
     if (isNaN(numCol) || numCol >= sheet.headers.length) numCol = sheet.headers.length > 1 ? 1 : 0;
 
-    const labels = sheet.rows.map(r => String(r[labelCol] !== undefined && r[labelCol] !== null ? r[labelCol] : `Item`).trim());
-    const dataValues = sheet.rows.map(r => {
-      const val = parseFloat(r[numCol]);
-      return isNaN(val) ? 0 : val;
-    });
-
     const currentType = chartTypeSelect.value || 'bar';
+    const isCircular = ['pie', 'doughnut', 'polarArea'].includes(currentType);
+    if (labelCaption) labelCaption.textContent = isCircular ? '🏷️ Category / Slice Label:' : '🏷️ X-Axis / Label Field:';
+    if (valueCaption) valueCaption.textContent = isCircular ? '📊 Value / Slice Size:' : '📈 Y-Axis / Metric Field:';
+    if (swapAxesButton) swapAxesButton.hidden = isCircular;
     const headerName = sheet.headers[numCol] || 'Metric Value';
 
     if (chartSubtitleDisplay) {
@@ -1349,57 +1420,41 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     const currentChartTitle = chartTitleInput ? chartTitleInput.value : `${headerName} — ${sheetName}`;
 
-    const clsuPalettes = [
-      { border: '#146C36', bg: 'rgba(20, 108, 54, 0.75)' },
-      { border: '#F59E0B', bg: 'rgba(245, 158, 11, 0.75)' },
-      { border: '#0D9488', bg: 'rgba(13, 148, 136, 0.75)' },
-      { border: '#10B981', bg: 'rgba(16, 185, 129, 0.75)' },
-      { border: '#D97706', bg: 'rgba(217, 119, 6, 0.75)' },
-      { border: '#2563EB', bg: 'rgba(37, 99, 235, 0.75)' },
-      { border: '#8B5CF6', bg: 'rgba(139, 92, 246, 0.75)' },
-      { border: '#EC4899', bg: 'rgba(236, 72, 153, 0.75)' }
-    ];
+    const query = filterInput ? filterInput.value.trim().toLowerCase() : '';
+    const minimum = minInput ? Number(minInput.value) : NaN;
+    const maximum = maxInput ? Number(maxInput.value) : NaN;
+    const sortMode = sortSelect ? sortSelect.value : 'none';
+    const limit = limitInput ? Math.max(1, Math.min(100, Number(limitInput.value) || 30)) : 30;
+    let points = sheet.rows.map((row, rowIndex) => ({
+      label: String(row[labelCol] !== undefined && row[labelCol] !== null ? row[labelCol] : `Item ${rowIndex + 1}`).trim(),
+      value: parseFloat(String(row[numCol] ?? '').replace(/[%,$,]/g, ''))
+    })).filter(point => Number.isFinite(point.value))
+      .filter(point => !query || `${point.label} ${point.value}`.toLowerCase().includes(query))
+      .filter(point => !Number.isFinite(minimum) || point.value >= minimum)
+      .filter(point => !Number.isFinite(maximum) || point.value <= maximum);
+    if (sortMode !== 'none') points.sort((a, b) => sortMode === 'asc' ? a.value - b.value : b.value - a.value);
+    points = points.slice(0, limit);
+    const labels = points.map(point => point.label);
+    const dataValues = points.map(point => point.value);
 
-    const ctx = canvas.getContext('2d');
-    studioChartInstance = new Chart(ctx, {
-      type: currentType,
-      data: {
-        labels: labels.slice(0, 30),
-        datasets: [{
-          label: `${headerName} (${sheetName})`,
-          data: dataValues.slice(0, 30),
-          backgroundColor: (currentType === 'pie' || currentType === 'doughnut' || currentType === 'polarArea') ? clsuPalettes.map(c => c.bg) : 'rgba(20, 108, 54, 0.7)',
-          borderColor: (currentType === 'pie' || currentType === 'doughnut' || currentType === 'polarArea') ? clsuPalettes.map(c => c.border) : '#146C36',
-          borderWidth: 2,
-          tension: 0.35,
-          fill: currentType === 'line'
-        }]
-      },
-      options: {
-        responsive: true,
-        maintainAspectRatio: false,
-        plugins: {
-          title: {
-            display: false,
-            text: currentChartTitle
-          },
-          legend: {
-            display: (currentType === 'pie' || currentType === 'doughnut' || currentType === 'polarArea'),
-            labels: { color: '#334155', font: { family: 'Inter, sans-serif', weight: '600' } }
-          }
-        },
-        scales: (currentType === 'pie' || currentType === 'doughnut' || currentType === 'polarArea') ? {} : {
-          x: {
-            ticks: { color: '#334155', font: { family: 'Inter, sans-serif', weight: '600' } },
-            grid: { color: '#E2E8E2' }
-          },
-          y: {
-            ticks: { color: '#334155', font: { family: 'Inter, sans-serif', weight: '600' } },
-            grid: { color: '#E2E8E2' }
-          }
-        }
-      }
+    studioChartInstance = echarts.init(canvas);
+    studioChartInstance.setOption({
+      title: { text: currentChartTitle, left: 'center', textStyle: { color: '#334155', fontSize: 14 } },
+      tooltip: { trigger: isCircular ? 'item' : 'axis' },
+      legend: { show: currentType === 'pie' || currentType === 'doughnut', bottom: 0 },
+      grid: { left: 48, right: 24, top: 48, bottom: 48, containLabel: true },
+      xAxis: isCircular ? undefined : { type: 'category', data: labels, axisLabel: { rotate: labels.length > 6 ? 30 : 0 } },
+      yAxis: isCircular ? undefined : { type: 'value' },
+      polar: currentType === 'polarArea' ? {} : undefined,
+      angleAxis: currentType === 'polarArea' ? { type: 'category', data: labels } : undefined,
+      radiusAxis: currentType === 'polarArea' ? {} : undefined,
+      series: [currentType === 'pie' || currentType === 'doughnut'
+        ? { type: 'pie', radius: currentType === 'doughnut' ? ['42%', '72%'] : '68%', data: labels.map((label, index) => ({ name: label, value: dataValues[index] })) }
+        : currentType === 'polarArea'
+          ? { type: 'bar', coordinateSystem: 'polar', data: dataValues, itemStyle: { color: '#146C36' } }
+          : { type: currentType, smooth: currentType === 'line', data: dataValues, itemStyle: { color: '#146C36' } }]
     });
+    window.addEventListener('resize', () => studioChartInstance && studioChartInstance.resize(), { once: true });
   }
 
   function updateStudioChart() {
@@ -1437,6 +1492,12 @@ document.addEventListener('DOMContentLoaded', async () => {
       updateStudioChart();
     });
   }
+
+  ['studioDataFilterInput', 'studioDataMinInput', 'studioDataMaxInput', 'studioDataSortSelect', 'studioDataLimitInput'].forEach(id => {
+    const control = document.getElementById(id);
+    if (control) control.addEventListener('input', updateStudioChart);
+    if (control && control.tagName === 'SELECT') control.addEventListener('change', updateStudioChart);
+  });
 
   // Swap Axes Button
   const studioBtnSwapAxes = document.getElementById('studioBtnSwapAxes');
@@ -1541,7 +1602,13 @@ document.addEventListener('DOMContentLoaded', async () => {
         primaryType: chartType,
         recommendation: `Administrator configured ${chartType} visualization.`,
         isDraft: !forceApprove,
-        chartData: JSON.parse(JSON.stringify(studioChartInstance.data))
+        chartData: {
+          labels: studioChartInstance ? (studioChartInstance.getOption().xAxis?.[0]?.data || []) : [],
+          datasets: [{
+            label: studioChartInstance ? (studioChartInstance.getOption().series?.[0]?.name || 'Value') : 'Value',
+            data: studioChartInstance ? (studioChartInstance.getOption().series?.[0]?.data || []) : []
+          }]
+        }
       }];
     }
 

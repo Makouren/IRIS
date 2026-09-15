@@ -18,7 +18,7 @@ app = FastAPI(
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.ALLOWED_ORIGINS,
-    allow_credentials=True,
+    allow_credentials=settings.ALLOWED_ORIGINS != ["*"],
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -32,8 +32,8 @@ async def health_check():
         "supported_formats": [
             "Spreadsheets (XLSX, XLS, CSV)",
             "PDF Documents (Native & Text-layer)",
-            "Word Documents (DOCX structure & tables)"
-            # Note: Image and embedded OCR scanning slated for review and revision
+                "Word Documents (DOCX structure & tables)",
+                "Images (PNG, JPG, JPEG, WEBP, BMP, TIFF)"
         ]
     }
 
@@ -49,6 +49,8 @@ async def scan_file(file: UploadFile = File(...)):
     
     try:
         contents = await file.read()
+        if not contents:
+            raise HTTPException(status_code=400, detail="Uploaded file is empty.")
         max_bytes = settings.MAX_FILE_SIZE_MB * 1024 * 1024
         if len(contents) > max_bytes:
             raise HTTPException(
@@ -63,6 +65,8 @@ async def scan_file(file: UploadFile = File(...)):
         )
         return JSONResponse(status_code=200, content=result)
 
+    except HTTPException:
+        raise
     except ValueError as ve:
         raise HTTPException(status_code=422, detail=str(ve))
     except Exception as e:

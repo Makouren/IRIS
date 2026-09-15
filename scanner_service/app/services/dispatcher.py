@@ -4,8 +4,7 @@ from datetime import datetime
 from app.parsers.spreadsheet_parser import SpreadsheetParser
 from app.parsers.pdf_parser import PDFParser
 from app.parsers.docx_parser import DOCXParser
-# [SLATED FOR REVIEW & REVISION]: Standalone Image OCR Parser
-# from app.parsers.image_parser import ImageParser
+from app.parsers.image_parser import ImageParser
 from app.services.chart_suggester import ChartSuggester
 
 class FileScanDispatcher:
@@ -18,8 +17,7 @@ class FileScanDispatcher:
     SPREADSHEET_EXTS = {'xlsx', 'xls', 'csv'}
     PDF_EXTS = {'pdf'}
     DOCX_EXTS = {'docx'}
-    # [SLATED FOR REVIEW & REVISION]: Image extensions disabled
-    # IMAGE_EXTS = {'png', 'jpg', 'jpeg', 'webp', 'bmp', 'tiff'}
+    IMAGE_EXTS = {'png', 'jpg', 'jpeg', 'webp', 'bmp', 'tiff'}
     
     @classmethod
     def scan_file(cls, file_bytes: bytes, filename: str, content_type: str = "") -> Dict[str, Any]:
@@ -38,13 +36,12 @@ class FileScanDispatcher:
             doc_type = "docx"
             parsed_data = DOCXParser.parse(file_bytes, filename)
             
-        # [SLATED FOR REVIEW & REVISION]: Standalone image parsing route disabled
-        # elif ext in cls.IMAGE_EXTS or 'image/' in content_type:
-        #     doc_type = "image"
-        #     parsed_data = ImageParser.parse(file_bytes, filename)
+        elif ext in cls.IMAGE_EXTS or content_type.startswith('image/'):
+            doc_type = "image"
+            parsed_data = ImageParser.parse(file_bytes, filename)
             
         else:
-            raise ValueError(f"Unsupported file format '.{ext}'. Supported formats: XLSX, XLS, CSV, PDF, DOCX. (Image scanning is slated for review and revision).")
+            raise ValueError(f"Unsupported file format '.{ext}'. Supported formats: XLSX, XLS, CSV, PDF, DOCX, PNG, JPG, JPEG, WEBP, BMP, TIFF.")
 
         # 2. Generate Draft Chart Suggestion
         visualization_draft = ChartSuggester.suggest_draft_visualization(parsed_data)

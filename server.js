@@ -6,10 +6,33 @@ const fs = require('fs');
 const app = express();
 let PORT = parseInt(process.env.PORT, 10) || 3000;
 const DB_FILE = path.join(__dirname, 'iris_database.json');
+const SCANNER_SERVICE_URL = process.env.SCANNER_SERVICE_URL || 'http://127.0.0.1:8000';
 
 app.use(cors());
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ extended: true, limit: '50mb' }));
+
+// Forward browser uploads to the Python scanner without exposing a second CORS boundary.
+app.post('/api/scan-file', express.raw({ type: 'multipart/form-data', limit: '50mb' }), async (req, res) => {
+  try {
+    const scannerResponse = await fetch(`${SCANNER_SERVICE_URL}/scan-file`, {
+      method: 'POST',
+      headers: {
+        'content-type': req.headers['content-type'],
+        'content-length': String(req.body.length)
+      },
+      body: req.body
+    });
+
+    const payload = await scannerResponse.text();
+    res.status(scannerResponse.status).type('application/json').send(payload);
+  } catch (err) {
+    console.error('Scanner service proxy error:', err.message);
+    res.status(503).json({
+      detail: 'The Python scanner service is unavailable. Start scanner_service on port 8000 and try again.'
+    });
+  }
+});
 
 // Helper to read database file
 function readDb() {

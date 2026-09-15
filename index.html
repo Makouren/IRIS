@@ -5,13 +5,20 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>CLSU Performance Observatory — IRIS AI File Scanner & Ingestion System</title>
   <meta name="description" content="Central Luzon State University (CLSU) IRIS AI File Scanner for Spreadsheets, PDFs, and Word DOCX with draft chart suggestions and Admin data editor.">
+
+  <!-- Flowbite UI primitives used by the scanner controls and status surfaces -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = { corePlugins: { preflight: false }, theme: { extend: { colors: { iris: '#146C36' } } } };
+  </script>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flowbite@2.5.2/dist/flowbite.min.css">
   
   <!-- CSS Stylesheet -->
   <link rel="stylesheet" href="css/styles.css">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf_viewer.min.css">
 
   <!-- External Parsing & Charting CDN Libraries -->
-  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/echarts@5.5.1/dist/echarts.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/mammoth@1.6.0/mammoth.browser.min.js"></script>
@@ -77,16 +84,13 @@
           <span class="format-chip excel">📊 Spreadsheets (XLSX, XLS, CSV)</span>
           <span class="format-chip pdf">📄 PDF Documents (Reports & Infographs)</span>
           <span class="format-chip docx">📝 Word (DOCX Status Links)</span>
-          <!-- [SLATED FOR REVIEW & REVISION]: Standalone image OCR scanning temporarily disabled
           <span class="format-chip image">🖼️ Images (PNG, JPG, WEBP)</span>
-          -->
         </div>
 
-        <!-- [SLATED FOR REVIEW & REVISION]: Image upload formats disabled (*.png, *.jpg, *.webp) -->
-        <input type="file" id="fileInput" multiple accept=".xlsx,.xls,.csv,.docx,.doc,.pdf" style="display: none;">
+        <input type="file" id="fileInput" multiple accept=".xlsx,.xls,.csv,.docx,.doc,.pdf,.png,.jpg,.jpeg,.webp,.bmp,.tiff" style="display: none;">
         
         <div style="margin-bottom: 1.5rem;">
-          <button id="btnBrowse" class="btn-icon" style="padding: 0.75rem 2rem; font-size: 0.95rem; margin: 0 auto;">
+          <button id="btnBrowse" type="button" class="btn-icon inline-flex items-center rounded-lg bg-iris px-5 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-green-800 focus:outline-none focus:ring-4 focus:ring-green-200" style="margin: 0 auto;">
             <span>📁</span> Browse Institutional Files
           </button>
         </div>
@@ -112,7 +116,7 @@
       </div>
 
       <!-- Real-time Progress Bar -->
-      <div id="progressCard" class="progress-card">
+      <div id="progressCard" class="progress-card" role="status" aria-live="polite">
         <div class="progress-header">
           <span id="progressStatus">Initializing scanner...</span>
           <span id="progressPercent">0%</span>
@@ -378,11 +382,11 @@
               <div style="background: #FFFFFF; border: 1.5px solid var(--border-green); border-radius: var(--radius-sm); padding: 0.75rem 1rem; margin-bottom: 0.85rem; display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 0.75rem;">
                 <div style="display: flex; align-items: center; gap: 1rem; flex-wrap: wrap;">
                   <div style="display: flex; align-items: center; gap: 0.4rem;">
-                    <span style="font-size: 0.8rem; font-weight: 800; color: #047857;">🏷️ X-Axis / Label Field:</span>
+                    <span id="studioLabelFieldCaption" style="font-size: 0.8rem; font-weight: 800; color: #047857;">🏷️ X-Axis / Label Field:</span>
                     <select id="studioLabelColSelect" class="form-input" style="padding: 0.3rem 0.65rem; font-size: 0.82rem; font-weight: 700; color: #0F172A; min-width: 140px;"></select>
                   </div>
                   <div style="display: flex; align-items: center; gap: 0.4rem;">
-                    <span style="font-size: 0.8rem; font-weight: 800; color: #1D4ED8;">📈 Y-Axis / Metric Field:</span>
+                    <span id="studioValueFieldCaption" style="font-size: 0.8rem; font-weight: 800; color: #1D4ED8;">📈 Y-Axis / Metric Field:</span>
                     <select id="studioValueColSelect" class="form-input" style="padding: 0.3rem 0.65rem; font-size: 0.82rem; font-weight: 700; color: #0F172A; min-width: 140px;"></select>
                   </div>
                 </div>
@@ -392,11 +396,25 @@
                     🔄 Swap Axes
                   </button>
                 </div>
+
+                <div class="grid grid-cols-1 gap-2 border-t border-slate-200 pt-3 md:grid-cols-4" style="width: 100%;">
+                  <input id="studioDataFilterInput" type="search" class="form-input" placeholder="Find labels or values" aria-label="Filter chart data">
+                  <input id="studioDataMinInput" type="number" step="any" class="form-input" placeholder="Minimum value" aria-label="Minimum chart value">
+                  <input id="studioDataMaxInput" type="number" step="any" class="form-input" placeholder="Maximum value" aria-label="Maximum chart value">
+                  <div style="display: flex; gap: 0.5rem;">
+                    <select id="studioDataSortSelect" class="form-input" aria-label="Sort chart data" style="flex: 1;">
+                      <option value="none">Source order</option>
+                      <option value="asc">Value: low to high</option>
+                      <option value="desc">Value: high to low</option>
+                    </select>
+                    <input id="studioDataLimitInput" type="number" min="1" max="100" value="30" class="form-input" aria-label="Rows to show" style="width: 90px;">
+                  </div>
+                </div>
               </div>
 
               <!-- Chart Canvas -->
               <div style="height: 280px; position: relative; width: 100%; margin-bottom: 0.75rem;">
-                <canvas id="studioChartCanvas"></canvas>
+                <div id="studioChartCanvas" class="h-full min-h-[320px] w-full"></div>
               </div>
             </div>
 
