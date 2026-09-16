@@ -5,7 +5,8 @@
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
-    "dev": "node server.js"
+    "dev": "node server.js",
+    "test": "node --test test/*.test.js"
   },
   "keywords": ["ai", "file-scanner", "ocr", "excel", "docx", "pdf", "pii-detection", "security-audit"],
   "author": "IRIS AI",

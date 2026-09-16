@@ -534,6 +534,10 @@ document.addEventListener('DOMContentLoaded', async () => {
   let studioActiveRecord = null;
   let studioChartInstance = null;
   let studioActiveSheetName = '';
+  let studioFilterPreviousQuery = '';
+  let studioFilterPreviousResults = null;
+  let studioFilterPreviousSheet = '';
+  let studioFilterPreviousScope = '';
 
   // ----------------------------------------------------
   // Admin Portal & Live Dashboard Studio
@@ -714,9 +718,14 @@ document.addEventListener('DOMContentLoaded', async () => {
   let docWindowActiveView = 'sheet'; // 'sheet' or 'text'
   let docWindowActiveSheetKey = '';
   let docWindowSearchQuery = '';
+  let docWindowFilterQuery = '';
+  let docWindowFilteredRows = null;
   let acrobatZoomLevel = 100;
   let acrobatCurrentPage = 1;
   let acrobatTotalPages = 1;
+  let docWindowViewerInstance = null;
+  let docWindowDocxPages = [];
+  let docWindowFallbackPages = [];
 
   function renderDocumentWindow(record) {
     const docWindowTitle = document.getElementById('docWindowTitle');
@@ -728,6 +737,20 @@ document.addEventListener('DOMContentLoaded', async () => {
     const acrobatZoomControlsGroup = document.getElementById('acrobatZoomControlsGroup');
 
     if (!record || !docContentArea) return;
+
+    docWindowViewerInstance = null;
+    docWindowDocxPages = [];
+    docWindowFallbackPages = [];
+
+    const ingestSourceText = (text) => {
+      const pairedText = SourceIngestion.pairSelectedText(text, record.rawText || '');
+      navigator.clipboard.writeText(pairedText).catch(() => {});
+      const copyStatus = document.getElementById('docWindowCopyStatus');
+      if (copyStatus) {
+        copyStatus.textContent = `✓ Copied: "${pairedText.length > 25 ? pairedText.substr(0, 25) + '...' : pairedText}"`;
+        setTimeout(() => { if (copyStatus) copyStatus.textContent = ''; }, 2000);
+      }
+    };
 
     if (docWindowTitle) {
       docWindowTitle.textContent = `${record.fileName || 'document'}`;
@@ -879,6 +902,27 @@ document.addEventListener('DOMContentLoaded', async () => {
     const pageInput = document.getElementById('acrobatCurrentPageInput');
     if (pageInput) pageInput.value = acrobatCurrentPage;
 
+    if (docWindowViewerInstance && typeof docWindowViewerInstance.goToPage === 'function') {
+      docWindowViewerInstance.goToPage(acrobatCurrentPage);
+      return;
+    }
+
+    if (docWindowDocxPages.length > 0) {
+      docWindowDocxPages.forEach((page, index) => {
+        page.style.display = index + 1 === acrobatCurrentPage ? '' : 'none';
+      });
+      return;
+    }
+
+    if (docWindowFallbackPages.length > 0) {
+      docWindowFallbackPages.forEach((page, index) => {
+        page.style.display = index + 1 === acrobatCurrentPage ? 'block' : 'none';
+      });
+      const contentArea = document.getElementById('studioDocContentArea');
+      if (contentArea) contentArea.scrollTop = 0;
+      return;
+    }
+
     const targetCard = document.getElementById(`acrobatDocPage_${acrobatCurrentPage}`);
     if (targetCard) {
       targetCard.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -903,11 +947,13 @@ document.addEventListener('DOMContentLoaded', async () => {
       if (docWindowPageCount) docWindowPageCount.textContent = `Sheet: ${docWindowActiveSheetKey}`;
       if (docWindowWordCount) docWindowWordCount.textContent = `${rows.length} rows • ${headers.length} cols`;
 
-      // Filter rows if search active
-      const filteredRows = rows.map((row, origIdx) => ({ row, origIdx })).filter(item => {
-        if (!docWindowSearchQuery) return true;
-        return item.row.some(cell => String(cell || '').toLowerCase().includes(docWindowSearchQuery));
+      // Search headers and every cell, narrowing the prior result set when terms are added.
+      const filteredRows = TableFilter.filterRows(headers, rows, docWindowSearchQuery, {
+        previousQuery: docWindowFilterQuery,
+        previousResults: docWindowFilteredRows
       });
+      docWindowFilterQuery = docWindowSearchQuery;
+      docWindowFilteredRows = filteredRows;
 
       if (filteredRows.length === 0) {
         docContentArea.innerHTML = `<div style="color: #94A3B8; font-size: 0.82rem; padding: 2rem; text-align: center;">No matching rows for "${docWindowSearchQuery}"</div>`;
@@ -961,13 +1007,9 @@ document.addEventListener('DOMContentLoaded', async () => {
       if ((record.type === 'pdf' || record.fileType === 'pdf') && (record.pdfBuffer || record.pdfDocReference || record.previewUrl) && typeof PdfViewerComponent !== 'undefined') {
         const pdfViewer = new PdfViewerComponent(docContentArea, {
           showToolbar: false,
-          scrollMode: 'continuous',
+          scrollMode: 'single',
           onTextSelect: (text) => {
-            navigator.clipboard.writeText(text).catch(() => {});
-            if (copyStatus) {
-              copyStatus.textContent = `✓ Copied: "${text.length > 25 ? text.substr(0, 25) + '...' : text}"`;
-              setTimeout(() => { if (copyStatus) copyStatus.textContent = ''; }, 2000);
-            }
+            ingestSourceText(text);
           },
           onPageChange: (current, total) => {
             acrobatCurrentPage = current;
@@ -981,6 +1023,7 @@ document.addEventListener('DOMContentLoaded', async () => {
           }
         });
 
+        docWindowViewerInstance = pdfViewer;
         pdfViewer.loadDocument(record.pdfBuffer || record.pdfDocReference || record.previewUrl, record.fileName || 'document.pdf');
         return;
       }
@@ -995,6 +1038,21 @@ document.addEventListener('DOMContentLoaded', async () => {
               const wc = record.metadata && record.metadata.wordCount ? record.metadata.wordCount : (record.rawText || '').split(/\s+/).filter(Boolean).length;
               docWindowWordCount.textContent = `${wc.toLocaleString()} words`;
             }
+            docWindowDocxPages = Array.from(docContentArea.querySelectorAll('section.docx'));
+            acrobatTotalPages = Math.max(1, docWindowDocxPages.length);
+            acrobatCurrentPage = 1;
+            docWindowDocxPages.forEach((page, index) => {
+              page.style.display = index === 0 ? '' : 'none';
+            });
+            if (acrobatTotalPagesSpan) acrobatTotalPagesSpan.textContent = String(acrobatTotalPages);
+            if (acrobatCurrentPageInput) {
+              acrobatCurrentPageInput.value = '1';
+              acrobatCurrentPageInput.max = String(acrobatTotalPages);
+            }
+            docContentArea.onmouseup = () => {
+              const selectedText = window.getSelection()?.toString().trim();
+              if (selectedText) ingestSourceText(selectedText);
+            };
           }
         });
         docxViewer.loadDocument(record.docxBuffer, record.fileName || 'document.docx');
@@ -1017,29 +1075,8 @@ document.addEventListener('DOMContentLoaded', async () => {
         return;
       }
 
-      // Group into paragraphs by blank lines or carriage returns
-      const rawParagraphs = rawText.split(/\n\s*\n/).map(p => p.trim()).filter(Boolean);
-      
-      // Paginate into authentic PDF pages (~220 words per page card or at least 1 page)
-      const pages = [];
-      let currentPageParas = [];
-      let currentWordCount = 0;
-
-      rawParagraphs.forEach((para) => {
-        const paraWords = para.split(/\s+/).filter(Boolean).length;
-        if (currentWordCount > 0 && (currentWordCount + paraWords > 230)) {
-          pages.push(currentPageParas);
-          currentPageParas = [para];
-          currentWordCount = paraWords;
-        } else {
-          currentPageParas.push(para);
-          currentWordCount += paraWords;
-        }
-      });
-      if (currentPageParas.length > 0) {
-        pages.push(currentPageParas);
-      }
-      if (pages.length === 0) pages.push(['No content available.']);
+      // Keep fallback text pagination deterministic so the outer page controls can switch cards.
+      const pages = DocumentPagination.paginateText(rawText);
 
       acrobatTotalPages = pages.length;
       acrobatCurrentPage = 1;
@@ -1057,7 +1094,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       pages.forEach((pageParas, pageIdx) => {
         const pageNum = pageIdx + 1;
         docHtml += `
-          <div class="acrobat-page-card" id="acrobatDocPage_${pageNum}" data-page="${pageNum}">
+          <div class="acrobat-page-card" id="acrobatDocPage_${pageNum}" data-page="${pageNum}" style="display: ${pageIdx === 0 ? 'block' : 'none'};">
         `;
 
         pageParas.forEach(para => {
@@ -1090,11 +1127,16 @@ document.addEventListener('DOMContentLoaded', async () => {
 
       docHtml += `</div>`;
       docContentArea.innerHTML = docHtml;
+      docWindowFallbackPages = Array.from(docContentArea.querySelectorAll('.acrobat-page-card'));
 
       // Enable text selection and click-to-copy on paragraphs
       docContentArea.querySelectorAll('.acrobat-page-card p, .acrobat-page-card h4').forEach(el => {
         el.style.cursor = 'text';
       });
+      docContentArea.onmouseup = () => {
+        const selectedText = window.getSelection()?.toString().trim();
+        if (selectedText) ingestSourceText(selectedText);
+      };
 
       // Scroll listener to update page counter as user scrolls down
       docContentArea.onscroll = () => {
@@ -1155,47 +1197,22 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
   }
 
-  function updateFieldSelectOptions(sheet, selectedLabelCol = null, selectedValueCol = null) {
-    const labelSelect = document.getElementById('studioLabelColSelect');
-    const valueSelect = document.getElementById('studioValueColSelect');
-    if (!labelSelect || !valueSelect || !sheet || !sheet.headers) return;
+  function updateFieldSelectOptions(sheet) {
+    if (!sheet || !sheet.headers) return;
 
-    const currentLabelVal = selectedLabelCol !== null ? String(selectedLabelCol) : (labelSelect.value || '0');
-    const currentValueVal = selectedValueCol !== null ? String(selectedValueCol) : (valueSelect.value || '1');
-
-    labelSelect.innerHTML = '';
-    valueSelect.innerHTML = '';
-
-    sheet.headers.forEach((h, colIdx) => {
-      const optL = document.createElement('option');
-      optL.value = colIdx;
-      optL.textContent = `${h || `Column ${colIdx + 1}`} (Col ${colIdx + 1})`;
-      labelSelect.appendChild(optL);
-
-      const optV = document.createElement('option');
-      optV.value = colIdx;
-      optV.textContent = `${h || `Column ${colIdx + 1}`} (Col ${colIdx + 1})`;
-      valueSelect.appendChild(optV);
-    });
-
-    // Determine smart defaults if not set
-    let defaultLabelCol = parseInt(currentLabelVal, 10);
-    if (isNaN(defaultLabelCol) || defaultLabelCol >= sheet.headers.length) defaultLabelCol = 0;
-
-    let defaultValueCol = parseInt(currentValueVal, 10);
-    if (isNaN(defaultValueCol) || defaultValueCol >= sheet.headers.length || defaultValueCol === defaultLabelCol) {
-      defaultValueCol = sheet.headers.length > 1 ? 1 : 0;
-      for (let c = 0; c < sheet.headers.length; c++) {
-        const hasNumbers = (sheet.rows || []).some(r => typeof r[c] === 'number' || (!isNaN(parseFloat(r[c])) && isFinite(r[c])));
-        if (hasNumbers && c !== defaultLabelCol) {
-          defaultValueCol = c;
-          break;
-        }
-      }
+    const filterField = document.getElementById('studioFilterField');
+    const currentFilterField = filterField ? filterField.value : 'all';
+    if (filterField) {
+      filterField.innerHTML = '<option value="all">All selected data</option><option value="context">Context / label only</option><option value="value">Metric / value only</option>';
+      sheet.headers.forEach((header, colIdx) => {
+        const option = document.createElement('option');
+        option.value = `column:${colIdx}`;
+        option.textContent = `${header || `Column ${colIdx + 1}`} only`;
+        filterField.appendChild(option);
+      });
+      filterField.value = Array.from(filterField.options).some(option => option.value === currentFilterField) ? currentFilterField : 'all';
     }
 
-    labelSelect.value = String(defaultLabelCol);
-    valueSelect.value = String(defaultValueCol);
   }
 
   function renderStudioTableGrid(record) {
@@ -1208,21 +1225,11 @@ document.addEventListener('DOMContentLoaded', async () => {
     const sheetName = activeSheetInfo.name;
     const sheet = activeSheetInfo.data;
 
-    const labelSelect = document.getElementById('studioLabelColSelect');
-    const valueSelect = document.getElementById('studioValueColSelect');
-    const activeLabelCol = labelSelect ? parseInt(labelSelect.value, 10) : 0;
-    const activeValueCol = valueSelect ? parseInt(valueSelect.value, 10) : 1;
-
     let tHtml = `<table class="data-table"><thead><tr>`;
     sheet.headers.forEach((h, colIdx) => {
-      const isX = colIdx === activeLabelCol;
-      const isY = colIdx === activeValueCol;
-      const badge = isX ? `<span class="axis-indicator-badge x-axis">🏷️ X-Axis</span>` : (isY ? `<span class="axis-indicator-badge y-axis">📈 Y-Axis</span>` : '');
-
       tHtml += `<th>
         <div class="header-cell-box">
           <div style="display: flex; align-items: center; justify-content: space-between; gap: 0.25rem;">
-            ${badge}
             ${sheet.headers.length > 1 ? `<button type="button" class="btn-delete-col" data-col="${colIdx}" style="background: none; border: none; color: #EF4444; cursor: pointer; font-size: 0.85rem; font-weight: 800;" title="Delete this field / column">✕</button>` : ''}
           </div>
           <input type="text" class="header-rename-input" data-col="${colIdx}" value="${String(h || '').replace(/"/g, '&quot;')}" placeholder="Field Name..." title="Click to rename this field header">
@@ -1269,10 +1276,11 @@ document.addEventListener('DOMContentLoaded', async () => {
         const c = parseInt(input.getAttribute('data-col'), 10);
         const newHeader = input.value.trim() || `Field_${c + 1}`;
         sheet.headers[c] = newHeader;
-        updateFieldSelectOptions(sheet, labelSelect ? labelSelect.value : null, valueSelect ? valueSelect.value : null);
+        updateFieldSelectOptions(sheet);
         updateStudioChart();
       });
     });
+
 
     // Delete Column
     document.querySelectorAll('.btn-delete-col').forEach(btn => {
@@ -1308,8 +1316,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     const chartTypeSelect = document.getElementById('studioChartTypeSelect');
     const chartTitleInput = document.getElementById('studioChartTitleInput');
     const chartSubtitleDisplay = document.getElementById('studioChartSubtitleDisplay');
-    const labelSelect = document.getElementById('studioLabelColSelect');
-    const valueSelect = document.getElementById('studioValueColSelect');
     if (!canvas || !chartTypeSelect || !record) return;
 
     if (studioChartInstance) {
@@ -1324,14 +1330,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     const sheet = activeSheetInfo.data;
     if (!sheet || !sheet.headers || !sheet.rows || sheet.rows.length === 0) return;
 
-    let labelCol = labelSelect ? parseInt(labelSelect.value, 10) : 0;
-    let numCol = valueSelect ? parseInt(valueSelect.value, 10) : (sheet.headers.length > 1 ? 1 : 0);
-
-    if (isNaN(labelCol) || labelCol >= sheet.headers.length) labelCol = 0;
-    if (isNaN(numCol) || numCol >= sheet.headers.length) numCol = sheet.headers.length > 1 ? 1 : 0;
+    const { labelColumn: labelCol, valueColumn: numCol } = ChartMapping.inferColumns(sheet.headers, sheet.rows);
 
     const currentType = chartTypeSelect.value || 'bar';
-    updateStudioChartControlLabels(currentType);
     const headerName = sheet.headers[numCol] || 'Metric Value';
 
     if (chartSubtitleDisplay) {
@@ -1352,41 +1353,71 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     const filterField = document.getElementById('studioFilterField')?.value || 'all';
     const filterOperator = document.getElementById('studioFilterOperator')?.value || 'all';
-    const filterValue = (document.getElementById('studioFilterValue')?.value || '').trim().toLowerCase();
+    const filterValue = (document.getElementById('studioFilterValue')?.value || '').trim();
     const filterUpperValue = Number(document.getElementById('studioFilterUpperValue')?.value);
     const sortOrder = document.getElementById('studioSortOrder')?.value || 'source';
     const rowLimit = Math.max(1, Math.min(100, Number(document.getElementById('studioRowLimit')?.value) || 30));
     const groupDuplicates = document.getElementById('studioGroupDuplicates')?.checked !== false;
 
     const parseNumber = value => {
-      const normalized = String(value ?? '').replace(/[%,$,\s]/g, '');
-      const parsed = Number(normalized);
-      return Number.isFinite(parsed) ? parsed : null;
+      return ChartMapping.parseNumericValue(value);
     };
 
-    let chartRows = sheet.rows.map((row, index) => ({
+    const sourceRows = sheet.rows.map((row, index) => ({
       sourceIndex: index,
-      label: String(row[labelCol] ?? `Item ${index + 1}`).trim() || `Item ${index + 1}`,
-      value: parseNumber(row[numCol]),
-      rawValue: row[numCol]
+      row: row || [],
+      label: String((row || [])[labelCol] ?? `Item ${index + 1}`).trim() || `Item ${index + 1}`,
+      value: parseNumber((row || [])[numCol]),
+      rawValue: (row || [])[numCol]
     })).filter(row => row.value !== null);
+    let chartRows = sourceRows;
 
-    if (filterOperator !== 'all' && filterValue) {
+    if (filterValue && ['all', 'contains'].includes(filterOperator)) {
+      const selectedColumn = filterField.startsWith('column:') ? parseInt(filterField.slice(7), 10) : -1;
+      const isColumnScope = selectedColumn >= 0 && selectedColumn < sheet.headers.length;
+      const filterHeaders = [];
+      const filterRows = sourceRows.map(item => {
+        if (isColumnScope) return [item.row[selectedColumn]];
+        if (filterField === 'context') return [item.row[labelCol]];
+        if (filterField === 'value') return [item.row[numCol]];
+        return item.row;
+      });
+      const filterScope = `${sheetName}:${filterField}:${filterOperator}`;
+      const sameScope = studioFilterPreviousScope === filterScope;
+      const filtered = TableFilter.filterRows(filterHeaders, filterRows, filterValue, {
+        previousQuery: sameScope ? studioFilterPreviousQuery : '',
+        previousResults: sameScope ? studioFilterPreviousResults : null,
+        includeHeaders: false
+      });
+      studioFilterPreviousQuery = filterValue;
+      studioFilterPreviousResults = filtered;
+      studioFilterPreviousSheet = sheetName;
+      studioFilterPreviousScope = filterScope;
+      const matchingIndices = new Set(filtered.map(item => sourceRows[item.origIdx]?.sourceIndex));
+      chartRows = sourceRows.filter(row => matchingIndices.has(row.sourceIndex));
+    } else if (filterOperator !== 'all' && filterValue) {
+      studioFilterPreviousQuery = '';
+      studioFilterPreviousResults = null;
+      studioFilterPreviousScope = '';
       const numericFilter = Number(filterValue);
       chartRows = chartRows.filter(row => {
-        const labelMatch = row.label.toLowerCase();
-        const valueMatch = String(row.rawValue ?? row.value).toLowerCase();
-        const searchableText = filterField === 'context' ? labelMatch : filterField === 'value' ? valueMatch : `${labelMatch} ${valueMatch}`;
-        if (filterOperator === 'contains') return searchableText.includes(filterValue);
-        if (filterOperator === 'starts-with') return searchableText.startsWith(filterValue);
-        if (filterOperator === 'ends-with') return searchableText.endsWith(filterValue);
-        if (filterOperator === 'equals') return searchableText === filterValue;
-        if (filterOperator === 'not-equals') return searchableText !== filterValue;
+        const cells = filterField === 'context' ? [row.row[labelCol]] : filterField === 'value' ? [row.row[numCol]] : row.row;
+        const searchableText = cells.map(cell => String(cell ?? '')).join(' ').toLowerCase();
+        const normalizedFilter = filterValue.toLowerCase();
+        if (filterOperator === 'contains') return searchableText.includes(normalizedFilter);
+        if (filterOperator === 'starts-with') return searchableText.startsWith(normalizedFilter);
+        if (filterOperator === 'ends-with') return searchableText.endsWith(normalizedFilter);
+        if (filterOperator === 'equals') return searchableText === normalizedFilter;
+        if (filterOperator === 'not-equals') return searchableText !== normalizedFilter;
         if (filterOperator === 'greater-than') return Number.isFinite(numericFilter) && row.value > numericFilter;
         if (filterOperator === 'less-than') return Number.isFinite(numericFilter) && row.value < numericFilter;
         if (filterOperator === 'between') return Number.isFinite(numericFilter) && Number.isFinite(filterUpperValue) && row.value >= numericFilter && row.value <= filterUpperValue;
         return true;
       });
+    } else {
+      studioFilterPreviousQuery = '';
+      studioFilterPreviousResults = null;
+      studioFilterPreviousScope = '';
     }
 
     if (sortOrder === 'value-asc') chartRows.sort((a, b) => a.value - b.value);
@@ -1396,11 +1427,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     chartRows = chartRows.slice(0, rowLimit);
 
     const isCircular = ['pie', 'doughnut', 'polarArea'].includes(currentType);
-    if (groupDuplicates && isCircular) {
-      const grouped = new Map();
-      chartRows.forEach(row => grouped.set(row.label, (grouped.get(row.label) || 0) + row.value));
-      chartRows = Array.from(grouped, ([label, value]) => ({ label, value }));
-    }
+    const circularData = isCircular ? ChartData.prepareCircularData(chartRows, groupDuplicates) : { rows: chartRows, legendLabels: [] };
+    chartRows = circularData.rows;
 
     const labels = chartRows.map(row => row.label);
     const dataValues = chartRows.map(row => row.value);
@@ -1410,10 +1438,10 @@ document.addEventListener('DOMContentLoaded', async () => {
       animationDuration: 350,
       title: { text: currentChartTitle, left: 'center', textStyle: { color: '#334155', fontSize: 14 } },
       tooltip: { trigger: isCircular ? 'item' : 'axis' },
-      legend: { show: isCircular, bottom: 0 },
+      legend: { show: isCircular, data: circularData.legendLabels, bottom: 0, type: 'scroll' },
       grid: { left: 48, right: 24, top: 48, bottom: 48, containLabel: true },
-      xAxis: isCircular ? undefined : { type: 'category', data: labels, axisLabel: { rotate: labels.length > 6 ? 30 : 0 } },
-      yAxis: isCircular ? undefined : { type: 'value' },
+      xAxis: isCircular ? undefined : { type: 'category', name: 'Rows', data: labels, axisLabel: { rotate: labels.length > 6 ? 30 : 0 } },
+      yAxis: isCircular ? undefined : { type: 'value', name: headerName },
       series: [isCircular
         ? { type: chartSeriesType, radius: currentType === 'doughnut' ? ['45%', '72%'] : currentType === 'polarArea' ? ['15%', '72%'] : '68%', data: labels.map((label, index) => ({ name: label, value: dataValues[index] })) }
         : { type: chartSeriesType, smooth: currentType === 'line', data: dataValues, itemStyle: { color: '#146C36' } }]
@@ -1422,19 +1450,6 @@ document.addEventListener('DOMContentLoaded', async () => {
       if (canvas._studioResizeObserver) canvas._studioResizeObserver.disconnect();
       canvas._studioResizeObserver = new ResizeObserver(() => studioChartInstance && studioChartInstance.resize());
       canvas._studioResizeObserver.observe(canvas);
-    }
-  }
-
-  function updateStudioChartControlLabels(chartType) {
-    const isCircular = ['pie', 'doughnut', 'polarArea'].includes(chartType);
-    const labelText = document.getElementById('studioLabelFieldText');
-    const valueText = document.getElementById('studioValueFieldText');
-    const swapButton = document.getElementById('studioBtnSwapAxes');
-    if (labelText) labelText.textContent = isCircular ? '🏷️ Context / Group Field:' : '🏷️ X-Axis / Label Field:';
-    if (valueText) valueText.textContent = isCircular ? '📊 Data / Value Field:' : '📈 Y-Axis / Metric Field:';
-    if (swapButton) {
-      swapButton.textContent = isCircular ? '🔄 Swap Context & Value' : '🔄 Swap Axes';
-      swapButton.title = isCircular ? 'Swap the context and value fields' : 'Swap X and Y fields';
     }
   }
 
@@ -1448,23 +1463,6 @@ document.addEventListener('DOMContentLoaded', async () => {
   const studioChartTypeSelect = document.getElementById('studioChartTypeSelect');
   if (studioChartTypeSelect) {
     studioChartTypeSelect.addEventListener('change', () => {
-      updateStudioChartControlLabels(studioChartTypeSelect.value);
-      updateStudioChart();
-    });
-  }
-
-  const studioLabelColSelect = document.getElementById('studioLabelColSelect');
-  if (studioLabelColSelect) {
-    studioLabelColSelect.addEventListener('change', () => {
-      renderStudioTableGrid(studioActiveRecord);
-      updateStudioChart();
-    });
-  }
-
-  const studioValueColSelect = document.getElementById('studioValueColSelect');
-  if (studioValueColSelect) {
-    studioValueColSelect.addEventListener('change', () => {
-      renderStudioTableGrid(studioActiveRecord);
       updateStudioChart();
     });
   }
@@ -1496,19 +1494,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     };
     studioFilterOperator.addEventListener('change', updateFilterInputs);
     updateFilterInputs();
-  }
-
-  // Swap Axes Button
-  const studioBtnSwapAxes = document.getElementById('studioBtnSwapAxes');
-  if (studioBtnSwapAxes) {
-    studioBtnSwapAxes.addEventListener('click', () => {
-      if (!studioLabelColSelect || !studioValueColSelect || !studioActiveRecord) return;
-      const temp = studioLabelColSelect.value;
-      studioLabelColSelect.value = studioValueColSelect.value;
-      studioValueColSelect.value = temp;
-      renderStudioTableGrid(studioActiveRecord);
-      updateStudioChart();
-    });
   }
 
   // ➕ Add New Field / Column Button Handler
