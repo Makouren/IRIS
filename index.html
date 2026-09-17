@@ -25,6 +25,7 @@
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/docx-preview@latest/dist/docx-preview.css">
   <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/docx-preview@latest/dist/docx-preview.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
 </head>
 <body>
 
@@ -381,26 +382,6 @@
                 </div>
               </div>
 
-              <!-- Interactive Field / Axis Mapping Controls -->
-              <div style="background: #FFFFFF; border: 1.5px solid var(--border-green); border-radius: var(--radius-sm); padding: 0.75rem 1rem; margin-bottom: 0.85rem; display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 0.75rem;">
-                <div style="display: flex; align-items: center; gap: 1rem; flex-wrap: wrap;">
-                  <div style="display: flex; align-items: center; gap: 0.4rem;">
-                    <span id="studioLabelFieldText" style="font-size: 0.8rem; font-weight: 800; color: #047857;">🏷️ X-Axis / Label Field:</span>
-                    <select id="studioLabelColSelect" class="form-input" style="padding: 0.3rem 0.65rem; font-size: 0.82rem; font-weight: 700; color: #0F172A; min-width: 140px;"></select>
-                  </div>
-                  <div style="display: flex; align-items: center; gap: 0.4rem;">
-                    <span id="studioValueFieldText" style="font-size: 0.8rem; font-weight: 800; color: #1D4ED8;">📈 Y-Axis / Metric Field:</span>
-                    <select id="studioValueColSelect" class="form-input" style="padding: 0.3rem 0.65rem; font-size: 0.82rem; font-weight: 700; color: #0F172A; min-width: 140px;"></select>
-                  </div>
-                </div>
-
-                <div>
-                  <button id="studioBtnSwapAxes" type="button" class="btn-studio-action" style="background: #F8FAF8; border: 1.5px solid #CBD5E1; color: #334155; font-size: 0.78rem; padding: 0.35rem 0.75rem;" title="Swap chart fields">
-                    🔄 Swap Axes
-                  </button>
-                </div>
-              </div>
-
               <div style="background: #F8FAF8; border: 1px solid var(--border-light); border-radius: var(--radius-sm); padding: 0.65rem 1rem; margin-bottom: 0.85rem; display: flex; flex-wrap: wrap; align-items: center; gap: 0.65rem;">
                 <span style="font-size: 0.78rem; font-weight: 800; color: #334155; text-transform: uppercase;">🔎 Filter extracted rows:</span>
                 <select id="studioFilterField" class="form-input" style="width: auto; padding: 0.3rem 0.55rem; font-size: 0.78rem;" aria-label="Filter data scope">
@@ -555,10 +536,7 @@
   </div>
 
   <!-- JavaScript Modules in Order -->
-  <!-- [SLATED FOR REVIEW & REVISION]: Standalone Image OCR Pipeline disabled
   <script src="js/parsers/imageOcrPipeline.js"></script>
-  <script src="js/parsers/imageParser.js"></script>
-  -->
   <script src="js/parsers/excelParser.js"></script>
   <script src="js/parsers/docxParser.js"></script>
   <script src="js/parsers/docxViewerComponent.js"></script>
@@ -568,6 +546,11 @@
   <script src="js/database/dbManager.js"></script>
   <script src="js/samples.js"></script>
   <script src="js/scanner.js"></script>
+  <script src="js/tableFilter.js"></script>
+  <script src="js/chartData.js"></script>
+  <script src="js/chartMapping.js"></script>
+  <script src="js/sourceIngestion.js"></script>
+  <script src="js/documentPagination.js"></script>
   <script src="js/app.js"></script>
 
 </body>

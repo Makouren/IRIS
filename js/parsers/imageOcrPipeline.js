@@ -7,6 +7,42 @@
 class ImageOcrPipeline {
   constructor() {
     this.ocrAvailable = typeof Tesseract !== 'undefined';
+    this.lowConfidenceThreshold = 60;
+  }
+
+  async preprocessImageSource(imageSource) {
+    if (typeof document === 'undefined') return imageSource;
+
+    let image = imageSource;
+    if (!(typeof HTMLCanvasElement !== 'undefined' && imageSource instanceof HTMLCanvasElement)) {
+      let objectUrl = null;
+      image = await new Promise((resolve, reject) => {
+        const element = new Image();
+        element.onload = () => resolve(element);
+        element.onerror = () => reject(new Error('Could not load image for OCR preprocessing'));
+        objectUrl = typeof imageSource === 'string' ? null : URL.createObjectURL(imageSource);
+        element.src = typeof imageSource === 'string' ? imageSource : objectUrl;
+      });
+      if (objectUrl) URL.revokeObjectURL(objectUrl);
+    }
+
+    const scale = 2;
+    const canvas = document.createElement('canvas');
+    canvas.width = Math.max(1, Math.round((image.naturalWidth || image.width) * scale));
+    canvas.height = Math.max(1, Math.round((image.naturalHeight || image.height) * scale));
+    const context = canvas.getContext('2d', { willReadFrequently: true });
+    context.drawImage(image, 0, 0, canvas.width, canvas.height);
+
+    const pixels = context.getImageData(0, 0, canvas.width, canvas.height);
+    for (let index = 0; index < pixels.data.length; index += 4) {
+      const gray = Math.round(pixels.data[index] * 0.299 + pixels.data[index + 1] * 0.587 + pixels.data[index + 2] * 0.114);
+      const contrast = Math.max(0, Math.min(255, Math.round((gray - 128) * 1.35 + 128)));
+      pixels.data[index] = contrast;
+      pixels.data[index + 1] = contrast;
+      pixels.data[index + 2] = contrast;
+    }
+    context.putImageData(pixels, 0, 0);
+    return canvas;
   }
 
   /**
@@ -19,16 +55,26 @@ class ImageOcrPipeline {
     }
 
     try {
+      const preprocessedImage = await this.preprocessImageSource(imageSource);
       const worker = await Tesseract.createWorker('eng', 1);
-      const result = await worker.recognize(imageSource);
+      const result = await worker.recognize(preprocessedImage);
       await worker.terminate();
 
       const text = (result.data.text || '').trim();
+      const words = (result.data.words || []).map(word => ({
+        text: String(word.text || '').trim(),
+        confidence: Math.round(word.confidence || 0),
+        lowConfidence: (word.confidence || 0) < this.lowConfidenceThreshold
+      })).filter(word => word.text);
+      const lowConfidenceWords = words.filter(word => word.lowConfidence);
       return {
         text,
         confidence: Math.round(result.data.confidence || 0),
         source: sourceLabel,
-        wordCount: text ? text.split(/\s+/).length : 0
+        wordCount: text ? text.split(/\s+/).length : 0,
+        words,
+        lowConfidenceWords,
+        warnings: lowConfidenceWords.length > 0 ? ['Some OCR words fell below the confidence threshold.'] : []
       };
     } catch (err) {
       console.warn(`OCR failed for ${sourceLabel}:`, err);
@@ -83,7 +129,7 @@ class ImageOcrPipeline {
 
         try {
           const page = await pdfDoc.getPage(i);
-          const viewport = page.getViewport({ scale: 2.0 }); // Higher scale = better OCR accuracy
+          const viewport = page.getViewport({ scale: 3.0 }); // Higher resolution improves small-character recognition
           const canvas = document.createElement('canvas');
           canvas.width = viewport.width;
           canvas.height = viewport.height;
