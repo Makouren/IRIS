@@ -1197,22 +1197,63 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
   }
 
+  // ----------------------------------------------------
+  // Field mapping selector population
+  // ----------------------------------------------------
   function updateFieldSelectOptions(sheet) {
     if (!sheet || !sheet.headers) return;
+    const headers = sheet.headers;
+    const rows = sheet.rows || [];
+    const { labelColumn: defaultLabel, valueColumn: defaultValue, columnTypes } = ChartMapping.inferColumns(headers, rows);
+    const currentType = document.getElementById('studioChartTypeSelect')?.value || 'bar';
+    const isCircular = ['pie', 'doughnut', 'polarArea'].includes(currentType);
 
+    // --- Category column selector ---
+    const catSel = document.getElementById('studioCategoryCol');
+    const valSel = document.getElementById('studioValueCol');
+    const catLabel = document.getElementById('studioCategoryLabel');
+    const valLabel = document.getElementById('studioValueLabel');
+    if (catSel) {
+      const prevCat = catSel.value;
+      catSel.innerHTML = '';
+      headers.forEach((h, idx) => {
+        const opt = document.createElement('option');
+        opt.value = idx;
+        opt.textContent = h || `Column ${idx + 1}`;
+        catSel.appendChild(opt);
+      });
+      // Restore previous selection or use default
+      catSel.value = prevCat !== '' && headers[Number(prevCat)] ? prevCat : String(defaultLabel);
+      if (catLabel) catLabel.textContent = isCircular ? 'Labels:' : 'Category (X-axis):';
+    }
+    if (valSel) {
+      const prevVal = valSel.value;
+      valSel.innerHTML = '';
+      headers.forEach((h, idx) => {
+        const type = columnTypes ? columnTypes[idx] : 'mixed';
+        const opt = document.createElement('option');
+        opt.value = idx;
+        opt.textContent = `${h || `Column ${idx + 1}`}${type === 'numeric' ? ' ✓' : type === 'text' ? ' (text)' : ''}`;
+        if (type === 'text') opt.style.color = '#94A3B8';
+        valSel.appendChild(opt);
+      });
+      valSel.value = prevVal !== '' && headers[Number(prevVal)] ? prevVal : String(defaultValue);
+      if (valLabel) valLabel.textContent = isCircular ? 'Value (single):' : 'Value (Y-axis):';
+    }
+
+    // --- Filter field dropdown (keep in sync) ---
     const filterField = document.getElementById('studioFilterField');
     const currentFilterField = filterField ? filterField.value : 'all';
     if (filterField) {
       filterField.innerHTML = '<option value="all">All selected data</option><option value="context">Context / label only</option><option value="value">Metric / value only</option>';
-      sheet.headers.forEach((header, colIdx) => {
+      headers.forEach((header, colIdx) => {
         const option = document.createElement('option');
         option.value = `column:${colIdx}`;
         option.textContent = `${header || `Column ${colIdx + 1}`} only`;
         filterField.appendChild(option);
       });
-      filterField.value = Array.from(filterField.options).some(option => option.value === currentFilterField) ? currentFilterField : 'all';
+      filterField.value = Array.from(filterField.options).some(o => o.value === currentFilterField) ? currentFilterField : 'all';
     }
-
   }
 
   function renderStudioTableGrid(record) {
@@ -1309,60 +1350,85 @@ document.addEventListener('DOMContentLoaded', async () => {
   }
 
   // ----------------------------------------------------
-  // Studio Live Chart Engine
+  // Studio Live Chart Engine (fixed field mapping, label truncation, aggregation)
   // ----------------------------------------------------
   function renderStudioChart(record) {
     const canvas = document.getElementById('studioChartCanvas');
+    const emptyState = document.getElementById('studioChartEmptyState');
+    const emptyMsg = document.getElementById('studioChartEmptyMsg');
+    const warningEl = document.getElementById('studioFieldWarning');
     const chartTypeSelect = document.getElementById('studioChartTypeSelect');
     const chartTitleInput = document.getElementById('studioChartTitleInput');
     const chartSubtitleDisplay = document.getElementById('studioChartSubtitleDisplay');
     if (!canvas || !chartTypeSelect || !record) return;
 
-    if (studioChartInstance) {
-      studioChartInstance.dispose();
-      studioChartInstance = null;
-    }
+    const showEmpty = (msg) => {
+      if (studioChartInstance) { studioChartInstance.dispose(); studioChartInstance = null; }
+      canvas.style.display = 'none';
+      if (emptyState) { emptyState.style.display = 'flex'; }
+      if (emptyMsg) emptyMsg.textContent = msg;
+    };
+    const showChart = () => {
+      canvas.style.display = '';
+      if (emptyState) emptyState.style.display = 'none';
+    };
+    const showWarning = (msg) => {
+      if (warningEl) { warningEl.textContent = msg; warningEl.style.display = msg ? 'block' : 'none'; }
+    };
+    showWarning('');
+
+    if (studioChartInstance) { studioChartInstance.dispose(); studioChartInstance = null; }
 
     const activeSheetInfo = getStudioActiveSheet(record);
-    if (!activeSheetInfo || !activeSheetInfo.data) return;
+    if (!activeSheetInfo || !activeSheetInfo.data) { showEmpty('No sheet data available.'); return; }
 
     const sheetName = activeSheetInfo.name;
     const sheet = activeSheetInfo.data;
-    if (!sheet || !sheet.headers || !sheet.rows || sheet.rows.length === 0) return;
+    if (!sheet || !sheet.headers || !sheet.rows || sheet.rows.length === 0) { showEmpty('No rows to chart.'); return; }
 
-    const { labelColumn: labelCol, valueColumn: numCol } = ChartMapping.inferColumns(sheet.headers, sheet.rows);
+    // ---- Read user-selected columns ----
+    const catSel = document.getElementById('studioCategoryCol');
+    const valSel = document.getElementById('studioValueCol');
+    let labelCol = catSel ? Number(catSel.value) : -1;
+    let numCol   = valSel ? Number(valSel.value) : -1;
+
+    // Fallback to inferred if selector is uninitialised
+    if (isNaN(labelCol) || labelCol < 0 || labelCol >= sheet.headers.length ||
+        isNaN(numCol)   || numCol < 0   || numCol >= sheet.headers.length) {
+      const inferred = ChartMapping.inferColumns(sheet.headers, sheet.rows);
+      labelCol = inferred.labelColumn;
+      numCol   = inferred.valueColumn;
+    }
+
+    // Validate: category and value must not be the same column
+    if (labelCol === numCol) {
+      showWarning('Category and Value fields must be different columns.');
+      showEmpty('Category and Value fields must be different columns. Please adjust Field Mapping above.');
+      return;
+    }
 
     const currentType = chartTypeSelect.value || 'bar';
-    const headerName = sheet.headers[numCol] || 'Metric Value';
+    const isCircular  = ['pie', 'doughnut', 'polarArea'].includes(currentType);
+    const headerName  = sheet.headers[numCol] || 'Value';
 
-    if (chartSubtitleDisplay) {
-      chartSubtitleDisplay.textContent = `Live interactive rendering from: ${sheetName}`;
-    }
-
-    if (chartTitleInput && !chartTitleInput.getAttribute('data-customized')) {
-      chartTitleInput.value = `${headerName} — ${sheetName}`;
-    }
-
+    if (chartSubtitleDisplay) chartSubtitleDisplay.textContent = `Live interactive rendering from: ${sheetName}`;
+    if (chartTitleInput && !chartTitleInput.getAttribute('data-customized')) chartTitleInput.value = `${headerName} — ${sheetName}`;
     const currentChartTitle = chartTitleInput ? chartTitleInput.value : `${headerName} — ${sheetName}`;
 
-    if (studioChartInstance) {
-      studioChartInstance.dispose();
-      studioChartInstance = null;
-    }
     if (typeof echarts === 'undefined') return;
 
-    const filterField = document.getElementById('studioFilterField')?.value || 'all';
-    const filterOperator = document.getElementById('studioFilterOperator')?.value || 'all';
-    const filterValue = (document.getElementById('studioFilterValue')?.value || '').trim();
+    // ---- Read filter/sort controls ----
+    const filterField      = document.getElementById('studioFilterField')?.value || 'all';
+    const filterOperator   = document.getElementById('studioFilterOperator')?.value || 'all';
+    const filterValue      = (document.getElementById('studioFilterValue')?.value || '').trim();
     const filterUpperValue = Number(document.getElementById('studioFilterUpperValue')?.value);
-    const sortOrder = document.getElementById('studioSortOrder')?.value || 'source';
-    const rowLimit = Math.max(1, Math.min(100, Number(document.getElementById('studioRowLimit')?.value) || 30));
-    const groupDuplicates = document.getElementById('studioGroupDuplicates')?.checked !== false;
+    const sortOrder        = document.getElementById('studioSortOrder')?.value || 'source';
+    const rowLimit         = Math.max(1, Math.min(100, Number(document.getElementById('studioRowLimit')?.value) || 30));
+    const groupDuplicates  = document.getElementById('studioGroupDuplicates')?.checked !== false;
 
-    const parseNumber = value => {
-      return ChartMapping.parseNumericValue(value);
-    };
+    const parseNumber = value => ChartMapping.parseNumericValue(value);
 
+    // Build source rows — filter out rows where value is not numeric
     const sourceRows = sheet.rows.map((row, index) => ({
       sourceIndex: index,
       row: row || [],
@@ -1370,82 +1436,156 @@ document.addEventListener('DOMContentLoaded', async () => {
       value: parseNumber((row || [])[numCol]),
       rawValue: (row || [])[numCol]
     })).filter(row => row.value !== null);
+
+    if (sourceRows.length === 0) {
+      showWarning(`The selected Value column "${headerName}" contains no numeric data. Choose a different Value field.`);
+      showEmpty(`No numeric data found in column "${headerName}". Please select a numeric Value field above.`);
+      return;
+    }
+
     let chartRows = sourceRows;
 
+    // ---- Apply filters ----
     if (filterValue && ['all', 'contains'].includes(filterOperator)) {
       const selectedColumn = filterField.startsWith('column:') ? parseInt(filterField.slice(7), 10) : -1;
-      const isColumnScope = selectedColumn >= 0 && selectedColumn < sheet.headers.length;
-      const filterHeaders = [];
-      const filterRows = sourceRows.map(item => {
+      const isColumnScope  = selectedColumn >= 0 && selectedColumn < sheet.headers.length;
+      const filterHeaders  = [];
+      const filterRows     = sourceRows.map(item => {
         if (isColumnScope) return [item.row[selectedColumn]];
         if (filterField === 'context') return [item.row[labelCol]];
-        if (filterField === 'value') return [item.row[numCol]];
+        if (filterField === 'value')   return [item.row[numCol]];
         return item.row;
       });
       const filterScope = `${sheetName}:${filterField}:${filterOperator}`;
-      const sameScope = studioFilterPreviousScope === filterScope;
-      const filtered = TableFilter.filterRows(filterHeaders, filterRows, filterValue, {
+      const sameScope   = studioFilterPreviousScope === filterScope;
+      const filtered    = TableFilter.filterRows(filterHeaders, filterRows, filterValue, {
         previousQuery: sameScope ? studioFilterPreviousQuery : '',
         previousResults: sameScope ? studioFilterPreviousResults : null,
         includeHeaders: false
       });
-      studioFilterPreviousQuery = filterValue;
+      studioFilterPreviousQuery   = filterValue;
       studioFilterPreviousResults = filtered;
-      studioFilterPreviousSheet = sheetName;
-      studioFilterPreviousScope = filterScope;
+      studioFilterPreviousSheet   = sheetName;
+      studioFilterPreviousScope   = filterScope;
       const matchingIndices = new Set(filtered.map(item => sourceRows[item.origIdx]?.sourceIndex));
       chartRows = sourceRows.filter(row => matchingIndices.has(row.sourceIndex));
     } else if (filterOperator !== 'all' && filterValue) {
-      studioFilterPreviousQuery = '';
+      studioFilterPreviousQuery   = '';
       studioFilterPreviousResults = null;
-      studioFilterPreviousScope = '';
+      studioFilterPreviousScope   = '';
       const numericFilter = Number(filterValue);
       chartRows = chartRows.filter(row => {
-        const cells = filterField === 'context' ? [row.row[labelCol]] : filterField === 'value' ? [row.row[numCol]] : row.row;
-        const searchableText = cells.map(cell => String(cell ?? '')).join(' ').toLowerCase();
-        const normalizedFilter = filterValue.toLowerCase();
-        if (filterOperator === 'contains') return searchableText.includes(normalizedFilter);
-        if (filterOperator === 'starts-with') return searchableText.startsWith(normalizedFilter);
-        if (filterOperator === 'ends-with') return searchableText.endsWith(normalizedFilter);
-        if (filterOperator === 'equals') return searchableText === normalizedFilter;
-        if (filterOperator === 'not-equals') return searchableText !== normalizedFilter;
+        const cells        = filterField === 'context' ? [row.row[labelCol]] : filterField === 'value' ? [row.row[numCol]] : row.row;
+        const searchText   = cells.map(c => String(c ?? '')).join(' ').toLowerCase();
+        const normFilter   = filterValue.toLowerCase();
+        if (filterOperator === 'contains')     return searchText.includes(normFilter);
+        if (filterOperator === 'starts-with')  return searchText.startsWith(normFilter);
+        if (filterOperator === 'ends-with')    return searchText.endsWith(normFilter);
+        if (filterOperator === 'equals')       return searchText === normFilter;
+        if (filterOperator === 'not-equals')   return searchText !== normFilter;
         if (filterOperator === 'greater-than') return Number.isFinite(numericFilter) && row.value > numericFilter;
-        if (filterOperator === 'less-than') return Number.isFinite(numericFilter) && row.value < numericFilter;
-        if (filterOperator === 'between') return Number.isFinite(numericFilter) && Number.isFinite(filterUpperValue) && row.value >= numericFilter && row.value <= filterUpperValue;
+        if (filterOperator === 'less-than')    return Number.isFinite(numericFilter) && row.value < numericFilter;
+        if (filterOperator === 'between')      return Number.isFinite(numericFilter) && Number.isFinite(filterUpperValue) && row.value >= numericFilter && row.value <= filterUpperValue;
         return true;
       });
     } else {
-      studioFilterPreviousQuery = '';
+      studioFilterPreviousQuery   = '';
       studioFilterPreviousResults = null;
-      studioFilterPreviousScope = '';
+      studioFilterPreviousScope   = '';
     }
 
-    if (sortOrder === 'value-asc') chartRows.sort((a, b) => a.value - b.value);
+    // ---- Sort ----
+    if (sortOrder === 'value-asc')  chartRows.sort((a, b) => a.value - b.value);
     if (sortOrder === 'value-desc') chartRows.sort((a, b) => b.value - a.value);
-    if (sortOrder === 'label-asc') chartRows.sort((a, b) => a.label.localeCompare(b.label));
+    if (sortOrder === 'label-asc')  chartRows.sort((a, b) => a.label.localeCompare(b.label));
     if (sortOrder === 'label-desc') chartRows.sort((a, b) => b.label.localeCompare(a.label));
+
+    // ---- Row limit ----
     chartRows = chartRows.slice(0, rowLimit);
 
-    const isCircular = ['pie', 'doughnut', 'polarArea'].includes(currentType);
-    const circularData = isCircular ? ChartData.prepareCircularData(chartRows, groupDuplicates) : { rows: chartRows, legendLabels: [] };
-    chartRows = circularData.rows;
+    if (chartRows.length === 0) {
+      showEmpty('No data matches the current filter. Try adjusting the filter criteria.');
+      return;
+    }
 
-    const labels = chartRows.map(row => row.label);
-    const dataValues = chartRows.map(row => row.value);
+    // ---- Group duplicates (Bar/Line: average; Circular: sum) ----
+    if (groupDuplicates) {
+      if (isCircular) {
+        const circularData = ChartData.prepareCircularData(chartRows, true);
+        chartRows = circularData.rows;
+      } else {
+        chartRows = ChartData.groupAndAggregate(chartRows);
+      }
+    }
+
+    // ---- Prepare labels with truncation for bar/line ----
+    const MAX_LABEL_LEN = 20;
+    const fullLabels = chartRows.map(r => r.label);
+    const shortLabels = fullLabels.map(l => l.length > MAX_LABEL_LEN ? l.slice(0, MAX_LABEL_LEN - 1) + '…' : l);
+    const dataValues  = chartRows.map(r => r.value);
     const chartSeriesType = currentType === 'doughnut' ? 'pie' : currentType;
+
+    // ---- Y-axis true data range ----
+    const minVal = Math.min(...dataValues);
+    const maxVal = Math.max(...dataValues);
+    const yAxisMin = minVal >= 0 && minVal <= maxVal * 0.8 ? 0 : Math.floor(minVal * 0.9);
+
+    showChart();
     studioChartInstance = echarts.init(canvas);
+
+    const legendLabels = isCircular ? Array.from(new Set(fullLabels)) : [];
+
     studioChartInstance.setOption({
       animationDuration: 350,
-      title: { text: currentChartTitle, left: 'center', textStyle: { color: '#334155', fontSize: 14 } },
-      tooltip: { trigger: isCircular ? 'item' : 'axis' },
-      legend: { show: isCircular, data: circularData.legendLabels, bottom: 0, type: 'scroll' },
-      grid: { left: 48, right: 24, top: 48, bottom: 48, containLabel: true },
-      xAxis: isCircular ? undefined : { type: 'category', name: 'Rows', data: labels, axisLabel: { rotate: labels.length > 6 ? 30 : 0 } },
-      yAxis: isCircular ? undefined : { type: 'value', name: headerName },
+      title: { text: currentChartTitle, left: 'center', textStyle: { color: '#334155', fontSize: 13, fontWeight: 700 } },
+      tooltip: {
+        trigger: isCircular ? 'item' : 'axis',
+        formatter: isCircular
+          ? '{b}: {c} ({d}%)'
+          : (params) => {
+              const p = Array.isArray(params) ? params[0] : params;
+              const fullName = fullLabels[p.dataIndex] || p.name;
+              return `<b>${fullName}</b><br/>${headerName}: <b>${p.value}</b>`;
+            }
+      },
+      legend: { show: isCircular, data: legendLabels, bottom: 0, type: 'scroll' },
+      grid: isCircular ? undefined : { left: 60, right: 20, top: 50, bottom: chartRows.length > 8 ? 90 : 60, containLabel: false },
+      xAxis: isCircular ? undefined : {
+        type: 'category',
+        data: shortLabels,
+        axisLabel: {
+          rotate: chartRows.length > 6 ? 40 : 0,
+          interval: 0,
+          overflow: 'truncate',
+          width: 100,
+          fontSize: 11,
+          formatter: (val) => val  // already truncated
+        },
+        axisTick: { alignWithLabel: true }
+      },
+      yAxis: isCircular ? undefined : {
+        type: 'value',
+        name: headerName,
+        nameTextStyle: { fontSize: 11, color: '#64748B' },
+        min: yAxisMin,
+        splitLine: { lineStyle: { type: 'dashed', color: '#E2E8F0' } }
+      },
       series: [isCircular
-        ? { type: chartSeriesType, radius: currentType === 'doughnut' ? ['45%', '72%'] : currentType === 'polarArea' ? ['15%', '72%'] : '68%', data: labels.map((label, index) => ({ name: label, value: dataValues[index] })) }
-        : { type: chartSeriesType, smooth: currentType === 'line', data: dataValues, itemStyle: { color: '#146C36' } }]
+        ? {
+            type: chartSeriesType,
+            radius: currentType === 'doughnut' ? ['45%', '72%'] : currentType === 'polarArea' ? ['15%', '72%'] : '68%',
+            data: fullLabels.map((label, i) => ({ name: label, value: dataValues[i] }))
+          }
+        : {
+            type: chartSeriesType,
+            smooth: currentType === 'line',
+            data: dataValues,
+            itemStyle: { color: '#146C36' },
+            label: { show: chartRows.length <= 15, position: 'top', fontSize: 10, color: '#334155', formatter: '{c}' }
+          }
+      ]
     });
+
     if (typeof ResizeObserver !== 'undefined') {
       if (canvas._studioResizeObserver) canvas._studioResizeObserver.disconnect();
       canvas._studioResizeObserver = new ResizeObserver(() => studioChartInstance && studioChartInstance.resize());
@@ -1463,6 +1603,11 @@ document.addEventListener('DOMContentLoaded', async () => {
   const studioChartTypeSelect = document.getElementById('studioChartTypeSelect');
   if (studioChartTypeSelect) {
     studioChartTypeSelect.addEventListener('change', () => {
+      // Re-populate the category/value labels based on chart type (circular vs Cartesian)
+      const activeSheetInfo = getStudioActiveSheet(studioActiveRecord);
+      if (activeSheetInfo && activeSheetInfo.data) {
+        updateFieldSelectOptions(activeSheetInfo.data);
+      }
       updateStudioChart();
     });
   }
@@ -1475,7 +1620,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     });
   }
 
-  ['studioFilterField', 'studioFilterOperator', 'studioFilterValue', 'studioFilterUpperValue', 'studioSortOrder', 'studioRowLimit', 'studioGroupDuplicates'].forEach(controlId => {
+  ['studioCategoryCol', 'studioValueCol', 'studioFilterField', 'studioFilterOperator', 'studioFilterValue', 'studioFilterUpperValue', 'studioSortOrder', 'studioRowLimit', 'studioGroupDuplicates'].forEach(controlId => {
     const control = document.getElementById(controlId);
     if (control) {
       control.addEventListener(control.type === 'search' || control.type === 'number' ? 'input' : 'change', updateStudioChart);

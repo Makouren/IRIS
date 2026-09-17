@@ -97,16 +97,19 @@ class DatabaseManager {
   async getAllRecords() {
     await this.initPromise;
 
-    // First attempt Server API
+    // Always prefer MySQL server — it is the source of truth
     try {
       const resp = await fetch('/api/records');
       if (resp.ok) {
         const data = await resp.json();
-        if (Array.isArray(data) && data.length > 0) return data;
+        // Return MySQL data even if empty — MySQL is canonical
+        if (Array.isArray(data)) return data;
       }
-    } catch (e) {}
+    } catch (e) {
+      console.warn('Server API unavailable, falling back to local storage:', e);
+    }
 
-    // Fallback to IndexedDB
+    // Offline Fallback to IndexedDB
     if (this.db) {
       return new Promise((resolve) => {
         const tx = this.db.transaction('records', 'readonly');

@@ -382,6 +382,20 @@
                 </div>
               </div>
 
+              <!-- Field Mapping Controls (chart-type aware) -->
+              <div id="studioFieldMappingRow" style="background: #EFF6FF; border: 1px solid #BFDBFE; border-radius: var(--radius-sm); padding: 0.65rem 1rem; margin-bottom: 0.75rem; display: flex; flex-wrap: wrap; align-items: center; gap: 0.65rem;">
+                <span style="font-size: 0.78rem; font-weight: 800; color: #1D4ED8; text-transform: uppercase;">📐 Field Mapping:</span>
+                <div style="display: flex; align-items: center; gap: 0.35rem;">
+                  <label style="font-size: 0.75rem; font-weight: 700; color: #334155; white-space: nowrap;" id="studioCategoryLabel">Category (X-axis):</label>
+                  <select id="studioCategoryCol" class="form-input" style="width: auto; padding: 0.3rem 0.55rem; font-size: 0.78rem;" aria-label="Category column"></select>
+                </div>
+                <div style="display: flex; align-items: center; gap: 0.35rem;">
+                  <label style="font-size: 0.75rem; font-weight: 700; color: #334155; white-space: nowrap;" id="studioValueLabel">Value (Y-axis):</label>
+                  <select id="studioValueCol" class="form-input" style="width: auto; padding: 0.3rem 0.55rem; font-size: 0.78rem;" aria-label="Value column"></select>
+                </div>
+                <div id="studioFieldWarning" style="display:none; font-size: 0.75rem; color: #DC2626; font-weight: 700; background: #FEF2F2; border: 1px solid #FECACA; border-radius: 4px; padding: 0.2rem 0.6rem;"></div>
+              </div>
+
               <div style="background: #F8FAF8; border: 1px solid var(--border-light); border-radius: var(--radius-sm); padding: 0.65rem 1rem; margin-bottom: 0.85rem; display: flex; flex-wrap: wrap; align-items: center; gap: 0.65rem;">
                 <span style="font-size: 0.78rem; font-weight: 800; color: #334155; text-transform: uppercase;">🔎 Filter extracted rows:</span>
                 <select id="studioFilterField" class="form-input" style="width: auto; padding: 0.3rem 0.55rem; font-size: 0.78rem;" aria-label="Filter data scope">
@@ -414,8 +428,12 @@
               </div>
 
               <!-- Chart Canvas -->
-              <div style="height: 280px; position: relative; width: 100%; margin-bottom: 0.75rem;">
+              <div style="height: 320px; position: relative; width: 100%; margin-bottom: 0.75rem;">
                 <div id="studioChartCanvas" style="height: 100%; width: 100%;"></div>
+                <div id="studioChartEmptyState" style="display:none; position:absolute; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center; background:rgba(248,250,248,0.95); border-radius:var(--radius-sm); border:2px dashed #CBD5E1;">
+                  <span style="font-size:2rem;">📊</span>
+                  <p id="studioChartEmptyMsg" style="font-size:0.88rem; color:#64748B; font-weight:600; margin-top:0.5rem; text-align:center; max-width:280px;">Select a Category field and a numeric Value field above to render the chart.</p>
+                </div>
               </div>
             </div>
 

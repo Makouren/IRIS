@@ -8,11 +8,21 @@
     "dev": "node server.js",
     "test": "node --test test/*.test.js"
   },
-  "keywords": ["ai", "file-scanner", "ocr", "excel", "docx", "pdf", "pii-detection", "security-audit"],
+  "keywords": [
+    "ai",
+    "file-scanner",
+    "ocr",
+    "excel",
+    "docx",
+    "pdf",
+    "pii-detection",
+    "security-audit"
+  ],
   "author": "IRIS AI",
   "license": "MIT",
   "dependencies": {
+    "cors": "^2.8.5",
     "express": "^4.21.2",
-    "cors": "^2.8.5"
+    "mysql2": "^3.24.4"
   }
 }
