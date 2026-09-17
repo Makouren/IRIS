@@ -496,7 +496,8 @@ body {
   overflow-x: auto;
 }
 
-.tab-btn {
+.tab-btn,
+.admin-tab-btn {
   background: transparent;
   border: 1px solid transparent;
   color: var(--text-muted);
@@ -512,12 +513,14 @@ body {
   transition: all 0.2s ease;
 }
 
-.tab-btn:hover {
+.tab-btn:hover,
+.admin-tab-btn:hover {
   color: var(--clsu-green);
   background: #F1F6F1;
 }
 
-.tab-btn.active {
+.tab-btn.active,
+.admin-tab-btn.active {
   background: var(--clsu-green);
   color: #FFFFFF;
   font-weight: 700;

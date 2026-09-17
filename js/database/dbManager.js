@@ -183,6 +183,82 @@ class DatabaseManager {
     return true;
   }
 
+  async saveGraph(graphData) {
+    const payload = {
+      id: graphData.id || `graph_${Date.now()}_${Math.random().toString(36).substr(2, 7)}`,
+      record_id: graphData.record_id || graphData.recordId,
+      title: graphData.title || 'Saved Chart',
+      chart_type: graphData.chart_type || graphData.chartType || 'bar',
+      labels: graphData.labels || [],
+      values_data: graphData.values_data || graphData.valuesData || graphData.data || []
+    };
+
+    const response = await fetch('/api/graphs', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({}));
+      throw new Error(error.error || 'Failed to save graph');
+    }
+
+    return response.json();
+  }
+
+  async getAllSavedGraphs() {
+    try {
+      const response = await fetch('/api/graphs');
+      if (!response.ok) return [];
+      const rows = await response.json();
+      return rows || [];
+    } catch (e) {
+      return [];
+    }
+  }
+
+  async getGraphsByRecord(recordId) {
+    if (!recordId) return [];
+
+    try {
+      const response = await fetch(`/api/graphs/${recordId}`);
+      if (!response.ok) return [];
+      const rows = await response.json();
+      return (rows || []).map(row => ({
+        id: row.id,
+        title: row.title || 'Saved Chart',
+        source: 'Saved Chart',
+        primaryType: row.chart_type || 'bar',
+        recommendation: 'Saved chart from the dashboard studio.',
+        isDraft: true,
+        chartData: {
+          labels: Array.isArray(row.labels) ? row.labels : [],
+          datasets: [{
+            label: row.title || 'Series',
+            data: Array.isArray(row.values_data) ? row.values_data : [],
+            backgroundColor: 'rgba(20, 108, 54, 0.45)',
+            borderColor: '#146C36',
+            borderWidth: 2
+          }]
+        }
+      }));
+    } catch (e) {
+      return [];
+    }
+  }
+
+  async deleteGraph(graphId) {
+    if (!graphId) return false;
+
+    try {
+      const response = await fetch(`/api/graphs/${graphId}`, { method: 'DELETE' });
+      return response.ok;
+    } catch (e) {
+      return false;
+    }
+  }
+
   /**
    * Admin Helper: Add a new custom data row to a sheet table inside a record
    */

@@ -237,6 +237,36 @@
         <span>🗄️</span> Rankings & Admin Data Management
       </div>
 
+      <div class="workspace-tabs" style="margin-bottom: 1.25rem;">
+        <button class="admin-tab-btn active" data-admin-tab="adminRecordsPanel">
+          <span>📋</span> Records & Dashboard Studio
+        </button>
+        <button class="admin-tab-btn" data-admin-tab="adminSavedGraphsPanel">
+          <span>🗂️</span> Saved Dashboard Graphs
+        </button>
+      </div>
+
+      <div id="adminSavedGraphsPanel" class="admin-tab-panel" style="display: none;">
+        <div style="margin-bottom: 1.5rem; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem;">
+          <div>
+            <h3 style="font-size: 1.1rem; font-weight: 800; color: var(--clsu-green);">Saved Dashboard Graphs</h3>
+            <p style="font-size: 0.85rem; color: var(--text-muted);">Approved and saved chart versions grouped per file record.</p>
+          </div>
+          <div style="display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap;">
+            <label style="font-size: 0.78rem; font-weight: 800; color: #334155; text-transform: uppercase;">File:</label>
+            <select id="savedGraphsRecordSelect" class="form-input" style="width: auto; min-width: 220px;">
+              <option value="">Loading files...</option>
+            </select>
+          </div>
+        </div>
+
+        <div id="savedDashboardGraphsContainer">
+          <!-- Saved graph cards dynamically populated -->
+        </div>
+      </div>
+
+      <div id="adminRecordsPanel" class="admin-tab-panel active">
+
       <!-- Admin Header Banner -->
       <div style="background: #FFFFFF; border: 1px solid var(--border-light); border-left: 5px solid var(--clsu-green); border-radius: var(--radius-lg); padding: 1.5rem 2rem; margin-bottom: 1.5rem; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem; box-shadow: var(--card-shadow);">
         <div>
@@ -533,6 +563,8 @@
             <!-- Records dynamically populated -->
           </tbody>
         </table>
+      </div>
+
       </div>
 
     </section>

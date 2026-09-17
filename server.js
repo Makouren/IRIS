@@ -229,6 +229,104 @@ app.delete('/api/records/:id', async (req, res) => {
   }
 });
 
+// Saved graphs endpoints
+app.get('/api/graphs', async (req, res) => {
+  try {
+    const [rows] = await pool.query('SELECT * FROM saved_graphs ORDER BY created_at DESC');
+    const normalized = rows.map(row => {
+      try {
+        row.labels = typeof row.labels === 'string' ? JSON.parse(row.labels) : (row.labels || []);
+        row.values_data = typeof row.values_data === 'string' ? JSON.parse(row.values_data) : (row.values_data || []);
+      } catch (e) {
+        row.labels = [];
+        row.values_data = [];
+      }
+      return row;
+    });
+
+    res.json(normalized);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'Failed to fetch saved graphs' });
+  }
+});
+
+app.post('/api/graphs', async (req, res) => {
+  try {
+    const graph = {
+      id: req.body.id || `graph_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`,
+      record_id: req.body.record_id || req.body.recordId,
+      title: req.body.title || 'Saved Chart',
+      chart_type: req.body.chart_type || req.body.chartType || 'bar',
+      labels: JSON.stringify(req.body.labels || []),
+      values_data: JSON.stringify(req.body.values_data || req.body.valuesData || req.body.data || [])
+    };
+
+    if (!graph.record_id) {
+      return res.status(400).json({ error: 'record_id is required' });
+    }
+
+    const [recordRows] = await pool.query('SELECT id FROM records WHERE id = ?', [graph.record_id]);
+    if (recordRows.length === 0) {
+      return res.status(404).json({ error: 'Record not found' });
+    }
+
+    await pool.query(
+      `INSERT INTO saved_graphs (id, record_id, title, chart_type, labels, values_data) VALUES (?, ?, ?, ?, ?, ?)`,
+      [graph.id, graph.record_id, graph.title, graph.chart_type, graph.labels, graph.values_data]
+    );
+
+    res.status(201).json({
+      ...graph,
+      labels: JSON.parse(graph.labels),
+      values_data: JSON.parse(graph.values_data)
+    });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'Failed to save graph' });
+  }
+});
+
+app.get('/api/graphs/:recordId', async (req, res) => {
+  try {
+    const { recordId } = req.params;
+    const [rows] = await pool.query('SELECT * FROM saved_graphs WHERE record_id = ? ORDER BY created_at DESC', [recordId]);
+
+    const normalized = rows.map(row => {
+      try {
+        row.labels = typeof row.labels === 'string' ? JSON.parse(row.labels) : (row.labels || []);
+        row.values_data = typeof row.values_data === 'string' ? JSON.parse(row.values_data) : (row.values_data || []);
+      } catch (e) {
+        row.labels = [];
+        row.values_data = [];
+      }
+      return row;
+    });
+
+    res.json(normalized);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'Failed to fetch graphs' });
+  }
+});
+
+app.delete('/api/graphs/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const [rows] = await pool.query('SELECT * FROM saved_graphs WHERE id = ?', [id]);
+
+    if (rows.length === 0) {
+      return res.status(404).json({ error: 'Graph not found' });
+    }
+
+    await pool.query('DELETE FROM saved_graphs WHERE id = ?', [id]);
+    res.json({ message: 'Graph deleted', graph: rows[0] });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'Failed to delete graph' });
+  }
+});
+
 // Fallback to index.html
 app.get('*', (req, res) => {
   res.sendFile(path.join(__dirname, 'index.html'));

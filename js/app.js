@@ -35,6 +35,8 @@ document.addEventListener('DOMContentLoaded', async () => {
   const btnClearQueue = document.getElementById('btnClearQueue');
   const tabBtns = document.querySelectorAll('.tab-btn');
   const tabPanels = document.querySelectorAll('.tab-panel');
+  const adminTabBtns = document.querySelectorAll('.admin-tab-btn');
+  const adminTabPanels = document.querySelectorAll('.admin-tab-panel');
 
   // DOM Elements - Overview Tab
   const summaryDocTitle = document.getElementById('summaryDocTitle');
@@ -53,6 +55,8 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   // DOM Elements - Graphs Tab
   const graphDraftsContainer = document.getElementById('graphDraftsContainer');
+  const savedDashboardGraphsContainer = document.getElementById('savedDashboardGraphsContainer');
+  const savedGraphsRecordSelect = document.getElementById('savedGraphsRecordSelect');
 
   // DOM Elements - Admin Portal
   const statTotalDb = document.getElementById('statTotalDb');
@@ -225,22 +229,25 @@ document.addEventListener('DOMContentLoaded', async () => {
   // ----------------------------------------------------
   // Set Active Scan & Render Tabs
   // ----------------------------------------------------
-  function setActiveScan(scan) {
+  async function setActiveScan(scan) {
     activeScan = scan;
     renderQueue();
 
     // 1. Render Overview Tab
-    renderOverviewTab(scan);
+    await renderOverviewTab(scan);
 
     // 2. Render Viewer Tab
     renderViewerTab(scan);
 
     // 3. Render Graph Drafts Tab
-    renderGraphsTab(scan);
+    await renderGraphsTab(scan);
   }
 
   // TAB 1: Overview & Fields Renderer
-  function renderOverviewTab(scan) {
+  async function renderOverviewTab(scan) {
+    const savedGraphs = scan.id ? await dbManager.getGraphsByRecord(scan.id) : [];
+    scan.graphDrafts = savedGraphs.length ? savedGraphs : (scan.graphDrafts || []);
+
     summaryDocTitle.textContent = scan.name;
     docFormatBadge.textContent = scan.type.toUpperCase();
     docFormatBadge.className = `format-chip ${scan.type}`;
@@ -413,14 +420,15 @@ document.addEventListener('DOMContentLoaded', async () => {
   }
 
   // TAB 3: Graph Drafts Tab Renderer
-  function renderGraphsTab(scan) {
+  async function renderGraphsTab(scan) {
     graphDraftsContainer.innerHTML = '';
     
     // Destroy previous Chart.js instances
     Object.values(chartInstances).forEach(c => c && c.destroy && c.destroy());
     chartInstances = {};
 
-    const drafts = scan.graphDrafts || [];
+    const drafts = scan.id ? (await dbManager.getGraphsByRecord(scan.id)) : (scan.graphDrafts || []);
+    scan.graphDrafts = drafts;
 
     if (drafts.length === 0) {
       graphDraftsContainer.innerHTML = '<div style="color: var(--text-muted); padding: 2rem; text-align: center;">No numerical series detected to build chart drafts.</div>';
@@ -515,11 +523,132 @@ document.addEventListener('DOMContentLoaded', async () => {
     });
   }
 
+  async function renderSavedGraphsTab() {
+    if (!savedDashboardGraphsContainer) return;
+
+    const savedGraphs = await dbManager.getAllSavedGraphs();
+    const records = await dbManager.getAllRecords();
+    const recordMap = new Map((records || []).map(record => [record.id, record.fileName || 'Unnamed file']));
+    const previousSelection = savedGraphsRecordSelect ? savedGraphsRecordSelect.value : '';
+    const uniqueRecordIds = [...new Set((records || []).map(record => record.id).filter(Boolean))];
+
+    if (savedGraphsRecordSelect) {
+      savedGraphsRecordSelect.innerHTML = '';
+
+      if (uniqueRecordIds.length === 0) {
+        savedGraphsRecordSelect.innerHTML = '<option value="">No files available</option>';
+      } else {
+        uniqueRecordIds.forEach(recordId => {
+          const option = document.createElement('option');
+          option.value = recordId;
+          const record = records.find(item => item.id === recordId);
+          option.textContent = `${recordMap.get(recordId) || recordId} (${(record?.fileType || 'FILE').toUpperCase()})`;
+          savedGraphsRecordSelect.appendChild(option);
+        });
+      }
+
+      const currentSelection = uniqueRecordIds.includes(previousSelection) ? previousSelection : (uniqueRecordIds[0] || '');
+      if (currentSelection) {
+        savedGraphsRecordSelect.value = currentSelection;
+      }
+    }
+
+    const selectedRecordId = savedGraphsRecordSelect ? savedGraphsRecordSelect.value : uniqueRecordIds[0] || '';
+    const filteredGraphs = selectedRecordId ? (savedGraphs || []).filter(graph => graph.record_id === selectedRecordId) : [];
+
+    savedDashboardGraphsContainer.innerHTML = '';
+
+    if (!selectedRecordId || filteredGraphs.length === 0) {
+      savedDashboardGraphsContainer.innerHTML = '<div style="color: var(--text-muted); padding: 2rem; text-align: center;">No saved dashboard graphs found for the selected file yet. Save a chart in the Studio to populate this view.</div>';
+      return;
+    }
+
+    filteredGraphs.forEach((graph, idx) => {
+      const card = document.createElement('div');
+      card.className = 'graph-card';
+      const canvasId = `saved_graph_canvas_${graph.id || idx}`;
+
+      card.innerHTML = `
+        <div class="graph-card-header">
+          <div>
+            <div class="graph-card-title">${graph.title || 'Saved Dashboard Chart'}</div>
+            <div style="font-size: 0.78rem; color: var(--text-muted); margin-top: 0.25rem;">Version ${filteredGraphs.length - idx}</div>
+          </div>
+          <div style="display: flex; gap: 0.5rem; align-items: center;">
+            <span class="badge badge-low">Saved</span>
+            <button class="btn-table-delete delete-saved-graph" data-graph-id="${graph.id}" style="padding: 0.35rem 0.65rem; font-size: 0.75rem; background: #FEF2F2; border: 1px solid #FECACA; border-radius: var(--radius-sm); color: #EF4444; cursor: pointer;">
+              🗑️
+            </button>
+          </div>
+        </div>
+
+        <div style="font-size: 0.82rem; color: var(--accent-cyan); margin-bottom: 1rem;">
+          📊 Chart type: <strong>${(graph.chart_type || 'bar').toUpperCase()}</strong>
+        </div>
+
+        <div class="graph-canvas-container" style="height: 260px; position: relative;">
+          <canvas id="${canvasId}"></canvas>
+        </div>
+      `;
+
+      savedDashboardGraphsContainer.appendChild(card);
+
+      setTimeout(() => {
+        const ctx = document.getElementById(canvasId);
+        if (ctx) {
+          const chartType = graph.chart_type || 'bar';
+          const chartData = {
+            labels: Array.isArray(graph.labels) ? graph.labels : [],
+            datasets: [{
+              label: graph.title || 'Saved Series',
+              data: Array.isArray(graph.values_data) ? graph.values_data : [],
+              backgroundColor: chartType === 'pie' || chartType === 'doughnut' || chartType === 'polarArea' ? ['rgba(20,108,54,0.45)', 'rgba(245,158,11,0.45)', 'rgba(13,148,136,0.45)', 'rgba(16,185,129,0.45)', 'rgba(217,119,6,0.45)', 'rgba(37,99,235,0.45)'] : 'rgba(20,108,54,0.45)',
+              borderColor: chartType === 'pie' || chartType === 'doughnut' || chartType === 'polarArea' ? ['#146C36', '#F59E0B', '#0D9488', '#10B981', '#D97706', '#2563EB'] : '#146C36',
+              borderWidth: 2,
+              tension: 0.35,
+              fill: chartType === 'line'
+            }]
+          };
+          new Chart(ctx, {
+            type: chartType,
+            data: chartData,
+            options: {
+              responsive: true,
+              maintainAspectRatio: false,
+              plugins: { legend: { display: chartType === 'pie' || chartType === 'doughnut' || chartType === 'polarArea' } },
+              scales: chartType === 'pie' || chartType === 'doughnut' || chartType === 'polarArea' ? {} : {
+                x: { ticks: { color: '#94A3B8' }, grid: { color: 'rgba(255,255,255,0.05)' } },
+                y: { ticks: { color: '#94A3B8' }, grid: { color: 'rgba(255,255,255,0.05)' } }
+              }
+            }
+          });
+        }
+      }, 50);
+    });
+
+    document.querySelectorAll('.delete-saved-graph').forEach(button => {
+      button.addEventListener('click', async () => {
+        const graphId = button.getAttribute('data-graph-id');
+        if (!graphId) return;
+        const ok = await dbManager.deleteGraph(graphId);
+        if (ok) {
+          await renderSavedGraphsTab();
+        }
+      });
+    });
+
+    if (savedGraphsRecordSelect) {
+      savedGraphsRecordSelect.onchange = async () => {
+        await renderSavedGraphsTab();
+      };
+    }
+  }
+
   // ----------------------------------------------------
   // Tab Switching Logic
   // ----------------------------------------------------
   tabBtns.forEach(btn => {
-    btn.addEventListener('click', () => {
+    btn.addEventListener('click', async () => {
       tabBtns.forEach(b => b.classList.remove('active'));
       tabPanels.forEach(p => p.classList.remove('active'));
 
@@ -527,6 +656,28 @@ document.addEventListener('DOMContentLoaded', async () => {
       const targetTab = btn.getAttribute('data-tab');
       const targetPanel = document.getElementById(targetTab);
       if (targetPanel) targetPanel.classList.add('active');
+
+    });
+  });
+
+  adminTabBtns.forEach(btn => {
+    btn.addEventListener('click', async () => {
+      adminTabBtns.forEach(tabBtn => tabBtn.classList.remove('active'));
+      adminTabPanels.forEach(panel => {
+        panel.classList.remove('active');
+        panel.style.display = 'none';
+      });
+
+      btn.classList.add('active');
+      const targetPanel = document.getElementById(btn.getAttribute('data-admin-tab'));
+      if (targetPanel) {
+        targetPanel.classList.add('active');
+        targetPanel.style.display = 'block';
+      }
+
+      if (btn.getAttribute('data-admin-tab') === 'adminSavedGraphsPanel') {
+        await renderSavedGraphsTab();
+      }
     });
   });
 
@@ -575,6 +726,11 @@ document.addEventListener('DOMContentLoaded', async () => {
         const selected = records.find(r => r.id === e.target.value);
         if (selected) {
           studioActiveRecord = selected;
+          docWindowActiveSheetKey = '';
+          studioFilterPreviousQuery = '';
+          studioFilterPreviousResults = null;
+          studioFilterPreviousSheet = '';
+          studioFilterPreviousScope = '';
           renderStudioWorkbench(selected);
         }
       };
@@ -1705,7 +1861,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     const updatedAdminNotes = studioNotesInput ? studioNotesInput.value.trim() : studioActiveRecord.adminNotes;
 
     // Harvest table cells from grid
-    const sheetName = Object.keys(studioActiveRecord.extractedData)[0];
+    const activeSheetInfo = getStudioActiveSheet(studioActiveRecord);
+    const sheetName = activeSheetInfo ? activeSheetInfo.name : Object.keys(studioActiveRecord.extractedData)[0];
     const sheet = studioActiveRecord.extractedData[sheetName];
     document.querySelectorAll('.studio-cell-input').forEach(input => {
       const r = parseInt(input.getAttribute('data-row'), 10);
@@ -1717,7 +1874,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       }
     });
 
-    // Update Draft Charts in record with current live state
+    let savedChart = null;
     if (studioChartInstance) {
       const chartTypeSelect = document.getElementById('studioChartTypeSelect');
       const chartType = chartTypeSelect ? chartTypeSelect.value : 'bar';
@@ -1730,21 +1887,13 @@ document.addEventListener('DOMContentLoaded', async () => {
         value: typeof point === 'object' ? point.value : point
       }));
 
-      studioActiveRecord.graphDrafts = [{
-        id: `draft_${Date.now()}`,
+      savedChart = {
+        record_id: studioActiveRecord.id,
         title: finalTitle,
-        source: `Studio Data Editor: ${sheetName}`,
-        primaryType: chartType,
-        recommendation: `Administrator configured ${chartType} visualization.`,
-        isDraft: !forceApprove,
-        chartData: {
-          labels: savedPoints.map(point => point.label),
-          datasets: [{
-            label: chartSeries.name || headerName,
-            data: savedPoints.map(point => point.value)
-          }]
-        }
-      }];
+        chart_type: chartType,
+        labels: savedPoints.map(point => point.label),
+        values_data: savedPoints.map(point => point.value)
+      };
     }
 
     const updated = await dbManager.updateRecord(studioActiveRecord.id, {
@@ -1752,8 +1901,12 @@ document.addEventListener('DOMContentLoaded', async () => {
       status: updatedStatus,
       adminNotes: updatedAdminNotes,
       extractedData: studioActiveRecord.extractedData,
-      graphDrafts: studioActiveRecord.graphDrafts
+      graphDrafts: []
     });
+
+    if (savedChart) {
+      await dbManager.saveGraph(savedChart);
+    }
 
     studioActiveRecord = { ...studioActiveRecord, ...updated };
     if (activeScan && activeScan.id === studioActiveRecord.id) {
