@@ -51,6 +51,52 @@
       </tr>
     `).join('');
 
+    function buildChartSvg() {
+      const width = 760;
+      const height = 320;
+      const colors = ['#146C36', '#F59E0B', '#0D9488', '#10B981', '#D97706', '#2563EB'];
+      const numericValues = values.map(value => Number(value) || 0);
+      const maxValue = Math.max(...numericValues, 1);
+      const safeType = String(chartType).toLowerCase();
+
+      if (safeType === 'pie' || safeType === 'doughnut' || safeType === 'polararea') {
+        const total = numericValues.reduce((sum, value) => sum + Math.max(value, 0), 0) || 1;
+        const centerX = 220;
+        const centerY = 160;
+        const radius = 105;
+        let angle = -Math.PI / 2;
+        const slices = numericValues.map((value, index) => {
+          const nextAngle = angle + (Math.max(value, 0) / total) * Math.PI * 2;
+          const largeArc = nextAngle - angle > Math.PI ? 1 : 0;
+          const startX = centerX + radius * Math.cos(angle);
+          const startY = centerY + radius * Math.sin(angle);
+          const endX = centerX + radius * Math.cos(nextAngle);
+          const endY = centerY + radius * Math.sin(nextAngle);
+          const path = `M ${centerX} ${centerY} L ${startX} ${startY} A ${radius} ${radius} 0 ${largeArc} 1 ${endX} ${endY} Z`;
+          angle = nextAngle;
+          return `<path d="${path}" fill="${colors[index % colors.length]}" stroke="#ffffff" stroke-width="2"><title>${escapeHtml(labels[index] || `Item ${index + 1}`)}: ${escapeHtml(value)}</title></path>`;
+        }).join('');
+        const legend = labels.map((label, index) => `<g transform="translate(390 ${55 + index * 28})"><rect width="14" height="14" fill="${colors[index % colors.length]}"/><text x="22" y="12" font-size="13" fill="#334155">${escapeHtml(label || `Item ${index + 1}`)}: ${escapeHtml(numericValues[index])}</text></g>`).join('');
+        return `<svg class="chart-preview" viewBox="0 0 ${width} ${height}" role="img" aria-label="${escapeHtml(chartType)} chart">${slices}${safeType === 'doughnut' ? '<circle cx="220" cy="160" r="52" fill="white"/>' : ''}${legend}</svg>`;
+      }
+
+      const left = 55;
+      const bottom = 265;
+      const plotWidth = 670;
+      const plotHeight = 210;
+      const step = numericValues.length > 1 ? plotWidth / (numericValues.length - 1) : plotWidth;
+      const labelsSvg = labels.map((label, index) => `<text x="${left + step * index}" y="292" text-anchor="middle" font-size="11" fill="#475569">${escapeHtml(String(label || `Item ${index + 1}`).slice(0, 16))}</text>`).join('');
+      const grid = [0, 0.5, 1].map(ratio => `<line x1="${left}" y1="${bottom - plotHeight * ratio}" x2="${left + plotWidth}" y2="${bottom - plotHeight * ratio}" stroke="#E2E8F0"/><text x="8" y="${bottom - plotHeight * ratio + 4}" font-size="11" fill="#64748B">${Math.round(maxValue * ratio)}</text>`).join('');
+      if (safeType === 'line') {
+        const points = numericValues.map((value, index) => `${left + step * index},${bottom - (value / maxValue) * plotHeight}`).join(' ');
+        const dots = numericValues.map((value, index) => `<circle cx="${left + step * index}" cy="${bottom - (value / maxValue) * plotHeight}" r="4" fill="#146C36"/>`).join('');
+        return `<svg class="chart-preview" viewBox="0 0 ${width} ${height}" role="img" aria-label="Line chart">${grid}<polyline points="${points}" fill="none" stroke="#146C36" stroke-width="3"/>${dots}${labelsSvg}</svg>`;
+      }
+      const barWidth = Math.min(52, plotWidth / Math.max(numericValues.length, 1) * 0.65);
+      const bars = numericValues.map((value, index) => { const x = left + (plotWidth / Math.max(numericValues.length, 1)) * index + 12; const barHeight = (value / maxValue) * plotHeight; return `<rect x="${x}" y="${bottom - barHeight}" width="${barWidth}" height="${barHeight}" fill="#146C36"><title>${escapeHtml(labels[index] || `Item ${index + 1}`)}: ${escapeHtml(value)}</title></rect>`; }).join('');
+      return `<svg class="chart-preview" viewBox="0 0 ${width} ${height}" role="img" aria-label="Bar chart">${grid}${bars}${labelsSvg}</svg>`;
+    }
+
     return `
       <!DOCTYPE html>
       <html lang="en">
@@ -100,6 +146,13 @@
             border-collapse: collapse;
             margin-top: 18px;
           }
+          .chart-preview {
+            display: block;
+            width: 100%;
+            height: 320px;
+            margin: 20px 0 24px;
+            background: #ffffff;
+          }
           th, td {
             border: 1px solid #dfe6ee;
             padding: 10px 12px;
@@ -144,6 +197,7 @@
           </div>
           <h1>${escapeHtml(title)}</h1>
           <div class="meta">Printable export created from saved and cleaned graph data.</div>
+          ${buildChartSvg()}
           <table>
             <thead>
               <tr>
@@ -164,9 +218,27 @@
     `;
   }
 
+  function buildPrintableGraphSheets(graphs, context = {}) {
+    const sheets = (graphs || []).map(graph => {
+      const recordName = typeof context.recordNameForGraph === 'function'
+        ? context.recordNameForGraph(graph)
+        : (context.recordName || 'IRIS Report');
+      const document = new DOMParser().parseFromString(buildPrintableGraphSheet(graph, { recordName }), 'text/html');
+      const sheet = document.querySelector('.sheet');
+      const actions = sheet?.querySelector('.actions');
+      if (actions) actions.remove();
+      return sheet ? sheet.outerHTML : '';
+    }).filter(Boolean).join('\n');
+    const template = new DOMParser().parseFromString(buildPrintableGraphSheet({}, context), 'text/html');
+    const style = template.querySelector('style')?.outerHTML || '';
+
+    return `<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8" /><title>IRIS Saved Graphs - Printable Sheets</title>${style}<style>.sheet { margin-bottom: 32px; page-break-after: always; } .sheet:last-child { page-break-after: auto; }</style></head><body>${sheets}<div class="actions"><button class="print-btn" onclick="window.print();">Print All</button></div></body></html>`;
+  }
+
   const api = {
     normalizeGraphExportItem,
-    buildPrintableGraphSheet
+    buildPrintableGraphSheet,
+    buildPrintableGraphSheets
   };
 
   if (typeof module !== 'undefined' && module.exports) {

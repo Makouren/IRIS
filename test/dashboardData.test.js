@@ -51,6 +51,20 @@ test('builds a printable graph sheet with row data and branding', () => {
   assert.match(html, /North/);
   assert.match(html, /82/);
   assert.match(html, /window\.print/);
+  assert.match(html, /class="chart-preview"/);
+  assert.match(html, /aria-label="Bar chart"/);
+});
+
+test('builds a printable pie chart preview before the data table', () => {
+  const html = buildPrintableGraphSheet({
+    title: 'Distribution',
+    chart_type: 'pie',
+    labels: ['North', 'South'],
+    values_data: [60, 40]
+  });
+
+  assert.match(html, /aria-label="pie chart"/);
+  assert.ok(html.indexOf('chart-preview') < html.indexOf('<table>'));
 });
 
 test('axis controls are structural and no longer user-facing', () => {

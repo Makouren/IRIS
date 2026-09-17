@@ -253,11 +253,21 @@
             <p style="font-size: 0.85rem; color: var(--text-muted);">Approved and saved chart versions grouped per file record.</p>
           </div>
           <div style="display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap;">
+            <button id="savedGraphsViewAllBtn" type="button" class="btn-table-load-studio" style="padding: 0.45rem 0.8rem;">View All</button>
             <label style="font-size: 0.78rem; font-weight: 800; color: #334155; text-transform: uppercase;">File:</label>
             <select id="savedGraphsRecordSelect" class="form-input" style="width: auto; min-width: 220px;">
               <option value="">Loading files...</option>
             </select>
           </div>
+        </div>
+
+        <div id="savedGraphsBulkToolbar" style="display: flex; align-items: center; gap: 0.75rem; margin-bottom: 1rem; padding: 0.75rem 1rem; background: #F8FAF8; border: 1px solid var(--border-light); border-radius: var(--radius-sm);">
+          <label style="display: inline-flex; align-items: center; gap: 0.45rem; font-weight: 700; font-size: 0.82rem;">
+            <input id="savedGraphsSelectAll" type="checkbox"> Select All
+          </label>
+          <button id="savedGraphsPrintAll" type="button" class="btn-table-load-studio" disabled style="padding: 0.45rem 0.8rem;">Print All</button>
+          <span id="savedGraphsSelectionCount" style="font-size: 0.8rem; color: var(--text-muted);">0 selected</span>
+          <button id="savedGraphsExportSelected" type="button" class="btn-table-load-studio" disabled style="padding: 0.45rem 0.8rem;">Export</button>
         </div>
 
         <div id="savedDashboardGraphsContainer">

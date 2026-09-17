@@ -232,7 +232,12 @@ app.delete('/api/records/:id', async (req, res) => {
 // Saved graphs endpoints
 app.get('/api/graphs', async (req, res) => {
   try {
-    const [rows] = await pool.query('SELECT * FROM saved_graphs ORDER BY created_at DESC');
+    const [rows] = await pool.query(`
+      SELECT saved_graphs.*, records.id AS source_file_id, records.fileName AS source_file_name, records.fileType AS source_file_type
+      FROM saved_graphs
+      LEFT JOIN records ON records.id = saved_graphs.record_id
+      ORDER BY saved_graphs.created_at DESC
+    `);
     const normalized = rows.map(row => {
       try {
         row.labels = typeof row.labels === 'string' ? JSON.parse(row.labels) : (row.labels || []);
@@ -248,6 +253,72 @@ app.get('/api/graphs', async (req, res) => {
   } catch (error) {
     console.error(error);
     res.status(500).json({ error: 'Failed to fetch saved graphs' });
+  }
+});
+
+function buildGraphExportText(graphs) {
+  return graphs.map(graph => {
+    const labels = typeof graph.labels === 'string' ? JSON.parse(graph.labels) : (graph.labels || []);
+    const values = typeof graph.values_data === 'string' ? JSON.parse(graph.values_data) : (graph.values_data || []);
+    const rows = labels.map((label, index) => `${label || `Item ${index + 1}`}: ${values[index] ?? ''}`);
+    return [`Title: ${graph.title || 'Saved Chart'}`, `Chart Type: ${(graph.chart_type || 'bar').toUpperCase()}`, `Source Record ID: ${graph.record_id}`, '', 'Category: Value', ...rows].join('\n');
+  }).join('\n\n');
+}
+
+app.post('/api/graphs/export', async (req, res) => {
+  const snapshotIds = Array.isArray(req.body.snapshot_ids) ? req.body.snapshot_ids.filter(Boolean) : [];
+  const mode = req.body.mode;
+
+  if (!snapshotIds.length) return res.status(400).json({ error: 'snapshot_ids must contain at least one graph id' });
+  if (!['database', 'script'].includes(mode)) return res.status(400).json({ error: 'mode must be database or script' });
+
+  try {
+    const placeholders = snapshotIds.map(() => '?').join(',');
+    const [graphs] = await pool.query(
+      `SELECT saved_graphs.*, records.id AS source_file_id, records.fileName AS source_file_name, records.fileType AS source_file_type
+       FROM saved_graphs LEFT JOIN records ON records.id = saved_graphs.record_id
+       WHERE saved_graphs.id IN (${placeholders}) ORDER BY saved_graphs.created_at DESC`,
+      snapshotIds
+    );
+
+    if (!graphs.length) return res.status(404).json({ error: 'No saved graphs found for the supplied ids' });
+
+    if (mode === 'script') {
+      const fileName = `iris_saved_graphs_${Date.now()}.txt`;
+      res.set({
+        'Content-Type': 'text/plain; charset=utf-8',
+        'Content-Disposition': `attachment; filename="${fileName}"`,
+        'X-Export-Count': String(graphs.length)
+      });
+      return res.send(buildGraphExportText(graphs));
+    }
+
+    const connection = await pool.getConnection();
+    try {
+      await connection.beginTransaction();
+      const exportedIds = [];
+      const rows = graphs.map(graph => {
+        const exportedId = `export_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
+        exportedIds.push(exportedId);
+        return [exportedId, graph.record_id, graph.title, graph.chart_type, graph.labels, graph.values_data];
+      });
+      const values = rows.flat();
+      const rowPlaceholders = rows.map(() => '(?, ?, ?, ?, ?, ?)').join(', ');
+      await connection.query(
+        `INSERT INTO saved_graphs (id, record_id, title, chart_type, labels, values_data) VALUES ${rowPlaceholders}`,
+        values
+      );
+      await connection.commit();
+      return res.json({ mode, count: graphs.length, exported_ids: exportedIds });
+    } catch (error) {
+      await connection.rollback();
+      throw error;
+    } finally {
+      connection.release();
+    }
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'Failed to export saved graphs' });
   }
 });
 

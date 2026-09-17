@@ -14,4 +14,3 @@ export function parseEditableValue(value) {
 
 export function formatFileSize(size) { return `${(Number(size || 0) / 1024).toFixed(1)} KB`; }
 
-export function setDisplay(element, value) { if (element) element.style.display = value; }

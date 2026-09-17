@@ -46,7 +46,7 @@ export function renderStudioChart(ctx, record) {
     const scope = `${info.name}:${filterField}:${operator}`;
     const same = ctx.state.studioFilterPreviousScope === scope;
     const filtered = window.TableFilter.filterRows([], filterRows, filterValue, { previousQuery: same ? ctx.state.studioFilterPreviousQuery : '', previousResults: same ? ctx.state.studioFilterPreviousResults : null, includeHeaders: false });
-    ctx.state.studioFilterPreviousQuery = filterValue; ctx.state.studioFilterPreviousResults = filtered; ctx.state.studioFilterPreviousSheet = info.name; ctx.state.studioFilterPreviousScope = scope;
+    ctx.state.studioFilterPreviousQuery = filterValue; ctx.state.studioFilterPreviousResults = filtered; ctx.state.studioFilterPreviousScope = scope;
     const matches = new Set(filtered.map(item => rows[item.origIdx]?.sourceIndex)); chartRows = rows.filter(item => matches.has(item.sourceIndex));
   } else if (operator !== 'all' && filterValue) {
     ctx.state.studioFilterPreviousQuery = ''; ctx.state.studioFilterPreviousResults = null; ctx.state.studioFilterPreviousScope = '';

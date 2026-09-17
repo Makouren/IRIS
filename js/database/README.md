@@ -28,8 +28,12 @@ Stores cleaned chart snapshots linked to a record through `record_id`, including
 - `getGraphsByRecord()` for draft/saved chart rendering,
 - `getAllSavedGraphs()` for the saved graph admin view,
 - `exportGraph()` for normalized draft export,
+- `exportGraphs()` for the live database export mode used by selected saved graphs,
 - `printGraphSheet()` for free printable output,
+- `printGraphSheets()` for one combined print window containing multiple saved graphs,
 - `deleteGraph()` for saved graph removal.
+
+The saved-graph text export does not use `exportGraphs()`. It is generated in the Saved Dashboard Graphs module from the already loaded labels, values, and metadata, then downloaded as a `.txt` file containing SQL-formatted statements. This keeps text export separate from live database writes.
 
 ## API endpoints
 

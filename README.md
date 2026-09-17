@@ -73,6 +73,18 @@ database: 'iris_db'
 
 The server creates `records` and `saved_graphs` automatically when the database is reachable.
 
+## v5 Session Changes
+
+This `v5` branch contains the Saved Dashboard Graphs workflow changes from this session:
+
+1. **File filtering:** The FILE dropdown now preserves the selected record and filters the graph list so every displayed card belongs to that source file.
+2. **Data-only Export:** The former `Export to MySQL` action is now labeled `Export`. Its non-database option downloads a `.txt` file containing SQL-formatted `CREATE TABLE` and `INSERT INTO` blocks generated only from saved graph metadata and category/value data. It does not render or serialize charts.
+3. **Bulk Export:** The header `Export` button works with Select All and per-graph checkboxes to export multiple selected graphs in one operation.
+4. **Print All:** The Saved Dashboard Graphs header includes `Print All`, which opens one combined printable view containing the existing chart and table print sheet for every selected graph.
+5. **Unchanged paths:** `Database Export (write to live MySQL)` and the individual `Print Sheet` action were left unchanged while these features were added.
+
+The text export keeps its `.txt` delivery format for compatibility, but its contents are valid SQL-style statements with title, source, and chart type comments. Print All reuses the existing single-graph printable template rather than the export path.
+
 ## Quick start
 
 From the `IRIS` directory:

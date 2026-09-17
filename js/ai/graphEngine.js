@@ -160,8 +160,6 @@ class GraphEngine {
     if (matches.length >= 2) {
       const labels = matches.map(m => m.label);
       const data = matches.map(m => m.val);
-      const palette = this.colorPalettes[0];
-
       drafts.push({
         id: `draft_text_${Date.now()}`,
         title: `Key Extracted Metrics — ${docName}`,

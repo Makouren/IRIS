@@ -222,12 +222,54 @@ class DatabaseManager {
     });
   }
 
+  async exportGraphs(snapshotIds, mode) {
+    const response = await fetch('/api/graphs/export', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ snapshot_ids: snapshotIds, mode })
+    });
+
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({}));
+      throw new Error(error.error || 'Failed to export saved graphs');
+    }
+
+    if (mode === 'script') {
+      const disposition = response.headers.get('Content-Disposition') || '';
+      const fileName = disposition.match(/filename="?([^";]+)"?/i)?.[1] || 'iris_saved_graphs.txt';
+      return {
+        mode,
+        count: Number(response.headers.get('X-Export-Count') || snapshotIds.length),
+        fileName,
+        blob: await response.blob()
+      };
+    }
+
+    return response.json();
+  }
+
   printGraphSheet(graphData, context = {}) {
     if (typeof GraphExport !== 'undefined' && GraphExport.buildPrintableGraphSheet) {
       const html = GraphExport.buildPrintableGraphSheet(graphData, context);
       const popup = window.open('', '_blank', 'width=1200,height=900');
       if (!popup) {
         throw new Error('Popup blocked. Please allow popups to print the graph sheet.');
+      }
+      popup.document.write(html);
+      popup.document.close();
+      popup.focus();
+      return popup;
+    }
+
+    return null;
+  }
+
+  printGraphSheets(graphs, context = {}) {
+    if (typeof GraphExport !== 'undefined' && GraphExport.buildPrintableGraphSheets) {
+      const html = GraphExport.buildPrintableGraphSheets(graphs, context);
+      const popup = window.open('', '_blank', 'width=1200,height=900');
+      if (!popup) {
+        throw new Error('Popup blocked. Please allow popups to print the graphs.');
       }
       popup.document.write(html);
       popup.document.close();

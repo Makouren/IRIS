@@ -24,7 +24,7 @@ Modules communicate through `ctx.api` callbacks. This avoids circular imports wh
 | `overviewTab.js` | Summary, extracted fields, takeaways |
 | `viewerTab.js` | Basic scan viewer for image, spreadsheet, DOCX, and fallback text |
 | `graphsTab.js` | Draft chart cards and draft export actions |
-| `savedGraphsTab.js` | Saved chart list, export, print, and delete actions |
+| `savedGraphsTab.js` | Saved chart list, file filtering, selection, export, Print All, print, and delete actions |
 | `adminPortal.js` | Record statistics, archive table, search, and status filters |
 | `studioWorkbench.js` | Studio record setup, field mapping, and studio orchestration |
 | `documentViewer.js` | Acrobat-style document window, paging, zoom, and copy behavior |
@@ -40,3 +40,11 @@ Modules communicate through `ctx.api` callbacks. This avoids circular imports wh
 3. Expose only the callback needed by another module through `ctx.api`.
 4. Preserve existing DOM IDs and event semantics.
 5. Run `npm test` after changing behavior.
+
+## Saved Dashboard Graphs
+
+The Saved Dashboard Graphs view preserves the selected FILE dropdown value and filters cards by `record_id`. Each card has an `Export` action and an individual `Print Sheet` action. The header provides Select All, bulk Export, and Print All controls; both bulk controls are disabled until at least one graph is selected.
+
+The non-database Export option builds a `.txt` download directly from saved graph data: title, source, chart type, labels, and values. The file contains SQL-formatted comments, `CREATE TABLE`, and `INSERT INTO` statements, but no chart or canvas data. The Database Export option remains the separate live-MySQL path.
+
+Print All sends the selected saved graph records to the database manager's combined print helper. That helper reuses the existing printable graph-sheet template for each graph, preserving each chart preview and data table in one print window.

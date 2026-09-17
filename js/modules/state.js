@@ -5,10 +5,8 @@ export function createState() {
     chartInstances: {},
     studioActiveRecord: null,
     studioChartInstance: null,
-    studioActiveSheetName: '',
     studioFilterPreviousQuery: '',
     studioFilterPreviousResults: null,
-    studioFilterPreviousSheet: '',
     studioFilterPreviousScope: '',
     docWindowActiveView: 'sheet',
     docWindowActiveSheetKey: '',
@@ -20,6 +18,8 @@ export function createState() {
     acrobatTotalPages: 1,
     docWindowViewerInstance: null,
     docWindowDocxPages: [],
-    docWindowFallbackPages: []
+    docWindowFallbackPages: [],
+    savedGraphIds: new Set(),
+    savedGraphsViewAll: false
   };
 }

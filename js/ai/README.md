@@ -16,7 +16,7 @@ Each draft contains a title, source, recommended chart type, recommendation text
 
 - `chartMapping.js` infers label and numeric columns and parses formatted numeric values.
 - `chartData.js` groups duplicate labels and prepares circular chart data.
-- `graphExport.js` normalizes draft/saved graph payloads and builds printable sheets.
+- `graphExport.js` normalizes draft/saved graph payloads and builds printable sheets, including the combined Print All document.
 
 The live studio chart is rendered by [../modules/chartEngine.js](../modules/chartEngine.js). Draft cards are rendered by [../modules/graphsTab.js](../modules/graphsTab.js).
 
@@ -27,3 +27,5 @@ The live studio chart is rendered by [../modules/chartEngine.js](../modules/char
 - Pie/doughnut/polar charts represent proportional data.
 
 The chart layer also supports filtering, sorting, row limits, duplicate grouping, axis mapping, labels, warnings, and empty states.
+
+Saved graph export content is data-only. The `.txt` export uses saved labels, values, title, source, and chart type to generate SQL-formatted `CREATE TABLE` and `INSERT INTO` blocks; it does not read chart canvases or serialize rendered graphs. The printable helpers are separate and retain chart previews and tables for Print Sheet and Print All.
