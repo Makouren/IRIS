@@ -207,6 +207,37 @@ class DatabaseManager {
     return response.json();
   }
 
+  async exportGraph(graphData, recordId) {
+    if (typeof GraphExport !== 'undefined' && GraphExport.normalizeGraphExportItem) {
+      const payload = GraphExport.normalizeGraphExportItem(graphData, recordId);
+      return this.saveGraph(payload);
+    }
+
+    return this.saveGraph({
+      record_id: recordId || graphData.record_id || graphData.recordId,
+      title: graphData.title || 'Saved Chart',
+      chart_type: graphData.chart_type || graphData.chartType || graphData.primaryType || 'bar',
+      labels: graphData.labels || [],
+      values_data: graphData.values_data || graphData.valuesData || graphData.data || []
+    });
+  }
+
+  printGraphSheet(graphData, context = {}) {
+    if (typeof GraphExport !== 'undefined' && GraphExport.buildPrintableGraphSheet) {
+      const html = GraphExport.buildPrintableGraphSheet(graphData, context);
+      const popup = window.open('', '_blank', 'width=1200,height=900');
+      if (!popup) {
+        throw new Error('Popup blocked. Please allow popups to print the graph sheet.');
+      }
+      popup.document.write(html);
+      popup.document.close();
+      popup.focus();
+      return popup;
+    }
+
+    return null;
+  }
+
   async getAllSavedGraphs() {
     try {
       const response = await fetch('/api/graphs');

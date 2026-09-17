@@ -4,6 +4,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const { prepareCircularData } = require('../js/chartData');
 const { pairSelectedText } = require('../js/sourceIngestion');
+const { normalizeGraphExportItem, buildPrintableGraphSheet } = require('../js/graphExport');
 
 test('deduplicates circular chart legend labels while grouping remains optional', () => {
   const rows = [{ label: 'North', value: 2 }, { label: 'North', value: 3 }, { label: 'South', value: 4 }];
@@ -17,6 +18,39 @@ test('deduplicates circular chart legend labels while grouping remains optional'
 test('pairs a selected label with its adjacent extracted value', () => {
   assert.equal(pairSelectedText('2022', '2022\n601-800'), '2022 601-800');
   assert.equal(pairSelectedText('Enrollment', 'Enrollment: 1,250'), 'Enrollment 1,250');
+});
+
+test('normalizes saved and draft graphs into a single export payload', () => {
+  const draft = {
+    title: 'Enrollment trend',
+    primaryType: 'line',
+    chartData: {
+      labels: ['Q1', 'Q2'],
+      datasets: [{ data: [120, 150] }]
+    }
+  };
+
+  const payload = normalizeGraphExportItem(draft, 'rec_123');
+
+  assert.equal(payload.record_id, 'rec_123');
+  assert.equal(payload.chart_type, 'line');
+  assert.deepEqual(payload.labels, ['Q1', 'Q2']);
+  assert.deepEqual(payload.values_data, [120, 150]);
+});
+
+test('builds a printable graph sheet with row data and branding', () => {
+  const html = buildPrintableGraphSheet({
+    title: 'Quality score',
+    chart_type: 'bar',
+    labels: ['North', 'South'],
+    values_data: [82, 90]
+  }, { recordName: 'CLSU Scorecard' });
+
+  assert.match(html, /CLSU Scorecard/);
+  assert.match(html, /Quality score/);
+  assert.match(html, /North/);
+  assert.match(html, /82/);
+  assert.match(html, /window\.print/);
 });
 
 test('axis controls are structural and no longer user-facing', () => {

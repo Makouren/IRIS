@@ -1,60 +1,39 @@
-# IRIS AI File Scanner & Admin Data Engine
+# IRIS AI File Scanner and Admin Data Engine
 
-IRIS is a browser-based document intake and review system for scanning institutional files, extracting structured data, generating draft chart suggestions, and allowing administrators to review and edit saved records.
+IRIS is a browser-based document intake and review system for institutional files. It parses spreadsheets, Word documents, and PDFs, extracts structured data, generates draft chart suggestions, and provides an administrator workflow for reviewing and cleaning records.
 
-This version reflects the actual implementation currently present in this workspace: a Node.js + Express server, a static front-end dashboard, and a MySQL-backed admin database.
+The active application is a static HTML/CSS/ES module frontend served by Node.js and Express, with MySQL as the server-side store and IndexedDB/localStorage as browser fallbacks.
 
----
+## Documentation map
 
-## What the current system does
+| Area | Documentation |
+| --- | --- |
+| Frontend module architecture | [js/modules/README.md](js/modules/README.md) |
+| File parsing and document viewers | [js/parsers/README.md](js/parsers/README.md) |
+| Database and REST persistence | [js/database/README.md](js/database/README.md) |
+| Graph generation and chart data | [js/ai/README.md](js/ai/README.md) |
+| Tests and regression checks | [test/README.md](test/README.md) |
+| Secondary Python scanner service | [scanner_service/README.md](scanner_service/README.md) |
 
-The application allows a user to:
+## Runtime flow
 
-- upload spreadsheet, Word, and PDF files,
-- parse the document content and detect tabular data,
-- generate chart draft recommendations such as bar, line, and pie charts,
-- review the extracted document summary in the workspace UI,
-- save records to a database for admin review,
-- edit, delete, and manage scanned records through the admin portal.
+1. The browser loads the legacy vendor-facing utilities and the ES module entry point, [js/app.js](js/app.js).
+2. `app.js` creates the scanner, database manager, shared application state, and module context.
+3. The file-ingestion module accepts uploads, drag-and-drop files, or generated samples.
+4. `ScannerOrchestrator` selects a parser and builds a scan package.
+5. `GraphEngine` creates draft chart suggestions from tables or extracted text.
+6. `DatabaseManager` persists records through the Express API and local browser fallbacks.
+7. The scanner workspace renders the overview, viewer, queue, and draft charts.
+8. The admin portal supports editing, cleaning, saving, approving, exporting, and deleting data.
 
-The system is designed as a draft-review workflow rather than a final publishing engine. It prepares data and visual suggestions for approval by an administrator.
+## Supported files
 
----
-
-## Current architecture
-
-The active codebase in this workspace is:
-
-- Front-end: static HTML/CSS/JS app served by Express
-- Backend: Node.js server in `server.js`
-- Database: MySQL via `mysql2/promise`
-- Local/offline fallback: IndexedDB + localStorage
-- Chart generation: client-side graph suggestion engine
-
-Runtime flow:
-
-1. User uploads a file in the UI.
-2. The scanner chooses the correct parser based on file type.
-3. Extracted text, table data, and metadata are combined into a scan package.
-4. A draft chart suggestion is generated from the data pattern.
-5. The result is saved to the database and shown in the admin portal.
-
----
-
-## Supported file types
-
-The current implementation supports these formats in the active application:
-
-| Format | Extensions | Current support |
+| Format | Extensions | Status |
 | --- | --- | --- |
-| Spreadsheet | `.xlsx`, `.xls`, `.csv` | Supported |
-| Word document | `.docx` | Supported |
-| PDF document | `.pdf` | Supported |
-| Image/OCR files | `.png`, `.jpg`, `.jpeg`, `.webp` | Not actively enabled in the current build |
-
-> The repository still contains a separate `scanner_service/` directory with a Python-based microservice, but the active runtime in this workspace is the Node/Express app rather than the Python service.
-
----
+| Spreadsheet | `.xlsx`, `.xls`, `.csv` | Active |
+| Word document | `.docx` | Active |
+| PDF document | `.pdf` | Active |
+| Image/OCR | `.png`, `.jpg`, `.jpeg`, `.webp` | Disabled in the active browser flow |
 
 ## Project structure
 
@@ -65,172 +44,86 @@ IRIS/
 ├── package.json
 ├── README.md
 ├── css/
-│   └── styles.css
 ├── js/
-│   ├── app.js
-│   ├── scanner.js
-│   ├── chartData.js
-│   ├── chartMapping.js
-│   ├── documentPagination.js
-│   ├── samples.js
-│   ├── tableFilter.js
-│   ├── sourceIngestion.js
-│   ├── ai/
-│   │   └── graphEngine.js
-│   ├── database/
-│   │   └── dbManager.js
-│   └── parsers/
-│       ├── docxParser.js
-│       ├── excelParser.js
-│       ├── pdfParser.js
-│       ├── imageParser.js
-│       └── ...
-├── scanner_service/
-│   └── Python FastAPI microservice (legacy/secondary implementation)
-└── test/
-    └── JavaScript tests
+│   ├── app.js                 # ES module bootstrap
+│   ├── modules/               # UI modules and shared state
+│   ├── utils/                 # Small frontend helpers
+│   ├── ai/                    # Graph suggestion engine
+│   ├── database/              # Persistence client
+│   ├── parsers/               # File parsers and viewers
+│   └── *.js                   # Legacy-compatible utilities
+├── scanner_service/           # Secondary FastAPI implementation
+└── test/                      # Node test runner tests
 ```
 
----
+## Requirements
 
-## Main behavior
+- Node.js 18 or newer
+- MySQL running locally
+- A database named `iris_db`, or a MySQL user allowed to create/use it
 
-### Scanner workspace
-The UI supports a scan queue and file drop zone. Users can:
-
-- drag and drop files,
-- browse for files,
-- run sample document generation,
-- view a document overview,
-- inspect extracted fields,
-- review draft chart recommendations.
-
-### Admin portal
-The admin dashboard reads records from the server and displays:
-
-- total records,
-- pending review counts,
-- verified records,
-- tables captured,
-- searchable and filterable record list.
-
-Admins can update record metadata, revise statuses, and delete records.
-
-### Draft chart generation
-The graph engine inspects headers and row structures and recommends one of the following based on the detected pattern:
-
-- `bar` for categorical comparisons,
-- `line` for time-series or sequential trends,
-- `pie` for proportional distributions.
-
----
-
-## API endpoints
-
-The server exposes a simple REST API on the same app host.
-
-### Health check
-
-```bash
-GET /api/health
-```
-
-Returns service status and the current number of records in the database.
-
-### Records API
-
-```bash
-GET /api/records
-POST /api/records
-PUT /api/records/:id
-DELETE /api/records/:id
-```
-
-These endpoints are used by the front-end to:
-
-- fetch all saved scans,
-- insert a new record,
-- update a record after admin review,
-- delete a record.
-
----
-
-## Database setup
-
-The current implementation expects a MySQL database named `iris_db` on `localhost`.
-
-The server creates these tables automatically if they do not exist:
-
-- `records`
-- `saved_graphs`
-
-Example default connection from the app:
+The default server connection is:
 
 ```js
-host: 'localhost',
-user: 'root',
-password: '',
+host: 'localhost'
+user: 'root'
+password: ''
 database: 'iris_db'
 ```
 
-If MySQL is not available, the app falls back to local browser storage, but the server is the canonical store when available.
-
----
+The server creates `records` and `saved_graphs` automatically when the database is reachable.
 
 ## Quick start
 
-### 1. Install dependencies
+From the `IRIS` directory:
 
-```bash
+```powershell
 npm install
-```
-
-### 2. Start MySQL
-Ensure a local MySQL server is running and that the database `iris_db` exists or is accessible.
-
-### 3. Run the app
-
-```bash
 npm start
 ```
 
-The app will start on the default port configured in the server. The server chooses an available port if the configured one is busy.
+Open the URL printed by the server, normally `http://localhost:3000`.
 
----
+If port 3000 is already in use, the server selects another available port and prints it in the terminal.
 
-## Development notes
+## API
 
-This project is a working internal tool, not a polished SaaS product. It includes:
+### Health
 
-- UI-driven processing,
-- draft chart recommendations,
-- local persistence fallbacks,
-- a lightweight admin management workflow.
+```text
+GET /api/health
+```
 
-It currently does not include full image OCR processing in the active browser app, and some of the older microservice features remain in the repository as separate legacy code.
+### Records
 
----
+```text
+GET    /api/records
+POST   /api/records
+PUT    /api/records/:id
+DELETE /api/records/:id
+```
+
+### Saved graphs
+
+```text
+GET    /api/graphs
+GET    /api/graphs/:recordId
+POST   /api/graphs
+DELETE /api/graphs/:id
+```
 
 ## Testing
 
-The project includes JavaScript tests under `test/`.
-
-Run them with:
-
-```bash
+```powershell
 npm test
 ```
 
----
+The tests cover chart mapping, chart data aggregation, text pairing, filtering, pagination, graph exports, and structural contracts for the frontend.
 
-## Summary
+## Design notes
 
-The current IRIS application is a practical document scanning and draft visualization review system built around:
-
-- file upload and parsing,
-- structured data extraction,
-- chart suggestion generation,
-- MySQL-backed record storage,
-- admin validation and record management.
-
-It is a real working implementation of an internal dashboard and review workflow, and the README has been updated to reflect that current state.
+- `app.js` is intentionally a small bootstrap and does not contain feature logic.
+- Shared mutable frontend state lives in `js/modules/state.js`.
+- Existing parser and utility scripts remain browser-compatible globals so the migration does not require a bundler.
+- Draft visualizations are not automatically published. An administrator must review and save or approve them.
+- `scanner_service/` is a separate Python/FastAPI path and is not required by the active Node.js runtime.
