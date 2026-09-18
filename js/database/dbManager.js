@@ -183,12 +183,32 @@ class DatabaseManager {
     return true;
   }
 
+  async deleteRecords(ids) {
+    await this.initPromise;
+    const recordIds = [...new Set((ids || []).filter(Boolean))];
+    if (!recordIds.length) return { results: [], successCount: 0, failureCount: 0 };
+    try {
+      const response = await fetch('/api/records/bulk-delete', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ids: recordIds }) });
+      if (!response.ok) throw new Error('Bulk delete request failed');
+      return response.json();
+    } catch (error) {
+      return { results: recordIds.map(id => ({ id, success: false, error: error.message })), successCount: 0, failureCount: recordIds.length };
+    }
+  }
+
   async saveGraph(graphData) {
     const payload = {
       id: graphData.id || `graph_${Date.now()}_${Math.random().toString(36).substr(2, 7)}`,
       record_id: graphData.record_id || graphData.recordId,
       title: graphData.title || 'Saved Chart',
       chart_type: graphData.chart_type || graphData.chartType || 'bar',
+      orientation: graphData.orientation || 'vertical',
+      valueAxisReversed: graphData.valueAxisReversed === true,
+      valueAxisMin: graphData.valueAxisMin,
+      valueAxisMax: graphData.valueAxisMax,
+      rankSemantic: graphData.rankSemantic === true,
+      rankValueMin: graphData.rankValueMin,
+      rankValueMax: graphData.rankValueMax,
       labels: graphData.labels || [],
       values_data: graphData.values_data || graphData.valuesData || graphData.data || []
     };
@@ -329,6 +349,18 @@ class DatabaseManager {
       return response.ok;
     } catch (e) {
       return false;
+    }
+  }
+
+  async deleteGraphs(graphIds) {
+    const ids = [...new Set((graphIds || []).filter(Boolean))];
+    if (!ids.length) return { results: [], successCount: 0, failureCount: 0 };
+    try {
+      const response = await fetch('/api/graphs/bulk-delete', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ids }) });
+      if (!response.ok) throw new Error('Bulk graph delete request failed');
+      return response.json();
+    } catch (error) {
+      return { results: ids.map(id => ({ id, success: false, error: error.message })), successCount: 0, failureCount: ids.length };
     }
   }
 

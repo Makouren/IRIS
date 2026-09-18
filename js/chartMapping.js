@@ -9,6 +9,18 @@
     return parseNumericValue(value) !== null;
   }
 
+  function isRankField(header) {
+    return /\brank\b/i.test(String(header || ''));
+  }
+
+  function parseRankValue(value) {
+    if (typeof value === 'number') return Number.isFinite(value) ? value : null;
+    const text = String(value ?? '').trim().replace(/,/g, '');
+    const range = text.match(/^(\d+(?:\.\d+)?)\s*-\s*(\d+(?:\.\d+)?)$/);
+    if (range) return (Number(range[1]) + Number(range[2])) / 2;
+    return parseNumericValue(text);
+  }
+
   function parseNumericValue(value) {
     if (typeof value === 'number') return Number.isFinite(value) ? value : null;
     if (value === null || value === undefined) return null;
@@ -74,5 +86,5 @@
     return { labelColumn, valueColumn, numericColumns, labelColumns, columnTypes };
   }
 
-  return { inferColumns, isNumeric, parseNumericValue };
+  return { inferColumns, isNumeric, isRankField, parseRankValue, parseNumericValue };
 });

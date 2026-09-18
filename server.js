@@ -48,12 +48,48 @@ async function initDb() {
         record_id VARCHAR(255) NOT NULL,
         title VARCHAR(255),
         chart_type VARCHAR(50),
+        orientation VARCHAR(20) DEFAULT 'vertical',
+        value_axis_reversed BOOLEAN DEFAULT FALSE,
+        value_axis_min DECIMAL(20,8),
+        value_axis_max DECIMAL(20,8),
+        rank_semantic BOOLEAN DEFAULT FALSE,
+        rank_value_min DECIMAL(20,8),
+        rank_value_max DECIMAL(20,8),
         labels JSON,
         values_data JSON,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         FOREIGN KEY (record_id) REFERENCES records(id) ON DELETE CASCADE
       )
     `);
+    try {
+      await pool.query('ALTER TABLE saved_graphs ADD COLUMN orientation VARCHAR(20) DEFAULT \'vertical\'');
+    } catch (error) {
+      if (!/duplicate column/i.test(error.message || '')) throw error;
+    }
+    try {
+      await pool.query('ALTER TABLE saved_graphs ADD COLUMN value_axis_reversed BOOLEAN DEFAULT FALSE');
+    } catch (error) {
+      if (!/duplicate column/i.test(error.message || '')) throw error;
+    }
+    for (const column of ['value_axis_min', 'value_axis_max']) {
+      try {
+        await pool.query(`ALTER TABLE saved_graphs ADD COLUMN ${column} DECIMAL(20,8)`);
+      } catch (error) {
+        if (!/duplicate column/i.test(error.message || '')) throw error;
+      }
+    }
+    try {
+      await pool.query('ALTER TABLE saved_graphs ADD COLUMN rank_semantic BOOLEAN DEFAULT FALSE');
+    } catch (error) {
+      if (!/duplicate column/i.test(error.message || '')) throw error;
+    }
+    for (const column of ['rank_value_min', 'rank_value_max']) {
+      try {
+        await pool.query(`ALTER TABLE saved_graphs ADD COLUMN ${column} DECIMAL(20,8)`);
+      } catch (error) {
+        if (!/duplicate column/i.test(error.message || '')) throw error;
+      }
+    }
     console.log('MySQL Database initialized: records & saved_graphs tables ready.');
   } catch (error) {
     console.error('Error initializing database:', error);
@@ -229,6 +265,23 @@ app.delete('/api/records/:id', async (req, res) => {
   }
 });
 
+app.post('/api/records/bulk-delete', async (req, res) => {
+  try {
+    const ids = [...new Set(Array.isArray(req.body.ids) ? req.body.ids.filter(Boolean) : [])];
+    if (!ids.length) return res.status(400).json({ error: 'ids must be a non-empty array' });
+    const placeholders = ids.map(() => '?').join(', ');
+    const [existing] = await pool.query(`SELECT id FROM records WHERE id IN (${placeholders})`, ids);
+    const existingIds = existing.map(record => record.id);
+    if (existingIds.length) await pool.query(`DELETE FROM records WHERE id IN (${existingIds.map(() => '?').join(', ')})`, existingIds);
+    const existingSet = new Set(existingIds);
+    const results = ids.map(id => ({ id, success: existingSet.has(id), error: existingSet.has(id) ? null : 'Record not found' }));
+    res.json({ results, successCount: existingIds.length, failureCount: ids.length - existingIds.length });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'Failed to bulk delete records' });
+  }
+});
+
 // Saved graphs endpoints
 app.get('/api/graphs', async (req, res) => {
   try {
@@ -329,6 +382,13 @@ app.post('/api/graphs', async (req, res) => {
       record_id: req.body.record_id || req.body.recordId,
       title: req.body.title || 'Saved Chart',
       chart_type: req.body.chart_type || req.body.chartType || 'bar',
+      orientation: req.body.orientation || 'vertical',
+      value_axis_reversed: req.body.valueAxisReversed === true,
+      value_axis_min: Number.isFinite(Number(req.body.valueAxisMin)) ? Number(req.body.valueAxisMin) : null,
+      value_axis_max: Number.isFinite(Number(req.body.valueAxisMax)) ? Number(req.body.valueAxisMax) : null,
+      rank_semantic: req.body.rankSemantic === true,
+      rank_value_min: Number.isFinite(Number(req.body.rankValueMin)) ? Number(req.body.rankValueMin) : null,
+      rank_value_max: Number.isFinite(Number(req.body.rankValueMax)) ? Number(req.body.rankValueMax) : null,
       labels: JSON.stringify(req.body.labels || []),
       values_data: JSON.stringify(req.body.values_data || req.body.valuesData || req.body.data || [])
     };
@@ -343,8 +403,8 @@ app.post('/api/graphs', async (req, res) => {
     }
 
     await pool.query(
-      `INSERT INTO saved_graphs (id, record_id, title, chart_type, labels, values_data) VALUES (?, ?, ?, ?, ?, ?)`,
-      [graph.id, graph.record_id, graph.title, graph.chart_type, graph.labels, graph.values_data]
+      `INSERT INTO saved_graphs (id, record_id, title, chart_type, orientation, value_axis_reversed, value_axis_min, value_axis_max, rank_semantic, rank_value_min, rank_value_max, labels, values_data) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [graph.id, graph.record_id, graph.title, graph.chart_type, graph.orientation, graph.value_axis_reversed, graph.value_axis_min, graph.value_axis_max, graph.rank_semantic, graph.rank_value_min, graph.rank_value_max, graph.labels, graph.values_data]
     );
 
     res.status(201).json({
@@ -395,6 +455,23 @@ app.delete('/api/graphs/:id', async (req, res) => {
   } catch (error) {
     console.error(error);
     res.status(500).json({ error: 'Failed to delete graph' });
+  }
+});
+
+app.post('/api/graphs/bulk-delete', async (req, res) => {
+  try {
+    const ids = [...new Set(Array.isArray(req.body.ids) ? req.body.ids.filter(Boolean) : [])];
+    if (!ids.length) return res.status(400).json({ error: 'ids must be a non-empty array' });
+    const placeholders = ids.map(() => '?').join(', ');
+    const [existing] = await pool.query(`SELECT id FROM saved_graphs WHERE id IN (${placeholders})`, ids);
+    const existingIds = existing.map(graph => graph.id);
+    if (existingIds.length) await pool.query(`DELETE FROM saved_graphs WHERE id IN (${existingIds.map(() => '?').join(', ')})`, existingIds);
+    const existingSet = new Set(existingIds);
+    const results = ids.map(id => ({ id, success: existingSet.has(id), error: existingSet.has(id) ? null : 'Graph not found' }));
+    res.json({ results, successCount: existingIds.length, failureCount: ids.length - existingIds.length });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'Failed to bulk delete graphs' });
   }
 });
 

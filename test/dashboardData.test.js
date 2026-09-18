@@ -5,6 +5,7 @@ const path = require('node:path');
 const { prepareCircularData } = require('../js/chartData');
 const { pairSelectedText } = require('../js/sourceIngestion');
 const { normalizeGraphExportItem, buildPrintableGraphSheet } = require('../js/graphExport');
+const savedGraphsSource = fs.readFileSync(path.join(__dirname, '..', 'js', 'modules', 'savedGraphsTab.js'), 'utf8');
 
 test('deduplicates circular chart legend labels while grouping remains optional', () => {
   const rows = [{ label: 'North', value: 2 }, { label: 'North', value: 3 }, { label: 'South', value: 4 }];
@@ -53,6 +54,21 @@ test('builds a printable graph sheet with row data and branding', () => {
   assert.match(html, /window\.print/);
   assert.match(html, /class="chart-preview"/);
   assert.match(html, /aria-label="Bar chart"/);
+});
+
+test('text export contains SQL statements and graph metadata comments', () => {
+  assert.match(savedGraphsSource, /export function buildTextExport/);
+  assert.match(savedGraphsSource, /CREATE TABLE IF NOT EXISTS/);
+  assert.match(savedGraphsSource, /INSERT INTO/);
+  assert.match(savedGraphsSource, /-- Title:/);
+  assert.match(savedGraphsSource, /-- Source:/);
+  assert.match(savedGraphsSource, /-- Chart Type:/);
+});
+
+test('SQL file export uses the shared SQL content and SQL download type', () => {
+  assert.match(savedGraphsSource, /data-mode="sql" class="export-choice-button">Export as SQL File \(\.sql\)/);
+  assert.match(savedGraphsSource, /text: buildTextExport\(graphs\), mimeType: 'application\/sql'/);
+  assert.match(savedGraphsSource, /\.sql`/);
 });
 
 test('builds a printable pie chart preview before the data table', () => {

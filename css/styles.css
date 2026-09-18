@@ -1345,6 +1345,21 @@ body {
   background: #F9FCF9;
 }
 
+.admin-bulk-actions {
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.75rem 1rem;
+  background: #F8FAF8;
+  border-bottom: 1px solid var(--border-light);
+  color: var(--text-main);
+  font-size: 0.82rem;
+  font-weight: 700;
+}
+
+.admin-bulk-actions:not([hidden]) {
+  display: flex;
+}
+
 /* ====================================================================
    Form Inputs & Buttons
    ==================================================================== */
@@ -1364,6 +1379,65 @@ body {
 .form-input:focus {
   border-color: var(--clsu-green);
   box-shadow: 0 0 0 3px rgba(20, 108, 54, 0.15);
+}
+
+.saved-graphs-bulk-button,
+.export-choice-button,
+.export-cancel-button,
+.archive-load-button,
+.archive-delete-button {
+  border: 1px solid var(--clsu-green);
+  border-radius: var(--radius-sm);
+  padding: 0.45rem 0.8rem;
+  font-family: var(--font-sans);
+  font-size: 0.8rem;
+  font-weight: 700;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  transition: background-color 0.2s ease, border-color 0.2s ease, color 0.2s ease;
+}
+
+.saved-graphs-bulk-button,
+.export-choice-button,
+.archive-load-button {
+  background: var(--clsu-green);
+  color: #FFFFFF;
+}
+
+.saved-graphs-bulk-button:hover:not(:disabled),
+.export-choice-button:hover,
+.archive-load-button:hover {
+  background: var(--clsu-green-dark);
+}
+
+.saved-graphs-bulk-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.export-cancel-button {
+  background: #FFFFFF;
+  color: var(--text-muted);
+  border-color: var(--border-light);
+  justify-content: center;
+}
+
+.export-cancel-button:hover {
+  background: #F8FAF8;
+  color: var(--text-main);
+}
+
+.archive-delete-button {
+  background: #FFFFFF;
+  color: #B91C1C;
+  border-color: #FCA5A5;
+}
+
+.archive-delete-button:hover {
+  background: #FEF2F2;
+  border-color: #B91C1C;
 }
 
 .btn-icon {

@@ -26,6 +26,9 @@
       record_id: source.record_id || source.recordId || recordId || null,
       title: source.title || source.name || 'Saved Graph Export',
       chart_type: source.chart_type || source.chartType || source.primaryType || 'bar',
+      rankSemantic: source.rankSemantic === true || chartData.rankSemantic === true,
+      rankValueMin: source.rankValueMin ?? chartData.rankValueMin,
+      rankValueMax: source.rankValueMax ?? chartData.rankValueMax,
       labels: labels.length ? labels : (Array.isArray(chartData.labels) ? chartData.labels : []),
       values_data: numericSeries.length ? numericSeries : (Array.isArray(source.data) ? source.data : [])
     };
@@ -41,8 +44,10 @@
     const recordName = context.recordName || 'IRIS Report';
     const title = graph.title || 'Saved Graph';
     const chartType = graph.chart_type || graph.chartType || 'bar';
-    const labels = Array.isArray(graph.labels) ? graph.labels : [];
-    const values = Array.isArray(graph.values_data) ? graph.values_data : [];
+    const chartData = graph.chartData || {};
+    const rankSemantic = graph.rank_semantic === 1 || graph.rank_semantic === true || graph.rankSemantic === true || chartData.rankSemantic === true;
+    const labels = Array.isArray(graph.labels) ? graph.labels : (Array.isArray(chartData.labels) ? chartData.labels : []);
+    const values = Array.isArray(graph.values_data) ? graph.values_data : (Array.isArray(chartData.datasets?.[0]?.data) ? chartData.datasets[0].data : []);
 
     const rows = labels.map((label, index) => `
       <tr>
@@ -55,7 +60,9 @@
       const width = 760;
       const height = 320;
       const colors = ['#146C36', '#F59E0B', '#0D9488', '#10B981', '#D97706', '#2563EB'];
-      const numericValues = values.map(value => Number(value) || 0);
+      const rankValues = rankSemantic ? values.map(value => root.ChartMapping?.parseRankValue?.(value) ?? (Number(value) || 0)) : [];
+      const rankMaximum = rankSemantic ? Number(graph.rank_value_max ?? graph.rankValueMax ?? Math.max(...rankValues, 0)) : 0;
+      const numericValues = rankSemantic ? rankValues.map(value => rankMaximum - value) : values.map(value => Number(value) || 0);
       const maxValue = Math.max(...numericValues, 1);
       const safeType = String(chartType).toLowerCase();
 
@@ -86,7 +93,7 @@
       const plotHeight = 210;
       const step = numericValues.length > 1 ? plotWidth / (numericValues.length - 1) : plotWidth;
       const labelsSvg = labels.map((label, index) => `<text x="${left + step * index}" y="292" text-anchor="middle" font-size="11" fill="#475569">${escapeHtml(String(label || `Item ${index + 1}`).slice(0, 16))}</text>`).join('');
-      const grid = [0, 0.5, 1].map(ratio => `<line x1="${left}" y1="${bottom - plotHeight * ratio}" x2="${left + plotWidth}" y2="${bottom - plotHeight * ratio}" stroke="#E2E8F0"/><text x="8" y="${bottom - plotHeight * ratio + 4}" font-size="11" fill="#64748B">${Math.round(maxValue * ratio)}</text>`).join('');
+      const grid = [0, 0.5, 1].map(ratio => `<line x1="${left}" y1="${bottom - plotHeight * ratio}" x2="${left + plotWidth}" y2="${bottom - plotHeight * ratio}" stroke="#E2E8F0"/><text x="8" y="${bottom - plotHeight * ratio + 4}" font-size="11" fill="#64748B">${rankSemantic ? Math.round(rankMaximum - maxValue * ratio) : Math.round(maxValue * ratio)}</text>`).join('');
       if (safeType === 'line') {
         const points = numericValues.map((value, index) => `${left + step * index},${bottom - (value / maxValue) * plotHeight}`).join(' ');
         const dots = numericValues.map((value, index) => `<circle cx="${left + step * index}" cy="${bottom - (value / maxValue) * plotHeight}" r="4" fill="#146C36"/>`).join('');
