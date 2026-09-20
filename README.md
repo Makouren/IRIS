@@ -1,204 +1,152 @@
-# IRIS — International Rapport Insight System
-## AI File Scanner Microservice & Ingestion Engine
+# IRIS AI File Scanner and Admin Data Engine
 
-> **Traceability Note**: This module covers the **"Generate Draft Visualization"** use case for IRIS. It is a decoupled, stateless Python microservice designed to ingest uploaded offline files, extract structured data and layout-aware text/OCR, and return a draft visualization suggestion (`bar`, `line`, or `pie`) for administrator review inside the main Laravel/Flowbite admin panel.
+IRIS is a browser-based document intake and review system for institutional files. It parses spreadsheets, Word documents, and PDFs, extracts structured data, generates draft chart suggestions, and provides an administrator workflow for reviewing and cleaning records.
 
----
+The active application is a static HTML/CSS/ES module frontend served by Node.js and Express, with MySQL as the server-side store and IndexedDB/localStorage as browser fallbacks.
 
-## 1. System Architecture & Boundaries
+## Documentation map
 
-```
-+-----------------------------------------------------------------------------------+
-|                        IRIS Core Application (Laravel & MySQL)                     |
-|                                                                                   |
-|   +--------------------------+    HTTP multipart/form-data     +---------------+  |
-|   | Flowbite Admin Dashboard | =============================>  | Laravel       |  |
-|   | (Review & Approve Draft) | <=============================  | Controller    |  |
-|   +--------------------------+         JSON Draft Payload      +-------+-------+  |
-|                 ^                                                      |          |
-|                 | Renders Approved Charts                              | Save     |
-|                 v                                                      v          |
-|   +--------------------------+                                 +---------------+  |
-|   |      Apache ECharts      |                                 | MySQL DB      |  |
-|   +--------------------------+                                 +---------------+  |
-+------------------------------------------------------------------------|----------+
-                                                                         |
-                                              POST /scan-file (1 File)   |
-                                              <==========================+
-                                              ===========================>
-                                              Structured JSON Draft
-                                                                         |
-                                                                         v
-                                                       +---------------------------+
-                                                       | Python FastAPI            |
-                                                       | Microservice (:8000)      |
-                                                       | - pandas & openpyxl       |
-                                                       | - PyMuPDF & PyMuPDF4LLM   |
-                                                       | - python-docx & media OCR |
-                                                       | - Tesseract OCR           |
-                                                       | - Chart Suggester         |
-                                                       +---------------------------+
-```
+| Area | Documentation |
+| --- | --- |
+| Frontend module architecture | [js/modules/README.md](js/modules/README.md) |
+| File parsing and document viewers | [js/parsers/README.md](js/parsers/README.md) |
+| Database and REST persistence | [js/database/README.md](js/database/README.md) |
+| Graph generation and chart data | [js/ai/README.md](js/ai/README.md) |
+| Tests and regression checks | [test/README.md](test/README.md) |
+| Secondary Python scanner service | [scanner_service/README.md](scanner_service/README.md) |
 
-### Core Architecture Principles:
-1. **Separation of Concerns**: The Python service handles heavy document parsing, layout recognition, and OCR where PHP lacks native tooling. It maintains **no local database, no authentication, and no custom UI**.
-2. **Draft-Only Workflow**: All scanner outputs are returned marked as `is_draft: true` (`pending_admin_review`). The Product Owner / OJT admin reviews and corrects the draft in Flowbite before it is saved or published.
-3. **Zero Cost**: Built entirely using local, open-source libraries (`pandas`, `openpyxl`, `PyMuPDF`, `python-docx`, `Tesseract OCR`).
+## v7 Integration Readiness
 
----
+The `v7` branch documents and prepares the frontend and scanner service for a future dashboard integration without wiring them together yet:
 
-## 2. Supported File Formats & Extraction Methods
+- `scanner_service/` exposes a documented, synchronous FastAPI upload contract.
+- `DatabaseManager` keeps REST endpoint paths in configurable endpoint definitions while retaining IndexedDB/localStorage fallbacks.
+- `chartEngine.js` accepts host-provided state, active-sheet access, and UI elements so chart rendering can be reused by another host page.
+- Parser, graph, and module READMEs describe the current boundaries and contracts used by a future orchestrator.
 
-| Format | Supported Extensions | Extraction Pipeline |
-| :--- | :--- | :--- |
-| **Spreadsheets** | `.xlsx`, `.xls`, `.csv` | Direct worksheet parsing via `pandas` & `openpyxl`. Extracts column headers, data types, and numeric groups. |
-| **PDF Documents** | `.pdf` (native & scanned) | Layout-aware block parsing via `PyMuPDF` / `PyMuPDF4LLM` to preserve multi-column / stat-card structures (e.g., OAD-CLSU Infographs). Scanned pages automatically fall back to OCR. |
-| **Word Documents** | `.docx` | Paragraphs, headings, and tables extracted via `python-docx`. Embedded graphics in `word/media/` are unpacked and OCR'd. |
-| **Standalone Images** | `.png`, `.jpg`, `.jpeg`, `.webp` | Direct OCR via `Pillow` & `pytesseract` to extract textual KPIs and tabular data from photographed certificates/records. |
+No new backend integration, queue, authentication flow, or dashboard adapter is included in this branch.
 
----
+## Runtime flow
 
-## 3. REST API Contract
+1. The browser loads the legacy vendor-facing utilities and the ES module entry point, [js/app.js](js/app.js).
+2. `app.js` creates the scanner, database manager, shared application state, and module context.
+3. The file-ingestion module accepts uploads, drag-and-drop files, or generated samples.
+4. `ScannerOrchestrator` selects a parser and builds a scan package.
+5. `GraphEngine` creates draft chart suggestions from tables or extracted text.
+6. `DatabaseManager` persists records through the Express API and local browser fallbacks.
+7. The scanner workspace renders the overview, viewer, queue, and draft charts.
+8. The admin portal supports editing, cleaning, saving, approving, exporting, and deleting data.
 
-### Base URL: `http://localhost:8000`
+## Supported files
 
-### `GET /health`
-Returns service status and supported format details.
+| Format | Extensions | Status |
+| --- | --- | --- |
+| Spreadsheet | `.xlsx`, `.xls`, `.csv` | Active |
+| Word document | `.docx` | Active |
+| PDF document | `.pdf` | Active |
+| Image/OCR | `.png`, `.jpg`, `.jpeg`, `.webp` | Disabled in the active browser flow |
 
----
+## Project structure
 
-### `POST /scan-file`
-Accepts a single uploaded document/image file and returns the draft payload.
-
-- **Request**: `multipart/form-data` with form field `file`.
-- **Response**: `application/json`
-
-#### Example Response:
-```json
-{
-  "status": "success",
-  "document_type": "spreadsheet",
-  "file_name": "qao_scores.xlsx",
-  "file_size_bytes": 24576,
-  "is_draft": true,
-  "approval_status": "pending_admin_review",
-  "data": {
-    "fields": [
-      {
-        "sheet": "Sheet1",
-        "name": "College",
-        "type": "categorical",
-        "unit": null,
-        "sample_values": ["CAS", "CBA", "COE", "CED"],
-        "distinct_count": 4,
-        "total_count": 4
-      },
-      {
-        "sheet": "Sheet1",
-        "name": "QAO Rating (%)",
-        "type": "numeric",
-        "unit": "%",
-        "sample_values": [94.5, 88.2, 96.0, 91.4],
-        "distinct_count": 4,
-        "total_count": 4
-      }
-    ],
-    "tables": [
-      {
-        "sheet_name": "Sheet1",
-        "headers": ["College", "QAO Rating (%)"],
-        "row_count": 4,
-        "rows": [
-          ["CAS", 94.5],
-          ["CBA", 88.2],
-          ["COE", 96.0],
-          ["CED", 91.4]
-        ]
-      }
-    ],
-    "embedded_ocr_text": [],
-    "raw_text_preview": "Sheet Sheet1 Column College: 4 records..."
-  },
-  "visualization_draft": {
-    "suggested_chart_type": "bar",
-    "confidence": 0.90,
-    "is_draft": true,
-    "status": "draft",
-    "rationale": "Comparative discrete categories in 'College' against numeric measure 'QAO Rating (%)'.",
-    "series_config": {
-      "x_axis": "College",
-      "y_axis": "QAO Rating (%)",
-      "unit": "%",
-      "data_preview": [
-        { "label": "CAS", "value": 94.5 },
-        { "label": "CBA", "value": 88.2 },
-        { "label": "COE", "value": 96.0 },
-        { "label": "CED", "value": 91.4 }
-      ]
-    }
-  },
-  "scan_metadata": {
-    "engine": "iris-ai-file-scanner-v1",
-    "processed_at": "2026-09-14T20:00:00Z"
-  }
-}
+```text
+IRIS/
+├── index.html
+├── server.js
+├── package.json
+├── README.md
+├── css/
+├── js/
+│   ├── app.js                 # ES module bootstrap
+│   ├── modules/               # UI modules and shared state
+│   ├── utils/                 # Small frontend helpers
+│   ├── ai/                    # Graph suggestion engine
+│   ├── database/              # Persistence client
+│   ├── parsers/               # File parsers and viewers
+│   └── *.js                   # Legacy-compatible utilities
+├── scanner_service/           # Secondary FastAPI implementation
+└── test/                      # Node test runner tests
 ```
 
----
+## Requirements
 
-## 4. Draft Chart Suggestion Engine Logic
+- Node.js 18 or newer
+- MySQL running locally
+- A database named `iris_db`, or a MySQL user allowed to create/use it
 
-The scanner classifies data patterns into one of three standard chart types:
-- **`bar`**: Discrete categories mapped to numerical metrics (e.g., Department vs Rating, Faculty Counts).
-- **`line`**: Time-series or sequential data (e.g., Academic Years, Semesters, Monthly Records).
-- **`pie`**: Proportional distributions or percentage fields with $\le 6$ categories.
+The default server connection is:
 
----
-
-## 5. Quick Start & Execution
-
-### Option A: Running with Docker (Recommended)
-```bash
-cd scanner_service
-docker compose up --build
+```js
+host: 'localhost'
+user: 'root'
+password: ''
+database: 'iris_db'
 ```
-The microservice will be available at `http://localhost:8000`. Access Swagger UI docs at `http://localhost:8000/docs`.
 
-### Option B: Running with Local Python
-1. Ensure Python 3.10+ and [Tesseract OCR](https://github.com/UB-Mannheim/tesseract/wiki) are installed.
-2. Install dependencies:
-   ```bash
-   cd scanner_service
-   pip install -r requirements.txt
-   ```
-3. Run the service:
-   ```bash
-   uvicorn main:app --host 0.0.0.0 --port 8000 --reload
-   ```
+The server creates `records` and `saved_graphs` automatically when the database is reachable.
 
----
+## v5 Session Changes
 
-## 6. Database Extractability for Product Owner (Ms. Hidalgo)
+This `v5` branch contains the Saved Dashboard Graphs workflow changes from this session:
 
-> [!IMPORTANT]
-> **Data Ownership & Backup Note**:
-> This capability is a deliberate administrator/owner provision for Ms. Hidalgo to retrieve and back up her own database, distinct from general dashboard viewers who have no export capabilities.
+1. **File filtering:** The FILE dropdown now preserves the selected record and filters the graph list so every displayed card belongs to that source file.
+2. **Data-only Export:** The former `Export to MySQL` action is now labeled `Export`. Its non-database option downloads a `.txt` file containing SQL-formatted `CREATE TABLE` and `INSERT INTO` blocks generated only from saved graph metadata and category/value data. It does not render or serialize charts.
+3. **Bulk Export:** The header `Export` button works with Select All and per-graph checkboxes to export multiple selected graphs in one operation.
+4. **Print All:** The Saved Dashboard Graphs header includes `Print All`, which opens one combined printable view containing the existing chart and table print sheet for every selected graph.
+5. **Unchanged paths:** `Database Export (write to live MySQL)` and the individual `Print Sheet` action were left unchanged while these features were added.
 
-### Storage & Schema Standards:
-1. **Standard Relational Schema**: All extracted drafts saved by Laravel must reside in standard MySQL tables (e.g., `draft_visualizations`, `extracted_series`) rather than opaque binary blobs or custom encoded formats.
-2. **Database Configuration**: Standard `.env` connection settings in Laravel (`DB_HOST`, `DB_PORT`, `DB_DATABASE`, `DB_USERNAME`, `DB_PASSWORD`).
-3. **Database Backup / Export Guide**:
-   - **Command Line (`mysqldump`)**:
-     ```bash
-     mysqldump -u root -p iris_database > iris_backup_$(date +%Y%m%d).sql
-     ```
-   - **phpMyAdmin**: Navigate to `http://localhost/phpmyadmin` -> Select `iris_database` -> Click **Export** -> Format: **SQL** -> Click **Go**.
+The text export keeps its `.txt` delivery format for compatibility, but its contents are valid SQL-style statements with title, source, and chart type comments. Print All reuses the existing single-graph printable template rather than the export path.
 
----
+## Quick start
 
-## 7. Out of Scope Boundaries (Version 1.0)
-- ❌ PII / Security audit engine, risk scoring, redactions.
-- ❌ Executive summarization, document Q&A / chat interface.
-- ❌ Standalone admin database portal inside Python (managed by Laravel Flowbite).
-- ❌ General-viewer data export features.
-- ❌ Live IAO synchronization (slated for future phase).
+From the `IRIS` directory:
+
+```powershell
+npm install
+npm start
+```
+
+Open the URL printed by the server, normally `http://localhost:3000`.
+
+If port 3000 is already in use, the server selects another available port and prints it in the terminal.
+
+## API
+
+### Health
+
+```text
+GET /api/health
+```
+
+### Records
+
+```text
+GET    /api/records
+POST   /api/records
+PUT    /api/records/:id
+DELETE /api/records/:id
+```
+
+### Saved graphs
+
+```text
+GET    /api/graphs
+GET    /api/graphs/:recordId
+POST   /api/graphs
+DELETE /api/graphs/:id
+```
+
+## Testing
+
+```powershell
+npm test
+```
+
+The tests cover chart mapping, chart data aggregation, text pairing, filtering, pagination, graph exports, and structural contracts for the frontend.
+
+## Design notes
+
+- `app.js` is intentionally a small bootstrap and does not contain feature logic.
+- Shared mutable frontend state lives in `js/modules/state.js`.
+- Existing parser and utility scripts remain browser-compatible globals so the migration does not require a bundler.
+- Draft visualizations are not automatically published. An administrator must review and save or approve them.
+- `scanner_service/` is a separate Python/FastAPI path and is not required by the active Node.js runtime.
