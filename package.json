@@ -1,12 +1,14 @@
 {
-  "name": "iris-ai-file-scanner",
+  "name": "IRIS-Scanner",
   "version": "1.0.0",
   "description": "Intelligent Multi-Format AI File Scanner for Images, Excel, Word DOCX, and PDF",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
     "dev": "node server.js",
-    "test": "node --test test/*.test.js"
+    "test": "node --test test/*.test.js",
+    "docker:build": "docker build -t IRIS-Scanner .",
+    "docker:up": "docker compose up --build"
   },
   "keywords": [
     "ai",

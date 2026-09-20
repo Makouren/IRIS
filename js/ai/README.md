@@ -20,6 +20,10 @@ Each draft contains a title, source, recommended chart type, recommendation text
 
 The live studio chart is rendered by [../modules/chartEngine.js](../modules/chartEngine.js). Draft cards are rendered by [../modules/graphsTab.js](../modules/graphsTab.js).
 
+## Integration boundary
+
+`graphEngine.js` produces draft data and does not persist records or call the Python scanner service. A host application can consume the draft object, apply its own approval policy, and pass normalized chart data to the studio renderer. The v7 pass keeps this boundary explicit; backend/dashboard wiring remains deferred.
+
 ## Chart types
 
 - Bar charts compare distinct categories.

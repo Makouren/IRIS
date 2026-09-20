@@ -1,3 +1,14 @@
+const DEFAULT_API_ENDPOINTS = {
+  records: '/api/records',
+  recordById: id => `/api/records/${id}`,
+  recordsBulkDelete: '/api/records/bulk-delete',
+  graphs: '/api/graphs',
+  graphById: id => `/api/graphs/${id}`,
+  graphsByRecord: recordId => `/api/graphs/${recordId}`,
+  graphsBulkDelete: '/api/graphs/bulk-delete',
+  graphsExport: '/api/graphs/export'
+};
+
 /**
  * IRIS AI - Admin Database & Record Management System
  * Supports IndexedDB + LocalStorage + REST API synchronization.
@@ -5,10 +16,16 @@
  */
 
 class DatabaseManager {
-  constructor() {
+  constructor(config = {}) {
     this.dbName = 'IRIS_AI_Database';
     this.dbVersion = 2;
     this.db = null;
+    this.config = {
+      endpoints: {
+        ...DEFAULT_API_ENDPOINTS,
+        ...(config.endpoints || {})
+      }
+    };
     this.initPromise = this.initIndexedDB();
   }
 
@@ -79,7 +96,7 @@ class DatabaseManager {
 
     // Sync to Server REST API if online
     try {
-      await fetch('/api/records', {
+      await fetch(this.config.endpoints.records, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(formattedRecord)
@@ -99,7 +116,7 @@ class DatabaseManager {
 
     // Always prefer MySQL server — it is the source of truth
     try {
-      const resp = await fetch('/api/records');
+      const resp = await fetch(this.config.endpoints.records);
       if (resp.ok) {
         const data = await resp.json();
         // Return MySQL data even if empty — MySQL is canonical
@@ -150,7 +167,7 @@ class DatabaseManager {
 
     // Sync to server API
     try {
-      await fetch(`/api/records/${id}`, {
+      await fetch(this.config.endpoints.recordById(id), {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(merged)
@@ -177,7 +194,7 @@ class DatabaseManager {
     localStorage.setItem('iris_db_records', JSON.stringify(local));
 
     try {
-      await fetch(`/api/records/${id}`, { method: 'DELETE' });
+      await fetch(this.config.endpoints.recordById(id), { method: 'DELETE' });
     } catch (e) {}
 
     return true;
@@ -188,7 +205,7 @@ class DatabaseManager {
     const recordIds = [...new Set((ids || []).filter(Boolean))];
     if (!recordIds.length) return { results: [], successCount: 0, failureCount: 0 };
     try {
-      const response = await fetch('/api/records/bulk-delete', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ids: recordIds }) });
+      const response = await fetch(this.config.endpoints.recordsBulkDelete, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ids: recordIds }) });
       if (!response.ok) throw new Error('Bulk delete request failed');
       return response.json();
     } catch (error) {
@@ -213,7 +230,7 @@ class DatabaseManager {
       values_data: graphData.values_data || graphData.valuesData || graphData.data || []
     };
 
-    const response = await fetch('/api/graphs', {
+    const response = await fetch(this.config.endpoints.graphs, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload)
@@ -243,7 +260,7 @@ class DatabaseManager {
   }
 
   async exportGraphs(snapshotIds, mode) {
-    const response = await fetch('/api/graphs/export', {
+    const response = await fetch(this.config.endpoints.graphsExport, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ snapshot_ids: snapshotIds, mode })
@@ -302,7 +319,7 @@ class DatabaseManager {
 
   async getAllSavedGraphs() {
     try {
-      const response = await fetch('/api/graphs');
+      const response = await fetch(this.config.endpoints.graphs);
       if (!response.ok) return [];
       const rows = await response.json();
       return rows || [];
@@ -315,7 +332,7 @@ class DatabaseManager {
     if (!recordId) return [];
 
     try {
-      const response = await fetch(`/api/graphs/${recordId}`);
+      const response = await fetch(this.config.endpoints.graphsByRecord(recordId));
       if (!response.ok) return [];
       const rows = await response.json();
       return (rows || []).map(row => ({
@@ -345,7 +362,7 @@ class DatabaseManager {
     if (!graphId) return false;
 
     try {
-      const response = await fetch(`/api/graphs/${graphId}`, { method: 'DELETE' });
+      const response = await fetch(this.config.endpoints.graphById(graphId), { method: 'DELETE' });
       return response.ok;
     } catch (e) {
       return false;
@@ -356,7 +373,7 @@ class DatabaseManager {
     const ids = [...new Set((graphIds || []).filter(Boolean))];
     if (!ids.length) return { results: [], successCount: 0, failureCount: 0 };
     try {
-      const response = await fetch('/api/graphs/bulk-delete', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ids }) });
+      const response = await fetch(this.config.endpoints.graphsBulkDelete, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ids }) });
       if (!response.ok) throw new Error('Bulk graph delete request failed');
       return response.json();
     } catch (error) {

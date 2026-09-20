@@ -17,5 +17,11 @@ export function initOverviewTab(ctx) {
     const fieldsGrid = $('extractedFieldsGrid'); fieldsGrid.innerHTML = ''; extractKeyFields(scan).forEach(field => { const card = document.createElement('div'); card.style.cssText = 'background: var(--bg-card); border: 1px solid var(--border-light); border-radius: var(--radius-sm); padding: 0.75rem 1rem;'; card.innerHTML = `<div style="font-size: 0.75rem; color: var(--text-muted); text-transform: uppercase; font-weight: 700; margin-bottom: 0.25rem;">${field.label}</div><div style="font-size: 1.1rem; font-weight: 800; color: var(--accent-cyan); font-family: var(--font-mono);">${field.value}</div>`; fieldsGrid.appendChild(card); });
     $('takeawayList').innerHTML = generateTakeaways(scan).map(item => `<li class="takeaway-item"><span>🔹</span><div>${item}</div></li>`).join(''); $('draftsCountBadge').textContent = (scan.graphDrafts || []).length;
   };
-  $('btnOpenInEditor')?.addEventListener('click', () => { if (ctx.state.activeScan) { $('navAdminBtn')?.click(); ctx.api.openRecordEditModal(ctx.state.activeScan.id); } });
+  $('btnOpenInEditor')?.addEventListener('click', async () => {
+    if (!ctx.state.activeScan) return;
+    if (typeof ctx.api.openReviewStudio === 'function') {
+      await ctx.api.openReviewStudio();
+    }
+    ctx.api.openRecordEditModal(ctx.state.activeScan.id);
+  });
 }

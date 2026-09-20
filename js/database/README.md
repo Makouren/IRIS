@@ -2,6 +2,10 @@
 
 [dbManager.js](dbManager.js) is the browser-side persistence adapter. The server-side implementation is [../../server.js](../../server.js).
 
+## v7 Host configuration
+
+REST paths are grouped in `DEFAULT_API_ENDPOINTS` and copied into the manager configuration. A future host can provide endpoint overrides without changing CRUD behavior or the browser fallbacks. The adapter still defaults to the current Express routes and does not establish a new backend integration by itself.
+
 ## Persistence layers
 
 1. MySQL through the Express REST API is the canonical store when available.

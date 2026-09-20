@@ -13,6 +13,8 @@ The frontend is initialized by [../app.js](../app.js), which creates a shared co
 
 Modules communicate through `ctx.api` callbacks. This avoids circular imports while keeping DOM lookups local to the module that owns the behavior.
 
+The v7 chart-rendering boundary is explicit: `chartEngine.js` can receive state, active-sheet access, and UI element references from its host. It retains compatibility with the current IRIS context and default DOM IDs, while allowing another dashboard shell to supply those dependencies later.
+
 ## Module responsibilities
 
 | Module | Responsibility |

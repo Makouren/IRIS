@@ -37,3 +37,7 @@ A parser returns an object containing, where applicable:
 ```
 
 When changing a parser, preserve the fields used by `ScannerOrchestrator`, overview rendering, document viewing, graph generation, and record persistence.
+
+## Integration boundary
+
+Parser output is an application-neutral scan package at the browser boundary. The active frontend still owns upload orchestration and persistence, while `scanner_service/` exposes a separate HTTP version of the same broad parse-and-suggest concern. v7 documents these contracts without connecting the two execution paths.

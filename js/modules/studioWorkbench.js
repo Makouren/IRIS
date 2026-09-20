@@ -25,7 +25,31 @@ export function initStudioWorkbench(ctx) {
     const filter = $('studioFilterField'); const previousFilter = filter?.value;
     if (filter) { filter.innerHTML = '<option value="all">All selected data</option><option value="context">Context / label only</option><option value="value">Metric / value only</option>'; sheet.headers.forEach((header, index) => { const option = document.createElement('option'); option.value = `column:${index}`; option.textContent = `${header || `Column ${index + 1}`} only`; filter.appendChild(option); }); filter.value = [...filter.options].some(option => option.value === previousFilter) ? previousFilter : 'all'; }
   };
-  ctx.api.renderStudioChart = record => renderStudioChart(ctx, record);
+  ctx.api.renderStudioChart = record => renderStudioChart(record, {
+    ctx,
+    state: ctx.state,
+    getStudioActiveSheet: ctx.api.getStudioActiveSheet,
+    elements: {
+      canvas: $('studioChartCanvas'),
+      emptyState: $('studioChartEmptyState'),
+      emptyMsg: $('studioChartEmptyMsg'),
+      warning: $('studioFieldWarning'),
+      typeSelect: $('studioChartTypeSelect'),
+      titleInput: $('studioChartTitleInput'),
+      subtitle: $('studioChartSubtitleDisplay'),
+      categorySelect: $('studioCategoryCol'),
+      valueSelect: $('studioValueCol'),
+      filterField: $('studioFilterField'),
+      filterOperator: $('studioFilterOperator'),
+      filterValue: $('studioFilterValue'),
+      filterUpperValue: $('studioFilterUpperValue'),
+      sortOrder: $('studioSortOrder'),
+      rowLimit: $('studioRowLimit'),
+      groupDuplicates: $('studioGroupDuplicates'),
+      reverseSortOrder: $('studioReverseSortOrder'),
+      reverseValueAxis: $('studioReverseValueAxis')
+    }
+  });
   ctx.api.updateStudioChart = () => ctx.state.studioActiveRecord && ctx.api.renderStudioChart(ctx.state.studioActiveRecord);
   ctx.api.saveStudioData = async approve => {
     const record = ctx.state.studioActiveRecord; if (!record) return;

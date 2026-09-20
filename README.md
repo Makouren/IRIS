@@ -15,6 +15,17 @@ The active application is a static HTML/CSS/ES module frontend served by Node.js
 | Tests and regression checks | [test/README.md](test/README.md) |
 | Secondary Python scanner service | [scanner_service/README.md](scanner_service/README.md) |
 
+## v7 Integration Readiness
+
+The `v7` branch documents and prepares the frontend and scanner service for a future dashboard integration without wiring them together yet:
+
+- `scanner_service/` exposes a documented, synchronous FastAPI upload contract.
+- `DatabaseManager` keeps REST endpoint paths in configurable endpoint definitions while retaining IndexedDB/localStorage fallbacks.
+- `chartEngine.js` accepts host-provided state, active-sheet access, and UI elements so chart rendering can be reused by another host page.
+- Parser, graph, and module READMEs describe the current boundaries and contracts used by a future orchestrator.
+
+No new backend integration, queue, authentication flow, or dashboard adapter is included in this branch.
+
 ## Runtime flow
 
 1. The browser loads the legacy vendor-facing utilities and the ES module entry point, [js/app.js](js/app.js).
