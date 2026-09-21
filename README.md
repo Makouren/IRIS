@@ -84,6 +84,32 @@ database: 'iris_db'
 
 The server creates `records` and `saved_graphs` automatically when the database is reachable.
 
+### Replace the database password
+
+Do not commit passwords to this repository. The Node server reads its MySQL password from `DB_PASSWORD`.
+
+For a local PowerShell session, set the password before starting the server:
+
+```powershell
+$env:DB_PASSWORD = 'your-new-password'
+npm start
+```
+
+For Docker, update both `DB_PASSWORD` under the `app` service and `MYSQL_ROOT_PASSWORD` under the `mysql` service in [docker-compose.yml](docker-compose.yml) to the same value, then recreate the containers:
+
+```powershell
+docker compose down
+docker compose up --build
+```
+
+If the MySQL volume already exists, changing `MYSQL_ROOT_PASSWORD` does not change the existing root account. Apply the new password inside MySQL first, or remove the development volume if its data can be discarded:
+
+```sql
+ALTER USER 'root'@'%' IDENTIFIED BY 'your-new-password';
+ALTER USER 'root'@'localhost' IDENTIFIED BY 'your-new-password';
+FLUSH PRIVILEGES;
+```
+
 ## v5 Session Changes
 
 This `v5` branch contains the Saved Dashboard Graphs workflow changes from this session:

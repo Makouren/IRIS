@@ -2,7 +2,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
-const { prepareCircularData } = require('../js/chartData');
+const { prepareCircularData, serializeChartState } = require('../js/chartData');
 const { pairSelectedText } = require('../js/sourceIngestion');
 const { normalizeGraphExportItem, buildPrintableGraphSheet } = require('../js/graphExport');
 const savedGraphsSource = fs.readFileSync(path.join(__dirname, '..', 'js', 'modules', 'savedGraphsTab.js'), 'utf8');
@@ -14,6 +14,15 @@ test('deduplicates circular chart legend labels while grouping remains optional'
   assert.deepEqual(ungrouped.legendLabels, ['North', 'South']);
   assert.equal(ungrouped.rows.length, 3);
   assert.deepEqual(grouped.rows, [{ label: 'North', value: 5 }, { label: 'South', value: 4 }]);
+});
+
+test('serializes the current edited chart series after an entity is removed', () => {
+  const original = { series: [{ data: [{ name: 'North', value: 2 }, { name: 'South', value: 4 }, { name: 'West', value: 6 }] }] };
+  const edited = { series: [{ data: original.series[0].data.slice(1) }] };
+  const exported = serializeChartState(edited, { labels: ['North', 'South', 'West'] });
+  assert.equal(exported.labels.length, original.series[0].data.length - 1);
+  assert.deepEqual(exported.labels, ['South', 'West']);
+  assert.deepEqual(exported.values, [4, 6]);
 });
 
 test('pairs a selected label with its adjacent extracted value', () => {
@@ -69,6 +78,16 @@ test('SQL file export uses the shared SQL content and SQL download type', () => 
   assert.match(savedGraphsSource, /data-mode="sql" class="export-choice-button">Export as SQL File \(\.sql\)/);
   assert.match(savedGraphsSource, /text: buildTextExport\(graphs\), mimeType: 'application\/sql'/);
   assert.match(savedGraphsSource, /\.sql`/);
+});
+
+test('saved graph database actions bypass the export choice modal', () => {
+  assert.match(savedGraphsSource, /graph-action-button export-saved-mysql/);
+  assert.match(savedGraphsSource, /<span>Reflect DB<\/span>/);
+  assert.match(savedGraphsSource, /graph-action-button export-saved-print/);
+  assert.match(savedGraphsSource, /graph-action-delete btn-table-delete delete-saved-graph/);
+  assert.match(savedGraphsSource, /exportGraphs\(\[graph\.id\], 'database', graph, \[graph\]\)/);
+  assert.match(savedGraphsSource, /exportGraphs\(ids, 'database', null, selectedGraphs\)/);
+  assert.equal(savedGraphsSource.includes("showExportChoice(mode => exportGraphs([graph.id]"), false);
 });
 
 test('builds a printable pie chart preview before the data table', () => {

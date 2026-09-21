@@ -11,7 +11,6 @@ import { initStudioWorkbench } from './modules/studioWorkbench.js';
 import { initStudioActions } from './modules/studioActions.js';
 import { initDocumentViewer } from './modules/documentViewer.js';
 import { initTableGrid } from './modules/tableGrid.js';
-import { initRecordEditModal } from './modules/recordEditModal.js';
 import { initNavigationTabs } from './modules/navigationTabs.js';
 
 // Chart behavior moved to chartEngine.js; these markers preserve the existing structural test contract.
@@ -33,7 +32,6 @@ document.addEventListener('DOMContentLoaded', async () => {
   initTableGrid(ctx);
   initStudioWorkbench(ctx);
   initStudioActions(ctx);
-  initRecordEditModal(ctx);
   initAdminPortal(ctx);
   initNavigationTabs(ctx);
   initFileIngestion(ctx);

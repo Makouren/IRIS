@@ -35,3 +35,10 @@ test('rank ranges use their representative midpoint', () => {
   assert.equal(parseRankValue('601-800'), 700.5);
   assert.equal(parseRankValue('200'), 200);
 });
+
+test('chart adapters bind line and bar categories to source labels', () => {
+  const source = require('node:fs').readFileSync(require('node:path').join(__dirname, '..', 'js', 'modules', 'chartEngine.js'), 'utf8');
+  assert.match(source, /const categoryScale = \{ type: 'category', labels: data\.labels/);
+  assert.match(source, /x: horizontal \? valueScale : categoryScale/);
+  assert.match(source, /y: horizontal \? \{ \.\.\.categoryScale, labels: data\.labels \} : valueScale/);
+});

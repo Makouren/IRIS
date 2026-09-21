@@ -257,7 +257,7 @@
           </label>
           <span id="savedGraphsSelectionCount" style="font-size: 0.8rem; color: var(--text-muted);">0 selected</span>
           <button id="savedGraphsPrintAll" type="button" class="saved-graphs-bulk-button" disabled>Print All</button>
-          <button id="savedGraphsExportSelected" type="button" class="saved-graphs-bulk-button" disabled>Export</button>
+          <button id="savedGraphsExportSelected" type="button" class="saved-graphs-bulk-button" disabled>Reflect DB</button>
           <button id="savedGraphsDeleteSelected" type="button" class="archive-delete-button" disabled>🗑️ Delete</button>
         </div>
 
@@ -577,20 +577,6 @@
     </section>
 
   </main>
-
-  <!-- Admin Record Detail / Editor Modal -->
-  <div id="recordEditModal" class="modal-overlay">
-    <div class="modal-card">
-      <div class="modal-header">
-        <h3 id="recordEditTitle" class="modal-title">Edit Record Data</h3>
-        <button id="btnCloseRecordModal" style="background: none; border: none; color: var(--text-muted); font-size: 1.4rem; cursor: pointer;">&times;</button>
-      </div>
-      
-      <div id="recordEditBody" style="max-height: 75vh; overflow-y: auto; padding-right: 0.5rem;">
-        <!-- Dynamic record editor fields & editable data table -->
-      </div>
-    </div>
-  </div>
 
   <!-- JavaScript Modules in Order -->
   <script src="js/parsers/imageOcrPipeline.js"></script>

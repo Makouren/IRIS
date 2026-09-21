@@ -19,9 +19,6 @@ export function initOverviewTab(ctx) {
   };
   $('btnOpenInEditor')?.addEventListener('click', async () => {
     if (!ctx.state.activeScan) return;
-    if (typeof ctx.api.openReviewStudio === 'function') {
-      await ctx.api.openReviewStudio();
-    }
-    ctx.api.openRecordEditModal(ctx.state.activeScan.id);
+    await ctx.api.openReviewStudio?.(ctx.state.activeScan.id);
   });
 }

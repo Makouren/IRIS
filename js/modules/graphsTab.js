@@ -32,15 +32,11 @@ export function initGraphsTab(ctx) {
       card.innerHTML = `<div class="graph-card-header"><div><div class="graph-card-title">${escapeHtml(draft.title)}</div><div style="font-size:.78rem;color:var(--text-muted);margin-top:.25rem">Source: ${escapeHtml(draft.source)}</div></div><div><button class="export-draft-mysql" type="button">💾 Export to MySQL</button><button class="export-draft-print" type="button">🖨️ Print Sheet</button><select class="form-input chart-type-select" data-draft-idx="${index}" style="width:auto;padding:.25rem .5rem;font-size:.8rem"><option value="bar" ${draft.primaryType === 'bar' ? 'selected' : ''}>Bar Chart</option><option value="line" ${draft.primaryType === 'line' ? 'selected' : ''}>Line Chart</option><option value="pie" ${draft.primaryType === 'pie' ? 'selected' : ''}>Pie Chart</option></select></div></div><div style="font-size:.82rem;color:var(--accent-cyan);margin-bottom:1rem">💡 <strong>AI Recommendation:</strong> ${escapeHtml(draft.recommendation)}</div><div class="graph-canvas-container" style="height:320px;position:relative"><canvas id="${canvasId}"></canvas></div>`;
       container.appendChild(card);
 
-      card.querySelector('.export-draft-mysql').onclick = () => showExportChoice(async mode => {
-        if (mode === 'database') {
-          await ctx.dbManager.exportGraph(window.GraphExport.normalizeGraphExportItem(draft, scan.id), scan.id);
-        } else {
-          await downloadText({ fileName: `iris_draft_${Date.now()}.txt`, text: draftText({ ...draft, record_id: scan.id }) });
-        }
-        alert(`1 graph exported as ${mode === 'script' ? 'a text file' : 'a database export'}.`);
+      card.querySelector('.export-draft-mysql').onclick = async () => {
+        await ctx.dbManager.exportGraph(window.GraphExport.normalizeGraphExportItem(draft, scan.id), scan.id);
+        alert('1 graph exported as a database export.');
         await ctx.api.renderSavedGraphsTab();
-      });
+      };
       card.querySelector('.export-draft-print').onclick = () => ctx.dbManager.printGraphSheet(draft, { recordName: scan.name || 'IRIS report' });
       setTimeout(() => { const canvas = $(canvasId); if (canvas) ctx.state.chartInstances[canvasId] = createChart(canvas, draft.primaryType, draft.chartData); }, 50);
     });

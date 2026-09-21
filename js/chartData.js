@@ -39,5 +39,19 @@
     };
   }
 
-  return { prepareCircularData, groupAndAggregate };
+  function serializeChartState(options, config = {}) {
+    const series = options?.series?.[0] || {};
+    const points = Array.isArray(series.data) ? series.data : [];
+    const categoryAxis = options?.xAxis?.[0]?.data;
+    const valueAxis = options?.yAxis?.[0]?.data;
+    const axisLabels = Array.isArray(categoryAxis) ? categoryAxis : (Array.isArray(valueAxis) ? valueAxis : []);
+    const labels = points.map((point, index) => {
+      if (point && typeof point === 'object' && point.name !== undefined) return String(point.name);
+      return String(axisLabels[index] ?? config.labels?.[index] ?? `Item ${index + 1}`);
+    });
+    const values = points.map(point => point && typeof point === 'object' ? point.rawValue ?? point.value : point);
+    return { labels, values };
+  }
+
+  return { prepareCircularData, groupAndAggregate, serializeChartState };
 });

@@ -11,7 +11,8 @@ export function createChart(ctx, type, chartData, { reverseOrder = false } = {})
   const rankTickLabel = value => String(chartData.rankValueMax !== undefined ? chartData.rankValueMax - value : value);
   const valueScale = { type: 'linear', reverse: rankSemantic ? false : chartData.valueAxisReversed === true, min: chartData.valueAxisMin, max: chartData.valueAxisMax, ticks: { color: '#94A3B8', callback: rankSemantic ? rankTickLabel : undefined, font: { family: 'Outfit, sans-serif' } }, grid: { color: 'rgba(255,255,255,0.05)' } };
   console.log('category axis config:', JSON.stringify(horizontal ? { type: 'category', ticks: valueScale.ticks, grid: valueScale.grid } : { type: 'category', ticks: valueScale.ticks, grid: valueScale.grid }));
-  return new window.Chart(ctx, { type, data, options: { responsive: true, maintainAspectRatio: false, indexAxis: horizontal ? 'y' : 'x', plugins: { legend: { display: type === 'pie', labels: { color: '#94A3B8', font: { family: 'Outfit, sans-serif' } } } }, scales: type === 'pie' ? {} : { x: horizontal ? valueScale : { type: 'category', ticks: valueScale.ticks, grid: valueScale.grid }, y: horizontal ? { type: 'category', ticks: valueScale.ticks, grid: valueScale.grid } : valueScale } } });
+  const categoryScale = { type: 'category', labels: data.labels, ticks: { color: '#94A3B8', font: { family: 'Outfit, sans-serif' } }, grid: valueScale.grid };
+  return new window.Chart(ctx, { type, data, options: { responsive: true, maintainAspectRatio: false, indexAxis: horizontal ? 'y' : 'x', plugins: { legend: { display: type === 'pie', labels: { color: '#94A3B8', font: { family: 'Outfit, sans-serif' } } } }, scales: type === 'pie' ? {} : { x: horizontal ? valueScale : categoryScale, y: horizontal ? { ...categoryScale, labels: data.labels } : valueScale } } });
 }
 export function renderStudioChart(arg1, arg2, arg3 = {}) {
   const legacyMode = arg1 && arg1.state && arg1.api && arg2 && typeof arg2 === 'object';
@@ -104,7 +105,7 @@ export function renderStudioChart(arg1, arg2, arg3 = {}) {
   if (!chartRows.length) return empty('No data matches the current filter. Try adjusting the filter criteria.');
   if (group) chartRows = circular ? window.ChartData.prepareCircularData(chartRows, true).rows : window.ChartData.groupAndAggregate(chartRows);
   const fullLabels = chartRows.map(row => row.label);
-  const labels = fullLabels.map(label => label.length > 20 ? `${label.slice(0, 19)}…` : label);
+  const labels = fullLabels.slice();
   const reverseValueAxis = elements.reverseValueAxis?.getAttribute('aria-pressed') === 'true' || document.getElementById('studioReverseValueAxis')?.getAttribute('aria-pressed') === 'true';
   const rawValues = chartRows.map(row => row.value);
   const values = rankSemantic ? (() => { const maximum = Math.max(...rawValues); return rawValues.map(value => maximum - value); })() : rawValues;
