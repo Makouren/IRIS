@@ -50,7 +50,6 @@ class PdfParser {
       onProgress({ status: `Parsing text layer: page ${pageNum} of ${numPages}...`, progress });
     }
 
-    /* [SLATED FOR REVIEW & REVISION]: Embedded Image OCR pipeline disabled
     let embeddedImageOcr = { text: '', count: 0, sources: [] };
     if (typeof ImageOcrPipeline !== 'undefined') {
       onProgress({ status: 'Scanning pages for embedded images & scanned content (OCR)...', progress: 60 });
@@ -63,7 +62,6 @@ class PdfParser {
         fullText += '\n\n--- EMBEDDED IMAGE OCR RESULTS ---' + embeddedImageOcr.text;
       }
     }
-    */
 
     onProgress({ status: 'Extracting PDF metadata & document catalog...', progress: 90 });
 
@@ -105,7 +103,8 @@ class PdfParser {
       metadata,
       pages: pagesData,
       pdfBuffer: arrayBuffer,
-      pdfDocReference: pdfDoc
+      pdfDocReference: pdfDoc,
+      embeddedImageOcr
     };
   }
 

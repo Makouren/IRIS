@@ -25,6 +25,7 @@
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/docx-preview@latest/dist/docx-preview.css">
   <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/docx-preview@latest/dist/docx-preview.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
 </head>
 <body>
 
@@ -41,21 +42,11 @@
       </div>
     </div>
 
-    <!-- Navigation Switcher: Scanner Workspace vs Admin Data Portal -->
     <nav class="header-nav">
       <button id="navScannerBtn" class="nav-btn active">
-        <span>🔍</span> Scanner Workspace
-      </button>
-      <button id="navAdminBtn" class="nav-btn">
-        <span>🗄️</span> Rankings & Admin Dashboard
+        <span>🔍</span> Review Workspace
       </button>
     </nav>
-
-    <!-- Header User Profile Capsule -->
-    <div class="user-capsule">
-      <span class="user-pill">👤 Welcome, Admin</span>
-      <button class="logout-pill" onclick="alert('Admin session active.')">Logout</button>
-    </div>
   </header>
 
   <!-- App Main Container -->
@@ -188,7 +179,7 @@
               </div>
               <div style="display: flex; gap: 0.75rem;">
                 <button id="btnOpenInEditor" class="btn-icon">
-                  <span>✏️</span> Edit in Admin Dashboard
+                  <span>✏️</span> Open review editor
                 </button>
               </div>
             </div>
@@ -233,13 +224,54 @@
     <section id="adminDatabaseView" style="display: none;">
       
       <div class="clsu-section-title">
-        <span>🗄️</span> Rankings & Admin Data Management
+        <span>🗄️</span> Review archive & record history
       </div>
+
+      <div class="workspace-tabs" style="margin-bottom: 1.25rem;">
+        <button class="admin-tab-btn active" data-admin-tab="adminRecordsPanel">
+          <span>📋</span> Records & Dashboard Studio
+        </button>
+        <button class="admin-tab-btn" data-admin-tab="adminSavedGraphsPanel">
+          <span>🗂️</span> Saved Dashboard Graphs
+        </button>
+      </div>
+
+      <div id="adminSavedGraphsPanel" class="admin-tab-panel" style="display: none;">
+        <div style="margin-bottom: 1.5rem; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem;">
+          <div>
+            <h3 style="font-size: 1.1rem; font-weight: 800; color: var(--clsu-green);">Saved Dashboard Graphs</h3>
+            <p style="font-size: 0.85rem; color: var(--text-muted);">Approved and saved chart versions grouped per file record.</p>
+          </div>
+          <div style="display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap;">
+            <button id="savedGraphsViewAllBtn" type="button" class="saved-graphs-bulk-button">View All</button>
+            <label style="font-size: 0.78rem; font-weight: 800; color: #334155; text-transform: uppercase;">File:</label>
+            <select id="savedGraphsRecordSelect" class="form-input" style="width: auto; min-width: 220px;">
+              <option value="">Loading files...</option>
+            </select>
+          </div>
+        </div>
+
+        <div id="savedGraphsBulkToolbar" style="display: flex; align-items: center; gap: 0.75rem; margin-bottom: 1rem; padding: 0.75rem 1rem; background: #F8FAF8; border: 1px solid var(--border-light); border-radius: var(--radius-sm);">
+          <label style="display: inline-flex; align-items: center; gap: 0.45rem; font-weight: 700; font-size: 0.82rem;">
+            <input id="savedGraphsSelectAll" type="checkbox"> Select All
+          </label>
+          <span id="savedGraphsSelectionCount" style="font-size: 0.8rem; color: var(--text-muted);">0 selected</span>
+          <button id="savedGraphsPrintAll" type="button" class="saved-graphs-bulk-button" disabled>Print All</button>
+          <button id="savedGraphsExportSelected" type="button" class="saved-graphs-bulk-button" disabled>Export</button>
+          <button id="savedGraphsDeleteSelected" type="button" class="archive-delete-button" disabled>🗑️ Delete</button>
+        </div>
+
+        <div id="savedDashboardGraphsContainer">
+          <!-- Saved graph cards dynamically populated -->
+        </div>
+      </div>
+
+      <div id="adminRecordsPanel" class="admin-tab-panel active">
 
       <!-- Admin Header Banner -->
       <div style="background: #FFFFFF; border: 1px solid var(--border-light); border-left: 5px solid var(--clsu-green); border-radius: var(--radius-lg); padding: 1.5rem 2rem; margin-bottom: 1.5rem; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem; box-shadow: var(--card-shadow);">
         <div>
-          <h2 style="font-size: 1.4rem; font-weight: 800; color: var(--clsu-green);">Admin Record Review & Data Editor</h2>
+          <h2 style="font-size: 1.4rem; font-weight: 800; color: var(--clsu-green);">Review record editor</h2>
           <p style="font-size: 0.88rem; color: var(--text-muted);">Review extracted fields, edit tabular cells, update draft status, and approve visualizations for the CLSU Observatory.</p>
         </div>
       </div>
@@ -381,24 +413,18 @@
                 </div>
               </div>
 
-              <!-- Interactive Field / Axis Mapping Controls -->
-              <div style="background: #FFFFFF; border: 1.5px solid var(--border-green); border-radius: var(--radius-sm); padding: 0.75rem 1rem; margin-bottom: 0.85rem; display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 0.75rem;">
-                <div style="display: flex; align-items: center; gap: 1rem; flex-wrap: wrap;">
-                  <div style="display: flex; align-items: center; gap: 0.4rem;">
-                    <span id="studioLabelFieldText" style="font-size: 0.8rem; font-weight: 800; color: #047857;">🏷️ X-Axis / Label Field:</span>
-                    <select id="studioLabelColSelect" class="form-input" style="padding: 0.3rem 0.65rem; font-size: 0.82rem; font-weight: 700; color: #0F172A; min-width: 140px;"></select>
-                  </div>
-                  <div style="display: flex; align-items: center; gap: 0.4rem;">
-                    <span id="studioValueFieldText" style="font-size: 0.8rem; font-weight: 800; color: #1D4ED8;">📈 Y-Axis / Metric Field:</span>
-                    <select id="studioValueColSelect" class="form-input" style="padding: 0.3rem 0.65rem; font-size: 0.82rem; font-weight: 700; color: #0F172A; min-width: 140px;"></select>
-                  </div>
+              <!-- Field Mapping Controls (chart-type aware) -->
+              <div id="studioFieldMappingRow" style="background: #EFF6FF; border: 1px solid #BFDBFE; border-radius: var(--radius-sm); padding: 0.65rem 1rem; margin-bottom: 0.75rem; display: flex; flex-wrap: wrap; align-items: center; gap: 0.65rem;">
+                <span style="font-size: 0.78rem; font-weight: 800; color: #1D4ED8; text-transform: uppercase;">📐 Field Mapping:</span>
+                <div style="display: flex; align-items: center; gap: 0.35rem;">
+                  <label style="font-size: 0.75rem; font-weight: 700; color: #334155; white-space: nowrap;" id="studioCategoryLabel">Category (X-axis):</label>
+                  <select id="studioCategoryCol" class="form-input" style="width: auto; padding: 0.3rem 0.55rem; font-size: 0.78rem;" aria-label="Category column"></select>
                 </div>
-
-                <div>
-                  <button id="studioBtnSwapAxes" type="button" class="btn-studio-action" style="background: #F8FAF8; border: 1.5px solid #CBD5E1; color: #334155; font-size: 0.78rem; padding: 0.35rem 0.75rem;" title="Swap chart fields">
-                    🔄 Swap Axes
-                  </button>
+                <div style="display: flex; align-items: center; gap: 0.35rem;">
+                  <label style="font-size: 0.75rem; font-weight: 700; color: #334155; white-space: nowrap;" id="studioValueLabel">Value (Y-axis):</label>
+                  <select id="studioValueCol" class="form-input" style="width: auto; padding: 0.3rem 0.55rem; font-size: 0.78rem;" aria-label="Value column"></select>
                 </div>
+                <div id="studioFieldWarning" style="display:none; font-size: 0.75rem; color: #DC2626; font-weight: 700; background: #FEF2F2; border: 1px solid #FECACA; border-radius: 4px; padding: 0.2rem 0.6rem;"></div>
               </div>
 
               <div style="background: #F8FAF8; border: 1px solid var(--border-light); border-radius: var(--radius-sm); padding: 0.65rem 1rem; margin-bottom: 0.85rem; display: flex; flex-wrap: wrap; align-items: center; gap: 0.65rem;">
@@ -428,13 +454,19 @@
                   <option value="label-asc">Label: A to Z</option>
                   <option value="label-desc">Label: Z to A</option>
                 </select>
+                <button id="studioReverseSortOrder" type="button" class="btn-studio-action" aria-pressed="false" style="padding: 0.3rem 0.55rem; font-size: 0.78rem;">⇄ Reverse order</button>
+                <button id="studioReverseValueAxis" type="button" class="btn-studio-action" aria-pressed="false" style="padding: 0.3rem 0.55rem; font-size: 0.78rem;">⇄ Reverse value axis</button>
                 <label style="font-size: 0.78rem; color: #334155; font-weight: 700; white-space: nowrap;">Show <input id="studioRowLimit" class="form-input" type="number" min="1" max="100" value="30" style="width: 4.5rem; display: inline-block; padding: 0.3rem 0.45rem; font-size: 0.78rem;"> rows</label>
                 <label style="font-size: 0.78rem; color: #334155; font-weight: 700; white-space: nowrap;"><input id="studioGroupDuplicates" type="checkbox" checked style="accent-color: var(--clsu-green); margin-right: 0.25rem;"> Group duplicate labels</label>
               </div>
 
               <!-- Chart Canvas -->
-              <div style="height: 280px; position: relative; width: 100%; margin-bottom: 0.75rem;">
+              <div style="height: 320px; position: relative; width: 100%; margin-bottom: 0.75rem;">
                 <div id="studioChartCanvas" style="height: 100%; width: 100%;"></div>
+                <div id="studioChartEmptyState" style="display:none; position:absolute; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center; background:rgba(248,250,248,0.95); border-radius:var(--radius-sm); border:2px dashed #CBD5E1;">
+                  <span style="font-size:2rem;">📊</span>
+                  <p id="studioChartEmptyMsg" style="font-size:0.88rem; color:#64748B; font-weight:600; margin-top:0.5rem; text-align:center; max-width:280px;">Select a Category field and a numeric Value field above to render the chart.</p>
+                </div>
               </div>
             </div>
 
@@ -517,14 +549,18 @@
 
       <!-- Database Records Table -->
       <div class="table-container" style="box-shadow: var(--card-shadow);">
+        <div id="adminBulkActions" class="admin-bulk-actions" hidden>
+          <span id="adminBulkSelectionCount">0 records selected</span>
+          <button id="adminBulkDelete" type="button" class="archive-delete-button" disabled>🗑️ Bulk Delete</button>
+          <button id="adminClearSelection" type="button" class="export-cancel-button">Clear selection</button>
+        </div>
         <table class="data-table">
           <thead>
             <tr>
+              <th><input id="adminSelectAll" type="checkbox" aria-label="Select all visible records"></th>
               <th>Record ID</th>
               <th>File Name</th>
               <th>Format</th>
-              <th>Category</th>
-              <th>Suggested Chart</th>
               <th>Review Status</th>
               <th>Scanned Date</th>
               <th>Actions</th>
@@ -534,6 +570,8 @@
             <!-- Records dynamically populated -->
           </tbody>
         </table>
+      </div>
+
       </div>
 
     </section>
@@ -555,10 +593,7 @@
   </div>
 
   <!-- JavaScript Modules in Order -->
-  <!-- [SLATED FOR REVIEW & REVISION]: Standalone Image OCR Pipeline disabled
   <script src="js/parsers/imageOcrPipeline.js"></script>
-  <script src="js/parsers/imageParser.js"></script>
-  -->
   <script src="js/parsers/excelParser.js"></script>
   <script src="js/parsers/docxParser.js"></script>
   <script src="js/parsers/docxViewerComponent.js"></script>
@@ -568,7 +603,13 @@
   <script src="js/database/dbManager.js"></script>
   <script src="js/samples.js"></script>
   <script src="js/scanner.js"></script>
-  <script src="js/app.js"></script>
+  <script src="js/tableFilter.js"></script>
+  <script src="js/chartData.js"></script>
+  <script src="js/chartMapping.js"></script>
+  <script src="js/sourceIngestion.js"></script>
+  <script src="js/documentPagination.js"></script>
+  <script src="js/graphExport.js"></script>
+  <script type="module" src="js/app.js"></script>
 
 </body>
 </html>

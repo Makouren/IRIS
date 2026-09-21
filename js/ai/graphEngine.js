@@ -87,10 +87,14 @@ class GraphEngine {
 
       numericColIndices.slice(0, 4).forEach((numColIdx, datasetIndex) => {
         const headerName = headers[numColIdx] || `Metric ${datasetIndex + 1}`;
+        const rankSemantic = window.ChartMapping?.isRankField?.(headerName) === true;
+        const parseValue = rankSemantic ? window.ChartMapping.parseRankValue : value => parseFloat(value);
         const dataValues = slicedRows.map(r => {
-          const val = parseFloat(r[numColIdx]);
-          return isNaN(val) ? 0 : val;
+          const val = parseValue(r[numColIdx]);
+          return val === null || !Number.isFinite(val) ? 0 : val;
         });
+        const rankValueMin = rankSemantic ? Math.min(...dataValues) : undefined;
+        const rankValueMax = rankSemantic ? Math.max(...dataValues) : undefined;
 
         const palette = this.colorPalettes[datasetIndex % this.colorPalettes.length];
 
@@ -121,6 +125,11 @@ class GraphEngine {
           isDraft: true,
           chartData: {
             labels,
+            rankSemantic,
+            rankValueMin,
+            rankValueMax,
+            valueAxisMin: rankSemantic ? 0 : undefined,
+            valueAxisMax: rankSemantic ? rankValueMax - rankValueMin : undefined,
             datasets: [{
               label: headerName,
               data: dataValues,
@@ -160,8 +169,6 @@ class GraphEngine {
     if (matches.length >= 2) {
       const labels = matches.map(m => m.label);
       const data = matches.map(m => m.val);
-      const palette = this.colorPalettes[0];
-
       drafts.push({
         id: `draft_text_${Date.now()}`,
         title: `Key Extracted Metrics — ${docName}`,

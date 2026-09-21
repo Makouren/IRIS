@@ -1,3 +1,14 @@
+const DEFAULT_API_ENDPOINTS = {
+  records: '/api/records',
+  recordById: id => `/api/records/${id}`,
+  recordsBulkDelete: '/api/records/bulk-delete',
+  graphs: '/api/graphs',
+  graphById: id => `/api/graphs/${id}`,
+  graphsByRecord: recordId => `/api/graphs/${recordId}`,
+  graphsBulkDelete: '/api/graphs/bulk-delete',
+  graphsExport: '/api/graphs/export'
+};
+
 /**
  * IRIS AI - Admin Database & Record Management System
  * Supports IndexedDB + LocalStorage + REST API synchronization.
@@ -5,10 +16,16 @@
  */
 
 class DatabaseManager {
-  constructor() {
+  constructor(config = {}) {
     this.dbName = 'IRIS_AI_Database';
     this.dbVersion = 2;
     this.db = null;
+    this.config = {
+      endpoints: {
+        ...DEFAULT_API_ENDPOINTS,
+        ...(config.endpoints || {})
+      }
+    };
     this.initPromise = this.initIndexedDB();
   }
 
@@ -79,7 +96,7 @@ class DatabaseManager {
 
     // Sync to Server REST API if online
     try {
-      await fetch('/api/records', {
+      await fetch(this.config.endpoints.records, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(formattedRecord)
@@ -97,16 +114,19 @@ class DatabaseManager {
   async getAllRecords() {
     await this.initPromise;
 
-    // First attempt Server API
+    // Always prefer MySQL server — it is the source of truth
     try {
-      const resp = await fetch('/api/records');
+      const resp = await fetch(this.config.endpoints.records);
       if (resp.ok) {
         const data = await resp.json();
-        if (Array.isArray(data) && data.length > 0) return data;
+        // Return MySQL data even if empty — MySQL is canonical
+        if (Array.isArray(data)) return data;
       }
-    } catch (e) {}
+    } catch (e) {
+      console.warn('Server API unavailable, falling back to local storage:', e);
+    }
 
-    // Fallback to IndexedDB
+    // Offline Fallback to IndexedDB
     if (this.db) {
       return new Promise((resolve) => {
         const tx = this.db.transaction('records', 'readonly');
@@ -147,7 +167,7 @@ class DatabaseManager {
 
     // Sync to server API
     try {
-      await fetch(`/api/records/${id}`, {
+      await fetch(this.config.endpoints.recordById(id), {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(merged)
@@ -174,10 +194,191 @@ class DatabaseManager {
     localStorage.setItem('iris_db_records', JSON.stringify(local));
 
     try {
-      await fetch(`/api/records/${id}`, { method: 'DELETE' });
+      await fetch(this.config.endpoints.recordById(id), { method: 'DELETE' });
     } catch (e) {}
 
     return true;
+  }
+
+  async deleteRecords(ids) {
+    await this.initPromise;
+    const recordIds = [...new Set((ids || []).filter(Boolean))];
+    if (!recordIds.length) return { results: [], successCount: 0, failureCount: 0 };
+    try {
+      const response = await fetch(this.config.endpoints.recordsBulkDelete, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ids: recordIds }) });
+      if (!response.ok) throw new Error('Bulk delete request failed');
+      return response.json();
+    } catch (error) {
+      return { results: recordIds.map(id => ({ id, success: false, error: error.message })), successCount: 0, failureCount: recordIds.length };
+    }
+  }
+
+  async saveGraph(graphData) {
+    const payload = {
+      id: graphData.id || `graph_${Date.now()}_${Math.random().toString(36).substr(2, 7)}`,
+      record_id: graphData.record_id || graphData.recordId,
+      title: graphData.title || 'Saved Chart',
+      chart_type: graphData.chart_type || graphData.chartType || 'bar',
+      orientation: graphData.orientation || 'vertical',
+      valueAxisReversed: graphData.valueAxisReversed === true,
+      valueAxisMin: graphData.valueAxisMin,
+      valueAxisMax: graphData.valueAxisMax,
+      rankSemantic: graphData.rankSemantic === true,
+      rankValueMin: graphData.rankValueMin,
+      rankValueMax: graphData.rankValueMax,
+      labels: graphData.labels || [],
+      values_data: graphData.values_data || graphData.valuesData || graphData.data || []
+    };
+
+    const response = await fetch(this.config.endpoints.graphs, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({}));
+      throw new Error(error.error || 'Failed to save graph');
+    }
+
+    return response.json();
+  }
+
+  async exportGraph(graphData, recordId) {
+    if (typeof GraphExport !== 'undefined' && GraphExport.normalizeGraphExportItem) {
+      const payload = GraphExport.normalizeGraphExportItem(graphData, recordId);
+      return this.saveGraph(payload);
+    }
+
+    return this.saveGraph({
+      record_id: recordId || graphData.record_id || graphData.recordId,
+      title: graphData.title || 'Saved Chart',
+      chart_type: graphData.chart_type || graphData.chartType || graphData.primaryType || 'bar',
+      labels: graphData.labels || [],
+      values_data: graphData.values_data || graphData.valuesData || graphData.data || []
+    });
+  }
+
+  async exportGraphs(snapshotIds, mode) {
+    const response = await fetch(this.config.endpoints.graphsExport, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ snapshot_ids: snapshotIds, mode })
+    });
+
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({}));
+      throw new Error(error.error || 'Failed to export saved graphs');
+    }
+
+    if (mode === 'script') {
+      const disposition = response.headers.get('Content-Disposition') || '';
+      const fileName = disposition.match(/filename="?([^";]+)"?/i)?.[1] || 'iris_saved_graphs.txt';
+      return {
+        mode,
+        count: Number(response.headers.get('X-Export-Count') || snapshotIds.length),
+        fileName,
+        blob: await response.blob()
+      };
+    }
+
+    return response.json();
+  }
+
+  printGraphSheet(graphData, context = {}) {
+    if (typeof GraphExport !== 'undefined' && GraphExport.buildPrintableGraphSheet) {
+      const html = GraphExport.buildPrintableGraphSheet(graphData, context);
+      const popup = window.open('', '_blank', 'width=1200,height=900');
+      if (!popup) {
+        throw new Error('Popup blocked. Please allow popups to print the graph sheet.');
+      }
+      popup.document.write(html);
+      popup.document.close();
+      popup.focus();
+      return popup;
+    }
+
+    return null;
+  }
+
+  printGraphSheets(graphs, context = {}) {
+    if (typeof GraphExport !== 'undefined' && GraphExport.buildPrintableGraphSheets) {
+      const html = GraphExport.buildPrintableGraphSheets(graphs, context);
+      const popup = window.open('', '_blank', 'width=1200,height=900');
+      if (!popup) {
+        throw new Error('Popup blocked. Please allow popups to print the graphs.');
+      }
+      popup.document.write(html);
+      popup.document.close();
+      popup.focus();
+      return popup;
+    }
+
+    return null;
+  }
+
+  async getAllSavedGraphs() {
+    try {
+      const response = await fetch(this.config.endpoints.graphs);
+      if (!response.ok) return [];
+      const rows = await response.json();
+      return rows || [];
+    } catch (e) {
+      return [];
+    }
+  }
+
+  async getGraphsByRecord(recordId) {
+    if (!recordId) return [];
+
+    try {
+      const response = await fetch(this.config.endpoints.graphsByRecord(recordId));
+      if (!response.ok) return [];
+      const rows = await response.json();
+      return (rows || []).map(row => ({
+        id: row.id,
+        title: row.title || 'Saved Chart',
+        source: 'Saved Chart',
+        primaryType: row.chart_type || 'bar',
+        recommendation: 'Saved chart from the dashboard studio.',
+        isDraft: true,
+        chartData: {
+          labels: Array.isArray(row.labels) ? row.labels : [],
+          datasets: [{
+            label: row.title || 'Series',
+            data: Array.isArray(row.values_data) ? row.values_data : [],
+            backgroundColor: 'rgba(20, 108, 54, 0.45)',
+            borderColor: '#146C36',
+            borderWidth: 2
+          }]
+        }
+      }));
+    } catch (e) {
+      return [];
+    }
+  }
+
+  async deleteGraph(graphId) {
+    if (!graphId) return false;
+
+    try {
+      const response = await fetch(this.config.endpoints.graphById(graphId), { method: 'DELETE' });
+      return response.ok;
+    } catch (e) {
+      return false;
+    }
+  }
+
+  async deleteGraphs(graphIds) {
+    const ids = [...new Set((graphIds || []).filter(Boolean))];
+    if (!ids.length) return { results: [], successCount: 0, failureCount: 0 };
+    try {
+      const response = await fetch(this.config.endpoints.graphsBulkDelete, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ids }) });
+      if (!response.ok) throw new Error('Bulk graph delete request failed');
+      return response.json();
+    } catch (error) {
+      return { results: ids.map(id => ({ id, success: false, error: error.message })), successCount: 0, failureCount: ids.length };
+    }
   }
 
   /**

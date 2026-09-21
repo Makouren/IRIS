@@ -7,48 +7,42 @@
 @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Outfit:wght@300;400;500;600;700;800&family=Inter:wght@400;500;600;700;800&display=swap');
 
 :root {
-  /* CLSU Institutional Color Palette */
-  --clsu-green-dark: #0D5C2C;
-  --clsu-green: #146C36;
-  --clsu-green-light: #1A8744;
-  --clsu-green-subtle: #EDF7F0;
-  --clsu-green-glow: rgba(20, 108, 54, 0.25);
+  /* Shared design tokens for the integrated review experience */
+  --brand-green-900: #0D5C2C;
+  --brand-green-800: #146C36;
+  --brand-green-700: #1A8744;
+  --brand-green-100: #EDF7F0;
+  --brand-gold-500: #F59E0B;
+  --brand-gold-400: #FACC15;
+  --brand-gold-700: #D97706;
+  --brand-gold-100: #FEF9C3;
 
-  --clsu-gold: #F59E0B;
-  --clsu-gold-bright: #FACC15;
-  --clsu-gold-dark: #D97706;
-  --clsu-gold-subtle: #FEF9C3;
+  --surface-page: #F4F7F4;
+  --surface-panel: #FFFFFF;
+  --surface-subtle: #F8FAF8;
+  --surface-input: #FFFFFF;
 
-  /* Surfaces & Backgrounds */
-  --bg-deep: #F4F7F4;
-  --bg-surface: #FFFFFF;
-  --bg-card: #FFFFFF;
-  --bg-input: #FFFFFF;
-  --bg-highlight: #F8FAF8;
+  --border-subtle: #E2E8E2;
+  --border-brand: rgba(20, 108, 54, 0.2);
+  --border-focus: rgba(20, 108, 54, 0.35);
+  --shadow-soft: 0 4px 20px rgba(0, 0, 0, 0.04), 0 1px 3px rgba(0, 0, 0, 0.02);
+  --shadow-modal: 0 20px 50px rgba(13, 92, 44, 0.15), 0 4px 20px rgba(0, 0, 0, 0.08);
 
-  /* Borders & Shadows */
-  --border-light: #E2E8E2;
-  --border-green: rgba(20, 108, 54, 0.2);
-  --border-glow: rgba(20, 108, 54, 0.35);
-  --card-shadow: 0 4px 20px rgba(0, 0, 0, 0.04), 0 1px 3px rgba(0, 0, 0, 0.02);
-  --modal-shadow: 0 20px 50px rgba(13, 92, 44, 0.15), 0 4px 20px rgba(0, 0, 0, 0.08);
+  --text-primary: #1E293B;
+  --text-secondary: #64748B;
+  --text-tertiary: #94A3B8;
+  --text-brand: #146C36;
+  --text-inverse: #FFFFFF;
 
-  /* Accents */
-  --accent-primary: #146C36;
-  --accent-cyan: #0D9488;
-  --accent-emerald: #10B981;
-  --accent-amber: #F59E0B;
-  --accent-rose: #E11D48;
-  --accent-violet: #146C36;
+  --space-1: 0.25rem;
+  --space-2: 0.5rem;
+  --space-3: 0.75rem;
+  --space-4: 1rem;
+  --space-5: 1.25rem;
+  --space-6: 1.5rem;
+  --space-8: 2rem;
+  --space-10: 2.5rem;
 
-  /* Text Colors */
-  --text-main: #1E293B;
-  --text-muted: #64748B;
-  --text-dim: #94A3B8;
-  --text-green: #146C36;
-  --text-white: #FFFFFF;
-
-  /* Geometry & Typography */
   --radius-sm: 6px;
   --radius-md: 12px;
   --radius-lg: 16px;
@@ -56,6 +50,37 @@
 
   --font-sans: 'Inter', 'Outfit', -apple-system, BlinkMacSystemFont, sans-serif;
   --font-mono: 'JetBrains Mono', monospace;
+
+  --clsu-green-dark: var(--brand-green-900);
+  --clsu-green: var(--brand-green-800);
+  --clsu-green-light: var(--brand-green-700);
+  --clsu-green-subtle: var(--brand-green-100);
+  --clsu-green-glow: rgba(20, 108, 54, 0.25);
+  --clsu-gold: var(--brand-gold-500);
+  --clsu-gold-bright: var(--brand-gold-400);
+  --clsu-gold-dark: var(--brand-gold-700);
+  --clsu-gold-subtle: var(--brand-gold-100);
+  --bg-deep: var(--surface-page);
+  --bg-surface: var(--surface-panel);
+  --bg-card: var(--surface-panel);
+  --bg-input: var(--surface-input);
+  --bg-highlight: var(--surface-subtle);
+  --border-light: var(--border-subtle);
+  --border-green: var(--border-brand);
+  --border-glow: var(--border-focus);
+  --card-shadow: var(--shadow-soft);
+  --modal-shadow: var(--shadow-modal);
+  --accent-primary: var(--brand-green-800);
+  --accent-cyan: #0D9488;
+  --accent-emerald: #10B981;
+  --accent-amber: var(--brand-gold-500);
+  --accent-rose: #E11D48;
+  --accent-violet: var(--brand-green-800);
+  --text-main: var(--text-primary);
+  --text-muted: var(--text-secondary);
+  --text-dim: var(--text-tertiary);
+  --text-green: var(--brand-green-800);
+  --text-white: var(--text-inverse);
 }
 
 * {
@@ -200,30 +225,7 @@ body {
 }
 
 .user-pill {
-  background: rgba(255, 255, 255, 0.15);
-  border: 1px solid rgba(255, 255, 255, 0.25);
-  color: #FFFFFF;
-  font-size: 0.82rem;
-  font-weight: 600;
-  padding: 0.35rem 0.9rem;
-  border-radius: var(--radius-full);
-}
-
-.logout-pill {
-  background: rgba(255, 255, 255, 0.9);
-  border: none;
-  color: var(--clsu-green);
-  font-size: 0.8rem;
-  font-weight: 700;
-  padding: 0.35rem 0.85rem;
-  border-radius: var(--radius-full);
-  cursor: pointer;
-  transition: all 0.2s ease;
-}
-
-.logout-pill:hover {
-  background: #FFFFFF;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+  display: none;
 }
 
 /* ====================================================================
@@ -496,7 +498,8 @@ body {
   overflow-x: auto;
 }
 
-.tab-btn {
+.tab-btn,
+.admin-tab-btn {
   background: transparent;
   border: 1px solid transparent;
   color: var(--text-muted);
@@ -512,12 +515,14 @@ body {
   transition: all 0.2s ease;
 }
 
-.tab-btn:hover {
+.tab-btn:hover,
+.admin-tab-btn:hover {
   color: var(--clsu-green);
   background: #F1F6F1;
 }
 
-.tab-btn.active {
+.tab-btn.active,
+.admin-tab-btn.active {
   background: var(--clsu-green);
   color: #FFFFFF;
   font-weight: 700;
@@ -1342,6 +1347,21 @@ body {
   background: #F9FCF9;
 }
 
+.admin-bulk-actions {
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.75rem 1rem;
+  background: #F8FAF8;
+  border-bottom: 1px solid var(--border-light);
+  color: var(--text-main);
+  font-size: 0.82rem;
+  font-weight: 700;
+}
+
+.admin-bulk-actions:not([hidden]) {
+  display: flex;
+}
+
 /* ====================================================================
    Form Inputs & Buttons
    ==================================================================== */
@@ -1361,6 +1381,65 @@ body {
 .form-input:focus {
   border-color: var(--clsu-green);
   box-shadow: 0 0 0 3px rgba(20, 108, 54, 0.15);
+}
+
+.saved-graphs-bulk-button,
+.export-choice-button,
+.export-cancel-button,
+.archive-load-button,
+.archive-delete-button {
+  border: 1px solid var(--clsu-green);
+  border-radius: var(--radius-sm);
+  padding: 0.45rem 0.8rem;
+  font-family: var(--font-sans);
+  font-size: 0.8rem;
+  font-weight: 700;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  transition: background-color 0.2s ease, border-color 0.2s ease, color 0.2s ease;
+}
+
+.saved-graphs-bulk-button,
+.export-choice-button,
+.archive-load-button {
+  background: var(--clsu-green);
+  color: #FFFFFF;
+}
+
+.saved-graphs-bulk-button:hover:not(:disabled),
+.export-choice-button:hover,
+.archive-load-button:hover {
+  background: var(--clsu-green-dark);
+}
+
+.saved-graphs-bulk-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.export-cancel-button {
+  background: #FFFFFF;
+  color: var(--text-muted);
+  border-color: var(--border-light);
+  justify-content: center;
+}
+
+.export-cancel-button:hover {
+  background: #F8FAF8;
+  color: var(--text-main);
+}
+
+.archive-delete-button {
+  background: #FFFFFF;
+  color: #B91C1C;
+  border-color: #FCA5A5;
+}
+
+.archive-delete-button:hover {
+  background: #FEF2F2;
+  border-color: #B91C1C;
 }
 
 .btn-icon {
@@ -1565,28 +1644,6 @@ body {
 
 .header-rename-input:hover {
   border-color: #94A3B8 !important;
-}
-
-.axis-indicator-badge {
-  font-size: 0.68rem;
-  font-weight: 800;
-  padding: 0.1rem 0.35rem;
-  border-radius: 3px;
-  display: inline-block;
-  text-transform: uppercase;
-  letter-spacing: 0.03em;
-}
-
-.axis-indicator-badge.x-axis {
-  background: #ECFDF5;
-  color: #047857;
-  border: 1px solid #A7F3D0;
-}
-
-.axis-indicator-badge.y-axis {
-  background: #EFF6FF;
-  color: #1D4ED8;
-  border: 1px solid #BFDBFE;
 }
 
 .studio-cell-input {
