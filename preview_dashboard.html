@@ -1,0 +1,630 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>IRIS - Central Luzon State University Performance Observatory</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        brand: {
+                            50: '#ecfdf5',
+                            100: '#d1fae5',
+                            500: '#10b981',
+                            600: '#059669',
+                            700: '#047857',
+                            800: '#065f46',
+                            900: '#064e3b',
+                            gold: '#f59e0b'
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    <!-- Flowbite CSS & JS -->
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/flowbite/2.3.0/flowbite.min.css" rel="stylesheet" />
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/flowbite/2.3.0/flowbite.min.js"></script>
+    <!-- Apache ECharts CDN -->
+    <script src="https://cdn.jsdelivr.net/npm/echarts@5.5.0/dist/echarts.min.js"></script>
+    <!-- Font Awesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Google Fonts: Inter -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+    </style>
+</head>
+<body class="bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-gray-100 min-h-screen flex flex-col">
+
+    <!-- Navbar -->
+    <nav class="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 sticky top-0 z-50 backdrop-blur-md bg-opacity-90 dark:bg-opacity-90">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex justify-between h-16">
+                <!-- Brand / Logo -->
+                <div class="flex items-center space-x-3">
+                    <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-emerald-600 to-teal-400 flex items-center justify-center text-white font-black text-xl shadow-lg shadow-emerald-500/20 ring-2 ring-emerald-400/30">
+                        <i class="fa-solid fa-seedling"></i>
+                    </div>
+                    <div>
+                        <div class="flex items-center space-x-2">
+                            <span class="text-xl font-bold tracking-tight bg-gradient-to-r from-emerald-600 to-teal-500 dark:from-emerald-400 dark:to-teal-300 bg-clip-text text-transparent">IRIS</span>
+                            <span class="text-xs px-2 py-0.5 font-medium rounded-full bg-emerald-100 dark:bg-emerald-900/60 text-emerald-800 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-700/50">CLSU</span>
+                        </div>
+                        <p class="text-xs text-gray-500 dark:text-gray-400 hidden sm:block">Institutional Ranking & Intelligence System</p>
+                    </div>
+                </div>
+
+                <!-- Center Nav Links -->
+                <div class="hidden md:flex items-center space-x-1">
+                    <a href="#" class="inline-flex items-center px-3 py-2 text-sm font-semibold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-gray-700/60 rounded-lg">
+                        <i class="fa-solid fa-chart-pie mr-2"></i> Observatory
+                    </a>
+                    <a href="#ranking-section" class="inline-flex items-center px-3 py-2 text-sm font-medium text-gray-600 dark:text-gray-300 hover:text-emerald-600 dark:hover:text-emerald-400 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors">
+                        <i class="fa-solid fa-trophy mr-2"></i> Global Rankings
+                    </a>
+                    <a href="#kpi-breakdown" class="inline-flex items-center px-3 py-2 text-sm font-medium text-gray-600 dark:text-gray-300 hover:text-emerald-600 dark:hover:text-emerald-400 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors">
+                        <i class="fa-solid fa-layer-group mr-2"></i> KPI Breakdown
+                    </a>
+                </div>
+
+                <!-- Right Actions: Dark Mode & User Profile Dropdown -->
+                <div class="flex items-center space-x-3">
+                    <!-- Dark Mode Toggle -->
+                    <button id="theme-toggle" type="button" class="text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 focus:outline-none focus:ring-4 focus:ring-gray-200 dark:focus:ring-gray-700 rounded-lg text-sm p-2.5">
+                        <i id="theme-toggle-dark-icon" class="hidden fa-solid fa-moon text-base"></i>
+                        <i id="theme-toggle-light-icon" class="hidden fa-solid fa-sun text-base text-amber-400"></i>
+                    </button>
+
+                    <!-- User Profile Dropdown -->
+                    <div class="relative">
+                        <button type="button" class="flex text-sm bg-gray-800 rounded-full focus:ring-4 focus:ring-emerald-300 dark:focus:ring-emerald-800" id="user-menu-button" aria-expanded="false" data-dropdown-toggle="user-dropdown" data-dropdown-placement="bottom">
+                            <span class="sr-only">Open user menu</span>
+                            <div class="w-9 h-9 rounded-full bg-gradient-to-tr from-emerald-500 to-amber-400 flex items-center justify-center text-white font-bold text-sm shadow">
+                                FA
+                            </div>
+                        </button>
+                        <!-- Dropdown menu -->
+                        <div class="z-50 hidden my-4 text-base list-none bg-white divide-y divide-gray-100 rounded-lg shadow-lg dark:bg-gray-700 dark:divide-gray-600" id="user-dropdown">
+                            <div class="px-4 py-3">
+                                <span class="block text-sm font-semibold text-gray-900 dark:text-white">Faculty Analyst</span>
+                                <span class="block text-xs text-gray-500 truncate dark:text-gray-400">analyst@clsu.edu.ph</span>
+                            </div>
+                            <ul class="py-2" aria-labelledby="user-menu-button">
+                                <li>
+                                    <a href="#" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 dark:hover:bg-gray-600 dark:text-gray-200 dark:hover:text-white"><i class="fa-solid fa-user-circle mr-2"></i> Profile & Roles</a>
+                                </li>
+                                <li>
+                                    <a href="#" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 dark:hover:bg-gray-600 dark:text-gray-200 dark:hover:text-white"><i class="fa-solid fa-file-export mr-2"></i> Export Reports</a>
+                                </li>
+                            </ul>
+                            <div class="py-1">
+                                <a href="#" class="block px-4 py-2 text-sm text-red-600 hover:bg-gray-100 dark:hover:bg-gray-600 dark:text-red-400 dark:hover:text-white"><i class="fa-solid fa-right-from-bracket mr-2"></i> Sign out</a>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Main Container -->
+    <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 flex-1 w-full space-y-8">
+        
+        <!-- Welcome & Breadcrumb Header -->
+        <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4 bg-gradient-to-r from-emerald-800 to-teal-900 dark:from-emerald-950 dark:to-gray-800 text-white rounded-2xl p-6 shadow-xl relative overflow-hidden">
+            <div class="absolute -right-10 -bottom-10 w-64 h-64 bg-white/5 rounded-full blur-2xl pointer-events-none"></div>
+            <div class="relative z-10">
+                <div class="flex items-center space-x-2 text-emerald-300 text-xs font-semibold uppercase tracking-wider mb-1">
+                    <i class="fa-solid fa-building-columns"></i>
+                    <span>Central Luzon State University &bull; Institutional Performance</span>
+                </div>
+                <h1 class="text-2xl sm:text-3xl font-black tracking-tight text-white">Observatory & Analytics Engine</h1>
+                <p class="text-sm text-emerald-100/80 mt-1 max-w-xl">
+                    Real-time tracking of THE, QS, WURI rankings, Scopus citations, SDG impacts, and academic accreditations.
+                </p>
+            </div>
+            <div class="relative z-10 flex flex-wrap items-center gap-3">
+                <button type="button" class="inline-flex items-center px-4 py-2.5 text-sm font-semibold text-white bg-emerald-600 hover:bg-emerald-500 focus:ring-4 focus:ring-emerald-300 dark:focus:ring-emerald-800 rounded-xl shadow-md transition-all">
+                    <i class="fa-solid fa-download mr-2"></i> Generate Dossier
+                </button>
+                <div class="flex items-center bg-black/30 backdrop-blur px-3 py-2 rounded-xl text-xs border border-white/10 text-emerald-200">
+                    <i class="fa-solid fa-circle text-emerald-400 text-[10px] mr-2 animate-pulse"></i> Live Data: AY 2024-2025
+                </div>
+            </div>
+        </div>
+
+        <!-- Metric KPI Cards Grid (4 Columns) -->
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
+            
+            <!-- Card 1: THE Impact Rank -->
+            <div class="p-5 bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 shadow-sm hover:shadow-md transition-shadow relative overflow-hidden group">
+                <div class="absolute top-0 left-0 h-1 w-full bg-gradient-to-r from-emerald-500 to-teal-400"></div>
+                <div class="flex items-center justify-between">
+                    <span class="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">THE Impact Ranking</span>
+                    <div class="w-8 h-8 rounded-lg bg-emerald-50 dark:bg-emerald-900/40 text-emerald-600 dark:text-emerald-400 flex items-center justify-center">
+                        <i class="fa-solid fa-award"></i>
+                    </div>
+                </div>
+                <div class="mt-4 flex items-baseline justify-between">
+                    <div class="text-3xl font-extrabold text-gray-900 dark:text-white">#801-1000</div>
+                    <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-bold bg-emerald-100 text-emerald-800 dark:bg-emerald-900/60 dark:text-emerald-300">
+                        <i class="fa-solid fa-arrow-trend-up mr-1"></i> +100 Tier
+                    </span>
+                </div>
+                <p class="text-xs text-gray-500 dark:text-gray-400 mt-2">Targeting Top 600 by 2026</p>
+            </div>
+
+            <!-- Card 2: Research Output -->
+            <div class="p-5 bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 shadow-sm hover:shadow-md transition-shadow relative overflow-hidden group">
+                <div class="absolute top-0 left-0 h-1 w-full bg-gradient-to-r from-teal-500 to-cyan-400"></div>
+                <div class="flex items-center justify-between">
+                    <span class="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Scopus / Web of Sci</span>
+                    <div class="w-8 h-8 rounded-lg bg-cyan-50 dark:bg-cyan-900/40 text-cyan-600 dark:text-cyan-400 flex items-center justify-center">
+                        <i class="fa-solid fa-book-journal-whills"></i>
+                    </div>
+                </div>
+                <div class="mt-4 flex items-baseline justify-between">
+                    <div class="text-3xl font-extrabold text-gray-900 dark:text-white">1,420</div>
+                    <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-bold bg-cyan-100 text-cyan-800 dark:bg-cyan-900/60 dark:text-cyan-300">
+                        <i class="fa-solid fa-arrow-trend-up mr-1"></i> +18.4%
+                    </span>
+                </div>
+                <p class="text-xs text-gray-500 dark:text-gray-400 mt-2">Indexed publications & citations</p>
+            </div>
+
+            <!-- Card 3: SDG Impact Score -->
+            <div class="p-5 bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 shadow-sm hover:shadow-md transition-shadow relative overflow-hidden group">
+                <div class="absolute top-0 left-0 h-1 w-full bg-gradient-to-r from-amber-500 to-orange-400"></div>
+                <div class="flex items-center justify-between">
+                    <span class="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">SDG Aggregate Index</span>
+                    <div class="w-8 h-8 rounded-lg bg-amber-50 dark:bg-amber-900/40 text-amber-600 dark:text-amber-400 flex items-center justify-center">
+                        <i class="fa-solid fa-earth-americas"></i>
+                    </div>
+                </div>
+                <div class="mt-4 flex items-baseline justify-between">
+                    <div class="text-3xl font-extrabold text-gray-900 dark:text-white">88.5 <span class="text-lg font-medium text-gray-400">/ 100</span></div>
+                    <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-bold bg-amber-100 text-amber-800 dark:bg-amber-900/60 dark:text-amber-300">
+                        <i class="fa-solid fa-star mr-1"></i> Band 1
+                    </span>
+                </div>
+                <p class="text-xs text-gray-500 dark:text-gray-400 mt-2">Top in SDG 2 (Zero Hunger) & 15 (Life on Land)</p>
+            </div>
+
+            <!-- Card 4: Accreditations -->
+            <div class="p-5 bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 shadow-sm hover:shadow-md transition-shadow relative overflow-hidden group">
+                <div class="absolute top-0 left-0 h-1 w-full bg-gradient-to-r from-emerald-600 to-green-500"></div>
+                <div class="flex items-center justify-between">
+                    <span class="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">AACCUP / QA Rating</span>
+                    <div class="w-8 h-8 rounded-lg bg-emerald-50 dark:bg-emerald-900/40 text-emerald-600 dark:text-emerald-400 flex items-center justify-center">
+                        <i class="fa-solid fa-certificate"></i>
+                    </div>
+                </div>
+                <div class="mt-4 flex items-baseline justify-between">
+                    <div class="text-3xl font-extrabold text-gray-900 dark:text-white">Level IV</div>
+                    <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-bold bg-emerald-100 text-emerald-800 dark:bg-emerald-900/60 dark:text-emerald-300">
+                        <i class="fa-solid fa-check-double mr-1"></i> 94% COE
+                    </span>
+                </div>
+                <p class="text-xs text-gray-500 dark:text-gray-400 mt-2">Centers of Excellence / Development</p>
+            </div>
+        </div>
+
+        <!-- Charts Row 1: ECharts Line Chart (Multi-Year Trajectory) & Doughnut Chart (SDG Distribution) -->
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            
+            <!-- Multi-Year Trajectory Chart (2 cols) -->
+            <div class="lg:col-span-2 bg-white dark:bg-gray-800 p-6 rounded-2xl border border-gray-200 dark:border-gray-700 shadow-sm">
+                <div class="flex flex-col sm:flex-row sm:items-center justify-between pb-4 border-b border-gray-100 dark:border-gray-700 gap-2">
+                    <div>
+                        <h2 class="text-lg font-bold text-gray-900 dark:text-white flex items-center">
+                            <i class="fa-solid fa-chart-line text-emerald-500 mr-2"></i>
+                            Historical Performance & Projections (2020 - 2026)
+                        </h2>
+                        <p class="text-xs text-gray-500 dark:text-gray-400">Institutional scoring across international ranking bodies</p>
+                    </div>
+                    <div class="flex items-center space-x-2">
+                        <span class="text-xs font-medium text-gray-500 dark:text-gray-400">View:</span>
+                        <select id="chart-filter-range" class="bg-gray-50 border border-gray-300 text-gray-900 text-xs rounded-lg focus:ring-emerald-500 focus:border-emerald-500 block p-2 dark:bg-gray-700 dark:border-gray-600 dark:text-white">
+                            <option selected>All Ranking Indices</option>
+                            <option>THE Impact Index Only</option>
+                            <option>QS Asia Index Only</option>
+                            <option>WURI Innovation Only</option>
+                        </select>
+                    </div>
+                </div>
+                <!-- ECharts Container -->
+                <div id="trajectory-chart" class="w-full h-80 pt-4"></div>
+            </div>
+
+            <!-- Doughnut Chart: SDG Impact Distribution (1 col) -->
+            <div class="bg-white dark:bg-gray-800 p-6 rounded-2xl border border-gray-200 dark:border-gray-700 shadow-sm flex flex-col">
+                <div class="pb-4 border-b border-gray-100 dark:border-gray-700">
+                    <h2 class="text-lg font-bold text-gray-900 dark:text-white flex items-center">
+                        <i class="fa-solid fa-chart-pie text-amber-500 mr-2"></i>
+                        SDG Contribution Share
+                    </h2>
+                    <p class="text-xs text-gray-500 dark:text-gray-400">Relative points share by Sustainable Development Goal</p>
+                </div>
+                <!-- ECharts Container -->
+                <div id="sdg-chart" class="w-full h-80 pt-4 flex-1"></div>
+            </div>
+        </div>
+
+        <!-- Charts Row 2: Faculty & Research Horizontal Bar Chart + Real-Time KPI Table -->
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6" id="kpi-breakdown">
+            
+            <!-- Horizontal Bar: College Performance Comparison -->
+            <div class="bg-white dark:bg-gray-800 p-6 rounded-2xl border border-gray-200 dark:border-gray-700 shadow-sm">
+                <div class="pb-4 border-b border-gray-100 dark:border-gray-700">
+                    <h2 class="text-lg font-bold text-gray-900 dark:text-white flex items-center">
+                        <i class="fa-solid fa-chart-column text-teal-500 mr-2"></i>
+                        College Research Output
+                    </h2>
+                    <p class="text-xs text-gray-500 dark:text-gray-400">Publications & funded research by department (2024)</p>
+                </div>
+                <div id="college-bar-chart" class="w-full h-80 pt-4"></div>
+            </div>
+
+            <!-- Table: Institutional Ranking Records (2 cols) -->
+            <div class="lg:col-span-2 bg-white dark:bg-gray-800 p-6 rounded-2xl border border-gray-200 dark:border-gray-700 shadow-sm flex flex-col" id="ranking-section">
+                <div class="flex flex-col sm:flex-row sm:items-center justify-between pb-4 border-b border-gray-100 dark:border-gray-700 gap-2">
+                    <div>
+                        <h2 class="text-lg font-bold text-gray-900 dark:text-white flex items-center">
+                            <i class="fa-solid fa-list-check text-emerald-500 mr-2"></i>
+                            Official Ranking Metric Submissions
+                        </h2>
+                        <p class="text-xs text-gray-500 dark:text-gray-400">Audited indicators submitted to international ranking commissions</p>
+                    </div>
+                    <div class="relative">
+                        <div class="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none">
+                            <i class="fa-solid fa-magnifying-glass text-gray-400 text-xs"></i>
+                        </div>
+                        <input type="text" id="table-search" class="block p-2 pl-9 text-xs text-gray-900 border border-gray-300 rounded-lg w-48 sm:w-60 bg-gray-50 focus:ring-emerald-500 focus:border-emerald-500 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white" placeholder="Search metric...">
+                    </div>
+                </div>
+
+                <!-- Responsive Table Component -->
+                <div class="overflow-x-auto mt-4 rounded-xl border border-gray-100 dark:border-gray-700">
+                    <table class="w-full text-sm text-left text-gray-500 dark:text-gray-400">
+                        <thead class="text-xs text-gray-700 uppercase bg-gray-100 dark:bg-gray-700 dark:text-gray-300">
+                            <tr>
+                                <th scope="col" class="px-4 py-3">Ranking Body / Metric</th>
+                                <th scope="col" class="px-4 py-3">Reporting Period</th>
+                                <th scope="col" class="px-4 py-3">Target Score</th>
+                                <th scope="col" class="px-4 py-3">Current Score</th>
+                                <th scope="col" class="px-4 py-3">Audit Status</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-gray-200 dark:divide-gray-700">
+                            <tr class="bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-750 transition-colors">
+                                <td class="px-4 py-3 font-semibold text-gray-900 dark:text-white flex items-center space-x-2">
+                                    <span class="w-2 h-2 rounded-full bg-emerald-500"></span>
+                                    <span>THE Impact - SDG 2 (Zero Hunger)</span>
+                                </td>
+                                <td class="px-4 py-3">2024 Cycle</td>
+                                <td class="px-4 py-3 font-medium text-gray-600 dark:text-gray-300">85.0 pts</td>
+                                <td class="px-4 py-3 font-bold text-emerald-600 dark:text-emerald-400">89.4 pts</td>
+                                <td class="px-4 py-3">
+                                    <span class="bg-emerald-100 text-emerald-800 text-xs font-medium px-2.5 py-0.5 rounded-full dark:bg-emerald-900/60 dark:text-emerald-300">
+                                        <i class="fa-solid fa-circle-check mr-1"></i> Verified
+                                    </span>
+                                </td>
+                            </tr>
+                            <tr class="bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-750 transition-colors">
+                                <td class="px-4 py-3 font-semibold text-gray-900 dark:text-white flex items-center space-x-2">
+                                    <span class="w-2 h-2 rounded-full bg-emerald-500"></span>
+                                    <span>THE Impact - SDG 15 (Life on Land)</span>
+                                </td>
+                                <td class="px-4 py-3">2024 Cycle</td>
+                                <td class="px-4 py-3 font-medium text-gray-600 dark:text-gray-300">80.0 pts</td>
+                                <td class="px-4 py-3 font-bold text-emerald-600 dark:text-emerald-400">84.1 pts</td>
+                                <td class="px-4 py-3">
+                                    <span class="bg-emerald-100 text-emerald-800 text-xs font-medium px-2.5 py-0.5 rounded-full dark:bg-emerald-900/60 dark:text-emerald-300">
+                                        <i class="fa-solid fa-circle-check mr-1"></i> Verified
+                                    </span>
+                                </td>
+                            </tr>
+                            <tr class="bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-750 transition-colors">
+                                <td class="px-4 py-3 font-semibold text-gray-900 dark:text-white flex items-center space-x-2">
+                                    <span class="w-2 h-2 rounded-full bg-amber-500"></span>
+                                    <span>QS Asia - Academic Reputation</span>
+                                </td>
+                                <td class="px-4 py-3">2025 Edition</td>
+                                <td class="px-4 py-3 font-medium text-gray-600 dark:text-gray-300">65.0 pts</td>
+                                <td class="px-4 py-3 font-bold text-amber-600 dark:text-amber-400">61.8 pts</td>
+                                <td class="px-4 py-3">
+                                    <span class="bg-amber-100 text-amber-800 text-xs font-medium px-2.5 py-0.5 rounded-full dark:bg-amber-900/60 dark:text-amber-300">
+                                        <i class="fa-solid fa-clock mr-1"></i> In Review
+                                    </span>
+                                </td>
+                            </tr>
+                            <tr class="bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-750 transition-colors">
+                                <td class="px-4 py-3 font-semibold text-gray-900 dark:text-white flex items-center space-x-2">
+                                    <span class="w-2 h-2 rounded-full bg-emerald-500"></span>
+                                    <span>WURI - Industrial Application</span>
+                                </td>
+                                <td class="px-4 py-3">2024 Ranking</td>
+                                <td class="px-4 py-3 font-medium text-gray-600 dark:text-gray-300">Top 50 Global</td>
+                                <td class="px-4 py-3 font-bold text-emerald-600 dark:text-emerald-400">Rank #32 Global</td>
+                                <td class="px-4 py-3">
+                                    <span class="bg-emerald-100 text-emerald-800 text-xs font-medium px-2.5 py-0.5 rounded-full dark:bg-emerald-900/60 dark:text-emerald-300">
+                                        <i class="fa-solid fa-circle-check mr-1"></i> Verified
+                                    </span>
+                                </td>
+                            </tr>
+                            <tr class="bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-750 transition-colors">
+                                <td class="px-4 py-3 font-semibold text-gray-900 dark:text-white flex items-center space-x-2">
+                                    <span class="w-2 h-2 rounded-full bg-cyan-500"></span>
+                                    <span>International Faculty Ratio</span>
+                                </td>
+                                <td class="px-4 py-3">AY 2024-2025</td>
+                                <td class="px-4 py-3 font-medium text-gray-600 dark:text-gray-300">10.0%</td>
+                                <td class="px-4 py-3 font-bold text-cyan-600 dark:text-cyan-400">8.2%</td>
+                                <td class="px-4 py-3">
+                                    <span class="bg-blue-100 text-blue-800 text-xs font-medium px-2.5 py-0.5 rounded-full dark:bg-blue-900/60 dark:text-blue-300">
+                                        <i class="fa-solid fa-arrows-rotate mr-1"></i> Ongoing
+                                    </span>
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+    </main>
+
+    <!-- Footer -->
+    <footer class="bg-white dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700 py-6 mt-12">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row items-center justify-between text-xs text-gray-500 dark:text-gray-400 gap-4">
+            <div class="flex items-center space-x-2">
+                <span class="font-bold text-gray-800 dark:text-gray-200">IRIS</span>
+                <span>&bull; CLSU Institutional Rankings and Information System</span>
+            </div>
+            <div>
+                Crafted for Central Luzon State University &bull; Powered by Flowbite & Apache ECharts
+            </div>
+        </div>
+    </footer>
+
+    <!-- Theme Toggle & ECharts Script Initialization -->
+    <script>
+        // --- 1. Dark Mode Toggle Logic ---
+        const themeToggleDarkIcon = document.getElementById('theme-toggle-dark-icon');
+        const themeToggleLightIcon = document.getElementById('theme-toggle-light-icon');
+        const themeToggleBtn = document.getElementById('theme-toggle');
+
+        if (document.documentElement.classList.contains('dark')) {
+            themeToggleLightIcon.classList.remove('hidden');
+        } else {
+            themeToggleDarkIcon.classList.remove('hidden');
+        }
+
+        themeToggleBtn.addEventListener('click', function() {
+            themeToggleDarkIcon.classList.toggle('hidden');
+            themeToggleLightIcon.classList.toggle('hidden');
+
+            if (document.documentElement.classList.contains('dark')) {
+                document.documentElement.classList.remove('dark');
+                localStorage.setItem('color-theme', 'light');
+            } else {
+                document.documentElement.classList.add('dark');
+                localStorage.setItem('color-theme', 'dark');
+            }
+            // Re-render ECharts with updated theme
+            initCharts();
+        });
+
+        // --- 2. Apache ECharts Initialization ---
+        let trajectoryChart = null;
+        let sdgChart = null;
+        let collegeBarChart = null;
+
+        function initCharts() {
+            const isDark = document.documentElement.classList.contains('dark');
+            const textColor = isDark ? '#9ca3af' : '#4b5563';
+            const splitLineColor = isDark ? '#374151' : '#f3f4f6';
+            const tooltipBg = isDark ? '#1f2937' : '#ffffff';
+            const tooltipBorder = isDark ? '#374151' : '#e5e7eb';
+            const tooltipText = isDark ? '#f9fafb' : '#111827';
+
+            // 2.1 Multi-Year Trajectory Line Chart
+            if (trajectoryChart) trajectoryChart.dispose();
+            const trajectoryElem = document.getElementById('trajectory-chart');
+            trajectoryChart = echarts.init(trajectoryElem);
+            
+            const trajectoryOption = {
+                backgroundColor: 'transparent',
+                tooltip: {
+                    trigger: 'axis',
+                    backgroundColor: tooltipBg,
+                    borderColor: tooltipBorder,
+                    textStyle: { color: tooltipText }
+                },
+                legend: {
+                    data: ['THE Impact Index', 'QS Asia Score', 'WURI Innovation Index'],
+                    textStyle: { color: textColor },
+                    top: 0
+                },
+                grid: {
+                    left: '3%',
+                    right: '4%',
+                    bottom: '3%',
+                    containLabel: true
+                },
+                xAxis: {
+                    type: 'category',
+                    boundaryGap: false,
+                    data: ['2020', '2021', '2022', '2023', '2024', '2025 (Est)', '2026 (Target)'],
+                    axisLine: { lineStyle: { color: splitLineColor } },
+                    axisLabel: { color: textColor }
+                },
+                yAxis: {
+                    type: 'value',
+                    min: 40,
+                    max: 100,
+                    splitLine: { lineStyle: { color: splitLineColor } },
+                    axisLabel: { color: textColor }
+                },
+                series: [
+                    {
+                        name: 'THE Impact Index',
+                        type: 'line',
+                        smooth: true,
+                        lineStyle: { width: 3, color: '#10b981' },
+                        itemStyle: { color: '#10b981' },
+                        areaStyle: {
+                            color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+                                { offset: 0, color: 'rgba(16, 185, 129, 0.3)' },
+                                { offset: 1, color: 'rgba(16, 185, 129, 0.0)' }
+                            ])
+                        },
+                        data: [52, 59, 68, 74, 82, 88, 93]
+                    },
+                    {
+                        name: 'QS Asia Score',
+                        type: 'line',
+                        smooth: true,
+                        lineStyle: { width: 3, color: '#06b6d4' },
+                        itemStyle: { color: '#06b6d4' },
+                        data: [45, 49, 54, 60, 67, 72, 78]
+                    },
+                    {
+                        name: 'WURI Innovation Index',
+                        type: 'line',
+                        smooth: true,
+                        lineStyle: { width: 3, color: '#f59e0b', type: 'dashed' },
+                        itemStyle: { color: '#f59e0b' },
+                        data: [60, 65, 71, 79, 85, 90, 95]
+                    }
+                ]
+            };
+            trajectoryChart.setOption(trajectoryOption);
+
+            // 2.2 SDG Contribution Doughnut Chart
+            if (sdgChart) sdgChart.dispose();
+            const sdgElem = document.getElementById('sdg-chart');
+            sdgChart = echarts.init(sdgElem);
+
+            const sdgOption = {
+                backgroundColor: 'transparent',
+                tooltip: {
+                    trigger: 'item',
+                    backgroundColor: tooltipBg,
+                    borderColor: tooltipBorder,
+                    textStyle: { color: tooltipText },
+                    formatter: '{b}: {c} pts ({d}%)'
+                },
+                legend: {
+                    orient: 'horizontal',
+                    bottom: '0',
+                    textStyle: { color: textColor, fontSize: 11 }
+                },
+                series: [
+                    {
+                        name: 'SDG Goals',
+                        type: 'pie',
+                        radius: ['45%', '70%'],
+                        avoidLabelOverlap: false,
+                        itemStyle: {
+                            borderRadius: 8,
+                            borderColor: isDark ? '#1f2937' : '#ffffff',
+                            borderWidth: 2
+                        },
+                        label: {
+                            show: false,
+                            position: 'center'
+                        },
+                        emphasis: {
+                            label: {
+                                show: true,
+                                fontSize: 14,
+                                fontWeight: 'bold',
+                                color: textColor
+                            }
+                        },
+                        labelLine: {
+                            show: false
+                        },
+                        data: [
+                            { value: 35, name: 'SDG 2: Zero Hunger', itemStyle: { color: '#10b981' } },
+                            { value: 25, name: 'SDG 15: Life on Land', itemStyle: { color: '#059669' } },
+                            { value: 18, name: 'SDG 4: Quality Education', itemStyle: { color: '#06b6d4' } },
+                            { value: 12, name: 'SDG 13: Climate Action', itemStyle: { color: '#f59e0b' } },
+                            { value: 10, name: 'Other SDGs', itemStyle: { color: '#8b5cf6' } }
+                        ]
+                    }
+                ]
+            };
+            sdgChart.setOption(sdgOption);
+
+            // 2.3 College Research Output (Horizontal Bar Chart)
+            if (collegeBarChart) collegeBarChart.dispose();
+            const collegeElem = document.getElementById('college-bar-chart');
+            collegeBarChart = echarts.init(collegeElem);
+
+            const collegeOption = {
+                backgroundColor: 'transparent',
+                tooltip: {
+                    trigger: 'axis',
+                    axisPointer: { type: 'shadow' },
+                    backgroundColor: tooltipBg,
+                    borderColor: tooltipBorder,
+                    textStyle: { color: tooltipText }
+                },
+                grid: {
+                    left: '3%',
+                    right: '8%',
+                    bottom: '3%',
+                    top: '5%',
+                    containLabel: true
+                },
+                xAxis: {
+                    type: 'value',
+                    splitLine: { lineStyle: { color: splitLineColor } },
+                    axisLabel: { color: textColor }
+                },
+                yAxis: {
+                    type: 'category',
+                    data: ['Agriculture (CAG)', 'Fisheries (CF)', 'Veterinary (CVM)', 'Engineering (CEn)', 'Arts & Sci (CAS)'],
+                    axisLine: { lineStyle: { color: splitLineColor } },
+                    axisLabel: { color: textColor, fontSize: 11 }
+                },
+                series: [
+                    {
+                        name: 'Indexed Publications',
+                        type: 'bar',
+                        data: [420, 280, 245, 190, 160],
+                        itemStyle: {
+                            color: new echarts.graphic.LinearGradient(1, 0, 0, 0, [
+                                { offset: 0, color: '#10b981' },
+                                { offset: 1, color: '#047857' }
+                            ]),
+                            borderRadius: [0, 6, 6, 0]
+                        }
+                    }
+                ]
+            };
+            collegeBarChart.setOption(collegeOption);
+        }
+
+        // Initialize when DOM loaded
+        document.addEventListener('DOMContentLoaded', () => {
+            initCharts();
+            window.addEventListener('resize', () => {
+                if (trajectoryChart) trajectoryChart.resize();
+                if (sdgChart) sdgChart.resize();
+                if (collegeBarChart) collegeBarChart.resize();
+            });
+        });
+    </script>
+</body>
+</html>
