@@ -1,6 +1,391 @@
 {
   "records": [
     {
+      "id": "scan_1789972357718_txd40u",
+      "fileName": "qao_evaluation_scores_2024.xlsx",
+      "fileType": "excel",
+      "fileSize": 18381,
+      "scannedAt": "2026-09-21T06:32:37.718Z",
+      "status": "Pending Review",
+      "docType": "General Institutional Data",
+      "rawText": "--- Worksheet: QAO_Scores_2024 (6 rows, 5 cols) ---\n\nCollege / Unit | QAO Evaluation Score (%) | Accredited Programs | Faculty Total | Passing Rate (%)\nCollege of Arts and Sciences (CAS) | 94.5 | 12 | 145 | 92.4\nCollege of Business Administration (CBA) | 89.2 | 8 | 98 | 86.7\nCollege of Engineering (COE) | 96 | 10 | 160 | 95.8\nCollege of Education (CED) | 91.8 | 6 | 75 | 89.5\nCollege of Agriculture (CA) | 93.4 | 9 | 110 | 91\n\n--- Worksheet: Annual_Trends (5 rows, 3 cols) ---\n\nAcademic Year | Institutional Performance Index | Target Score\n2020-2021 | 88.5 | 85\n2021-2022 | 91.2 | 90\n2022-2023 | 93 | 92\n2023-2024 | 95.4 | 94",
+      "extractedData": {
+        "QAO_Scores_2024": {
+          "name": "QAO_Scores_2024",
+          "rowCount": 6,
+          "colCount": 5,
+          "formulaCount": 0,
+          "headers": [
+            "College / Unit",
+            "QAO Evaluation Score (%)",
+            "Accredited Programs",
+            "Faculty Total",
+            "Passing Rate (%)"
+          ],
+          "rows": [
+            [
+              "College of Arts and Sciences (CAS)",
+              94.5,
+              12,
+              145,
+              92.4
+            ],
+            [
+              "College of Business Administration (CBA)",
+              89.2,
+              8,
+              98,
+              86.7
+            ],
+            [
+              "College of Engineering (COE)",
+              96,
+              10,
+              160,
+              95.8
+            ],
+            [
+              "College of Education (CED)",
+              91.8,
+              6,
+              75,
+              89.5
+            ],
+            [
+              "College of Agriculture (CA)",
+              93.4,
+              9,
+              110,
+              91
+            ]
+          ],
+          "numericStats": {
+            "QAO Evaluation Score (%)": {
+              "count": 5,
+              "sum": 464.9,
+              "min": 89.2,
+              "max": 96,
+              "avg": 92.98
+            },
+            "Accredited Programs": {
+              "count": 5,
+              "sum": 45,
+              "min": 6,
+              "max": 12,
+              "avg": 9
+            },
+            "Faculty Total": {
+              "count": 5,
+              "sum": 588,
+              "min": 75,
+              "max": 160,
+              "avg": 117.6
+            },
+            "Passing Rate (%)": {
+              "count": 5,
+              "sum": 455.4,
+              "min": 86.7,
+              "max": 95.8,
+              "avg": 91.08
+            }
+          }
+        },
+        "Annual_Trends": {
+          "name": "Annual_Trends",
+          "rowCount": 5,
+          "colCount": 3,
+          "formulaCount": 0,
+          "headers": [
+            "Academic Year",
+            "Institutional Performance Index",
+            "Target Score"
+          ],
+          "rows": [
+            [
+              "2020-2021",
+              88.5,
+              85
+            ],
+            [
+              "2021-2022",
+              91.2,
+              90
+            ],
+            [
+              "2022-2023",
+              93,
+              92
+            ],
+            [
+              "2023-2024",
+              95.4,
+              94
+            ]
+          ],
+          "numericStats": {
+            "Institutional Performance Index": {
+              "count": 4,
+              "sum": 368.1,
+              "min": 88.5,
+              "max": 95.4,
+              "avg": 92.03
+            },
+            "Target Score": {
+              "count": 4,
+              "sum": 361,
+              "min": 85,
+              "max": 94,
+              "avg": 90.25
+            }
+          }
+        }
+      },
+      "graphDrafts": [
+        {
+          "id": "draft_1789972357718_0",
+          "title": "QAO Evaluation Score (%) — Spreadsheet: QAO_Scores_2024",
+          "source": "Spreadsheet: QAO_Scores_2024",
+          "primaryType": "pie",
+          "recommendation": "Pie Chart recommended to visualize proportional composition.",
+          "isDraft": true,
+          "chartData": {
+            "labels": [
+              "College of Arts and Sciences (CAS)",
+              "College of Business Administration (CBA)",
+              "College of Engineering (COE)",
+              "College of Education (CED)",
+              "College of Agriculture (CA)"
+            ],
+            "datasets": [
+              {
+                "label": "QAO Evaluation Score (%)",
+                "data": [
+                  94.5,
+                  89.2,
+                  96,
+                  91.8,
+                  93.4
+                ],
+                "backgroundColor": [
+                  "rgba(20, 108, 54, 0.45)",
+                  "rgba(245, 158, 11, 0.45)",
+                  "rgba(13, 148, 136, 0.45)",
+                  "rgba(16, 185, 129, 0.45)",
+                  "rgba(217, 119, 6, 0.45)",
+                  "rgba(37, 99, 235, 0.45)"
+                ],
+                "borderColor": [
+                  "#146C36",
+                  "#F59E0B",
+                  "#0D9488",
+                  "#10B981",
+                  "#D97706",
+                  "#2563EB"
+                ],
+                "borderWidth": 2,
+                "tension": 0.35,
+                "fill": false
+              }
+            ]
+          }
+        },
+        {
+          "id": "draft_1789972357718_1",
+          "title": "Accredited Programs — Spreadsheet: QAO_Scores_2024",
+          "source": "Spreadsheet: QAO_Scores_2024",
+          "primaryType": "bar",
+          "recommendation": "Bar Chart recommended to compare distinct categories side-by-side.",
+          "isDraft": true,
+          "chartData": {
+            "labels": [
+              "College of Arts and Sciences (CAS)",
+              "College of Business Administration (CBA)",
+              "College of Engineering (COE)",
+              "College of Education (CED)",
+              "College of Agriculture (CA)"
+            ],
+            "datasets": [
+              {
+                "label": "Accredited Programs",
+                "data": [
+                  12,
+                  8,
+                  10,
+                  6,
+                  9
+                ],
+                "backgroundColor": "rgba(245, 158, 11, 0.45)",
+                "borderColor": "#F59E0B",
+                "borderWidth": 2,
+                "tension": 0.35,
+                "fill": false
+              }
+            ]
+          }
+        },
+        {
+          "id": "draft_1789972357718_2",
+          "title": "Faculty Total — Spreadsheet: QAO_Scores_2024",
+          "source": "Spreadsheet: QAO_Scores_2024",
+          "primaryType": "bar",
+          "recommendation": "Bar Chart recommended to compare distinct categories side-by-side.",
+          "isDraft": true,
+          "chartData": {
+            "labels": [
+              "College of Arts and Sciences (CAS)",
+              "College of Business Administration (CBA)",
+              "College of Engineering (COE)",
+              "College of Education (CED)",
+              "College of Agriculture (CA)"
+            ],
+            "datasets": [
+              {
+                "label": "Faculty Total",
+                "data": [
+                  145,
+                  98,
+                  160,
+                  75,
+                  110
+                ],
+                "backgroundColor": "rgba(13, 148, 136, 0.45)",
+                "borderColor": "#0D9488",
+                "borderWidth": 2,
+                "tension": 0.35,
+                "fill": false
+              }
+            ]
+          }
+        },
+        {
+          "id": "draft_1789972357718_3",
+          "title": "Passing Rate (%) — Spreadsheet: QAO_Scores_2024",
+          "source": "Spreadsheet: QAO_Scores_2024",
+          "primaryType": "pie",
+          "recommendation": "Pie Chart recommended to visualize proportional composition.",
+          "isDraft": true,
+          "chartData": {
+            "labels": [
+              "College of Arts and Sciences (CAS)",
+              "College of Business Administration (CBA)",
+              "College of Engineering (COE)",
+              "College of Education (CED)",
+              "College of Agriculture (CA)"
+            ],
+            "datasets": [
+              {
+                "label": "Passing Rate (%)",
+                "data": [
+                  92.4,
+                  86.7,
+                  95.8,
+                  89.5,
+                  91
+                ],
+                "backgroundColor": [
+                  "rgba(20, 108, 54, 0.45)",
+                  "rgba(245, 158, 11, 0.45)",
+                  "rgba(13, 148, 136, 0.45)",
+                  "rgba(16, 185, 129, 0.45)",
+                  "rgba(217, 119, 6, 0.45)",
+                  "rgba(37, 99, 235, 0.45)"
+                ],
+                "borderColor": [
+                  "#146C36",
+                  "#F59E0B",
+                  "#0D9488",
+                  "#10B981",
+                  "#D97706",
+                  "#2563EB"
+                ],
+                "borderWidth": 2,
+                "tension": 0.35,
+                "fill": false
+              }
+            ]
+          }
+        },
+        {
+          "id": "draft_1789972357718_0",
+          "title": "Institutional Performance Index — Spreadsheet: Annual_Trends",
+          "source": "Spreadsheet: Annual_Trends",
+          "primaryType": "line",
+          "recommendation": "Line Chart recommended to observe chronological trends over time.",
+          "isDraft": true,
+          "chartData": {
+            "labels": [
+              "2020-2021",
+              "2021-2022",
+              "2022-2023",
+              "2023-2024"
+            ],
+            "datasets": [
+              {
+                "label": "Institutional Performance Index",
+                "data": [
+                  88.5,
+                  91.2,
+                  93,
+                  95.4
+                ],
+                "backgroundColor": "rgba(20, 108, 54, 0.45)",
+                "borderColor": "#146C36",
+                "borderWidth": 2,
+                "tension": 0.35,
+                "fill": true
+              }
+            ]
+          }
+        },
+        {
+          "id": "draft_1789972357718_1",
+          "title": "Target Score — Spreadsheet: Annual_Trends",
+          "source": "Spreadsheet: Annual_Trends",
+          "primaryType": "line",
+          "recommendation": "Line Chart recommended to observe chronological trends over time.",
+          "isDraft": true,
+          "chartData": {
+            "labels": [
+              "2020-2021",
+              "2021-2022",
+              "2022-2023",
+              "2023-2024"
+            ],
+            "datasets": [
+              {
+                "label": "Target Score",
+                "data": [
+                  85,
+                  90,
+                  92,
+                  94
+                ],
+                "backgroundColor": "rgba(245, 158, 11, 0.45)",
+                "borderColor": "#F59E0B",
+                "borderWidth": 2,
+                "tension": 0.35,
+                "fill": true
+              }
+            ]
+          }
+        }
+      ],
+      "adminNotes": "",
+      "metadata": {
+        "sheetCount": 2,
+        "sheets": [
+          "QAO_Scores_2024",
+          "Annual_Trends"
+        ],
+        "totalRows": 11,
+        "totalCells": 45,
+        "totalFormulas": 0,
+        "activeSheet": "QAO_Scores_2024",
+        "embeddedImagesScanned": 0,
+        "embeddedImageSources": []
+      }
+    },
+    {
       "id": "scan_1789426770813_r4w4rt",
       "fileName": "IAO_Final.xlsx",
       "fileType": "excel",
