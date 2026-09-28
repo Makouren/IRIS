@@ -1,51 +1,176 @@
 # IRIS
 
-IRIS is a plain-PHP application for institutional data ingestion, review, and publication. Apache/PHP serves the site and PHP/PDO endpoints; browser JavaScript handles document parsing, scanner workflows, and charts. There is no Laravel, Composer application, Node.js web server, or Python service.
+**IRIS (International Rapport Insight System)** is the CLSU International Affairs Office's institutional performance data and observatory application. It combines structured ranking and program data, reviewed file ingestion, saved analytics, and a user-facing Observatory.
 
-## Requirements
+IRIS is a plain-PHP application. Apache serves PHP pages and PDO-backed APIs; browser JavaScript handles interactive workflows, file parsing, and charts. There is no Laravel application, Composer runtime, Node.js web server, or Python service.
 
-- XAMPP (Apache, PHP 8.1 or newer, and MySQL/MariaDB)
-- A modern browser with access to the page's CDN-hosted frontend libraries
-- Node.js only if you want to run the dependency-free JavaScript test suite
+## What the System Does
 
-## XAMPP Setup
+- Presents institutional rankings, ranking breakdowns, college contributions, program results, and accreditation data.
+- Lets administrators import structured CSV rows into the institutional database through a reviewable staging workflow.
+- Provides a Scanner for spreadsheet ingestion, extracted-data review, editable tables, and chart drafting.
+- Stores records, saved graph configurations, and manually managed performance snapshot cards in MySQL.
+- Publishes selected graphs and snapshot cards to the Observatory without conflating graph publication with record approval.
+- Provides authentication, user/admin roles, record management, graph exports, and print views.
 
-1. Place or clone this repository under `C:/xampp/htdocs/iris`.
-2. Start Apache and MySQL from the XAMPP Control Panel.
-3. Create the `iris_db` database and import [`database.sql`](database.sql) using phpMyAdmin.
-4. Update the connection constants in [`config/db.php`](config/db.php) if the local MySQL host, port, user, or password differ.
-5. Open `http://localhost/iris/` and register an account.
-6. To grant that account administrator access, run this in the `iris_db` SQL console:
+## Roles and Access
 
-  ```sql
-  UPDATE users SET role = 'admin' WHERE username = 'YOUR_USERNAME';
-  ```
+- **User:** registers with a CLSU email address, signs in, and reads the Observatory.
+- **Admin:** has all user access plus the File Ingestion dashboard, Review Editor, Smart Upload, and Saved Graphs management tools.
 
-7. Sign in again. Administrators can open the Review Editor and Scanner; saved charts appear in the public Observatory only after their graph is explicitly published.
+Registration creates a `user` role. An administrator must promote an account explicitly. PHP session authentication protects the Observatory and authenticated APIs. Admin pages and API mutations require the `admin` role; form workflows use CSRF tokens. Do not expose the local default database credentials in a deployed environment.
 
 ## Main Areas
 
-- **Admin and Review Editor:** manage uploaded records, review extracted data, adjust chart fields, and publish a record with its active Studio chart.
-- **Scanner:** browser-based ingestion and parsing for supported spreadsheet and document formats, extraction review, and chart drafting.
-- **Saved Dashboard Graphs:** browse saved chart versions, publish individual or selected graphs, print sheets, and export graph data.
-- **Public Observatory:** displays graphs whose `saved_graphs.is_published` flag is true. Admins can unpublish a graph without deleting its saved data. Guests do not see admin-only controls.
+| Area | Entry point | Purpose |
+| --- | --- | --- |
+| Application router | `index.php` | Redirects signed-in users to the Observatory or admins to File Ingestion; otherwise opens login. |
+| Observatory | `user/dashboard.php` | Displays institutional analytics, published snapshot cards, and Scanner-published graphs. Admins also see editing and unpublish controls. |
+| File Ingestion | `admin/dashboard.php` | Accepts Scanner spreadsheet uploads and shows parsed records for review. |
+| Review Editor | `admin/review_editor.php` | Reviews records, edits extracted cells and chart mappings, saves records, and publishes the active Studio chart. |
+| Smart Upload | `admin/smart_upload.php` | Maps supported structured CSV headers into staging rows for the institutional tables. |
+| Extraction Review | `admin/review_extraction.php` | Lets an admin inspect, edit, and select mapped rows before the Smart Upload database transaction. |
+| Saved Graphs | `admin/saved_graphs.php` | Lists saved chart versions and supports per-graph or selected-graph publishing, export, printing, and deletion. |
+| Scanner workspace | `scanner/index.php` | Provides browser-based ingestion, extraction overview, document/data viewing, draft charts, and links to the admin and Observatory. |
 
-## Charts
+## Data Workflows
 
-Apache ECharts is used for interactive charts. Studio and saved graphs support Bar, Line, Pie, Doughnut, Polar Area, and Ranked Bar. Spreadsheet drafts use the parsed rows, keep separate numerical columns as separate charts, detect chronological values for line charts, and omit identifier-like columns and invalid cells. Draft chart data is emitted in ECharts format and rendered by the existing ECharts adapter.
+### Structured Institutional CSV
 
-## Database and API
+1. An admin uploads a CSV in Smart Upload.
+2. Rule-based mapping checks the headers and stages recognized rows in the PHP session; it does not write them automatically.
+3. The admin reviews and selects rows in the extraction review page.
+4. Confirmation inserts the selected ranking, breakdown, college, program, and/or accreditation rows in a MySQL transaction and adds an `uploads_log` entry.
 
-`config/db.php` provides the PDO connection and ensures the scanner record/graph tables exist. `api/iris.php` requires a signed-in user and an admin role for mutations. Record approval (`records.status`) and graph publication (`saved_graphs.is_published`) are separate fields and workflows. `api/dashboard_graphs.php` returns only explicitly published graphs and disables HTTP caching so publish/unpublish changes appear immediately.
+### Scanner Record and Chart
 
-Scanner persistence is managed by `scanner/js/database/dbManager.js`, which uses the PHP API as the canonical store and browser storage fallbacks for records. The upload handoff between admin pages uses IndexedDB. The PHP app does not require a separate Express server.
+1. An admin uploads a CSV, XLS, or XLSX using the Scanner upload widget. The current upload validator allows these extensions and limits files to 100 MB.
+2. Browser JavaScript parses the workbook and creates an editable pending record. Upload handoff between admin pages uses IndexedDB; MySQL persistence is performed through the PHP API.
+3. The Review Editor can update record fields, extracted data, notes, and chart configuration. Save keeps the record in its selected review status and leaves the active graph unpublished.
+4. Studio Publish sets `records.status` to `Approved` and saves the active chart with `saved_graphs.is_published = 1`. It does not publish every saved graph belonging to that record.
+
+Parser and viewer modules for PDF, DOCX, and image OCR are present in the codebase, but the current Scanner upload widget accepts spreadsheets only. Smart Upload currently performs rule-based mapping for CSV files.
+
+### Saved Graph Publish and Unpublish
+
+- Saved Graphs Publish sends the selected graph IDs to the authenticated graph API and changes only those graph rows.
+- Observatory Unpublish changes the same graph's publication flag back to false. The chart remains saved and can be published again.
+- Public Scanner-Published Analytics includes only saved graph rows whose `is_published` value is true. Its endpoint sends no-cache headers so state changes appear after refresh.
+
+### Performance Snapshot Cards
+
+Snapshot cards are maintained separately from Scanner graphs. Their title, values, labels, year, description, display order, precision, and publication state are stored in `summary_cards`. Publishing or unpublishing a card does not change records or saved graphs.
+
+## Important Publication Rules
+
+Publication and record review are distinct:
+
+- `records.status` describes record review (`Pending Review`, `Approved`, or `Needs Revision`).
+- `saved_graphs.is_published` controls whether a graph appears in Scanner-Published Analytics.
+- `summary_cards.is_published` controls whether a snapshot card appears in the Observatory.
+
+Approving a record does not implicitly publish its saved graphs. The public graph query filters by the graph flag; publication is never inferred from record approval.
+
+## Architecture and Data
+
+### Runtime
+
+- **Server:** Apache with PHP 8.1+ and PDO.
+- **Database:** MySQL or MariaDB, database name `iris_db` by default.
+- **Frontend:** browser JavaScript modules and CSS. Pages load Tailwind, Flowbite, Font Awesome, ECharts, and parser libraries from CDNs, so the browser needs access to those hosts.
+- **Tests:** Node.js is optional and is used only for the dependency-free test suite.
+
+### Main Data Tables
+
+| Table | Contents |
+| --- | --- |
+| `users` | Login identity, password hash, and `user`/`admin` role. |
+| `ranking_bodies` | Ranking publisher catalog (QS, THE, WURI, and others). |
+| `rankings` | Yearly global/national ranking values, categories, and notes. Original rank text is retained alongside derived numeric values. |
+| `ranking_breakdowns` | Per-body, per-year items such as THE Impact SDGs or WURI categories. |
+| `colleges` | College contribution metrics by year. |
+| `programs` | College-linked program rank, score, movement, and year. |
+| `accreditations` | Program-level assessment criteria, text scores, and optional numeric scores. |
+| `uploads_log` | Admin CSV import filename, type, inserted row count, and uploader. |
+| `records` | Scanner file metadata, extracted data, review status, notes, and draft metadata. |
+| `saved_graphs` | Saved ECharts configuration/data linked to a record; `is_published` is the public visibility flag. |
+| `summary_cards` | Independently managed Observatory snapshot cards and publication settings. |
+
+`database.sql` creates the core institutional schema and Scanner `records`/`saved_graphs` tables. On database connection, `config/db.php` ensures the Scanner tables and compatibility columns exist and creates `summary_cards` when absent. The PHP database account therefore needs the required table/column creation privileges during setup or migration.
+
+## API Map
+
+`api/iris.php` is the session-authenticated JSON API. Mutating requests additionally require an admin role.
+
+| Route | Purpose |
+| --- | --- |
+| `GET /api/iris.php?resource=records` | List Scanner records. |
+| `POST /api/iris.php?resource=records` | Create a Scanner record. |
+| `GET /api/iris.php?resource=records&id={recordId}` | Read one record. |
+| `PUT /api/iris.php?resource=records&id={recordId}` | Update record fields and review status. |
+| `DELETE /api/iris.php?resource=records&id={recordId}` | Delete a record and its linked saved graphs. |
+| `POST /api/iris.php?resource=records&action=bulk-approve` | Approve selected records; does not publish their graphs. |
+| `GET /api/iris.php?resource=graphs` | List saved graphs. |
+| `POST /api/iris.php?resource=graphs` | Save a graph and its chart data. |
+| `POST /api/iris.php?resource=graphs&id={graphId}&action=publish` | Set one graph's `is_published` flag to true. |
+| `POST /api/iris.php?resource=graphs&id={graphId}&action=unpublish` | Set one graph's `is_published` flag to false. |
+| `GET /api/iris.php?resource=graphs&record_id={recordId}` | List graphs for one source record. |
+| `POST /api/iris.php?resource=graphs&action=export` | Export selected saved graph data. |
+| `GET /api/iris.php?resource=summary_cards` | List snapshot cards for the admin interface. |
+| `POST/PUT/DELETE /api/iris.php?resource=summary_cards[&id={cardId}]` | Create, update, or delete snapshot cards. |
+| `GET /api/dashboard_graphs.php` | Read-only Observatory feed containing explicitly published graphs and cards; response is non-cacheable. |
+| `GET /api/summary.php` | Return an authenticated narrative summary based on stored institutional data. |
+
+Graph publish/unpublish requests send JSON such as `{ "published": true }` or `{ "published": false }`. The API responds with the graph ID and the resulting publication state. Browser persistence is managed by `scanner/js/database/dbManager.js`; MySQL is canonical when the PHP API is available.
+
+## Local Setup (XAMPP)
+
+1. Place or clone the repository under `C:/xampp/htdocs/iris` (or another Apache document-root subdirectory).
+2. Start Apache and MySQL from the XAMPP Control Panel.
+3. Import [`database.sql`](database.sql) once into MySQL using phpMyAdmin or the MySQL client. The script creates/selects `iris_db` and seeds the ranking body catalog.
+4. Set `IRIS_DB_HOST`, `IRIS_DB_PORT`, `IRIS_DB_NAME`, `IRIS_DB_USER`, and `IRIS_DB_PASS` in [`config/db.php`](config/db.php) for the environment. The current defaults are intended for local XAMPP development, not production.
+5. Open `http://localhost/iris/`, register a CLSU account, and sign in. Registration requires an email ending in `@clsu2.edu.ph` and a password of at least eight characters.
+6. Registration assigns the `user` role. To grant administrator access, run the following as a database administrator, substituting the account name:
+
+   ```sql
+   UPDATE users SET role = 'admin' WHERE username = 'YOUR_USERNAME';
+   ```
+
+7. Sign out and back in so the new role is present in the PHP session. The application root redirects signed-in users according to their role.
+
+For production, configure a least-privilege MySQL account, a non-default password, HTTPS, and a schema migration process appropriate to the deployment. Because the database bootstrap may create or add Scanner schema objects, ensure its database account has the necessary setup privileges.
+
+## Repository Map
+
+```text
+auth/                    Registration, login, logout, and PHP sessions
+admin/                   File intake, record review, Smart Upload, saved graphs
+api/                     Authenticated IRIS API and Observatory read endpoints
+config/db.php            PDO connection and Scanner schema compatibility setup
+includes/                Authentication, rank helpers, extractors, data inserts
+scanner/index.php        Authenticated Scanner application shell
+scanner/js/              Browser app, charting, persistence, modules, parsers
+scanner/css/             Scanner styles
+scanner/test/            Dependency-free Node tests
+user/dashboard.php       Signed-in Observatory interface
+database.sql             Core schema and seed ranking-body data
+```
 
 ## Tests
 
-Tests use Node's built-in runner; there is no `package.json` or `npm test` script. From the repository root, run:
+Node.js is not required to run the PHP application. To run the browser-logic and source-contract tests from the repository root:
 
 ```powershell
 node --test scanner/test/*.test.js
 ```
 
-See [`scanner/test/README.md`](scanner/test/README.md) for coverage and focused test commands.
+The suite covers graph/chart mapping, table filtering, document pagination, graph exports, publication wiring, and UI contracts. It does not replace an authenticated browser smoke test against Apache/MySQL for changes to login, upload, persistence, or publish/unpublish behavior. See [`scanner/test/README.md`](scanner/test/README.md) for test coverage details.
+
+## Related Documentation
+
+- [`README_PHP.md`](README_PHP.md): PHP deployment notes.
+- [`scanner/js/ai/README.md`](scanner/js/ai/README.md): chart suggestions and shared chart utilities.
+- [`scanner/js/database/README.md`](scanner/js/database/README.md): persistence and API routes.
+- [`scanner/js/modules/README.md`](scanner/js/modules/README.md): browser module responsibilities.
+- [`scanner/js/parsers/README.md`](scanner/js/parsers/README.md): parser/viewer modules and data contract.
+- [`scanner/test/README.md`](scanner/test/README.md): automated test commands and coverage.
