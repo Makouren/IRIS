@@ -48,7 +48,7 @@ require_auth();
     <!-- Apache ECharts CDN -->
     <script src="https://cdn.jsdelivr.net/npm/echarts@5.5.0/dist/echarts.min.js"></script>
     <script src="<?= e(base_url('scanner/js/chartMapping.js')) ?>"></script>
-    <script src="<?= e(base_url('scanner/js/graphExport.js')) ?>"></script>
+    <script src="<?= e(base_url('scanner/js/graphExport.js')) ?>?v=<?= (int) filemtime(__DIR__.'/../scanner/js/graphExport.js') ?>"></script>
     <!-- Font Awesome -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <!-- Google Fonts -->
@@ -967,7 +967,7 @@ require_auth();
             count.innerHTML = `<i class="fa-solid fa-circle-check mr-1"></i> ${graphs.length} published graph${graphs.length === 1 ? '' : 's'}`;
 
             const isDark = document.documentElement.classList.contains('dark');
-            const textColor = isDark ? '#9ca3af' : '#4b5563';
+            const textColor = isDark ? '#F8FAFC' : '#4b5563';
             const splitLineColor = isDark ? '#374151' : '#f3f4f6';
             const tooltipBg = isDark ? '#1f2937' : '#ffffff';
             const tooltipBorder = isDark ? '#374151' : '#e5e7eb';

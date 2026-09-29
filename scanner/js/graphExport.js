@@ -92,6 +92,15 @@
   function buildSavedChartOption(graph) {
     const source = graph || {};
     const chartData = readChartConfig(source.chart_data || source.chartData || source.chartDataJson || source.option || source.config || {});
+    const isDark = typeof document !== 'undefined' && document.documentElement?.classList?.contains('dark');
+    const textColor = isDark ? '#FFFFFF' : '#4b5563';
+    const labelColor = isDark ? '#FFFFFF' : '#111827';
+    const gridColor = isDark ? 'rgba(226, 232, 240, 0.3)' : '#e5e7eb';
+    const tooltipStyle = {
+      backgroundColor: isDark ? '#172033' : '#FFFFFF',
+      borderColor: isDark ? '#475569' : '#E5E7EB',
+      textStyle: { color: labelColor }
+    };
     const explicitType = resolveChartType({ ...source, chartData }, 'bar');
     const labels = Array.isArray(source.labels) && source.labels.length ? source.labels : chartLabels(chartData);
     const values = Array.isArray(source.values_data) && source.values_data.length ? source.values_data : chartValues(chartData);
@@ -114,40 +123,49 @@
         name: displayLabels[index] || `Item ${index + 1}`
       }));
       return {
-        tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' }, formatter: params => {
+        textStyle: { color: textColor },
+        tooltip: { ...tooltipStyle, trigger: 'axis', axisPointer: { type: 'shadow' }, formatter: params => {
           const point = Array.isArray(params) ? params[0] : params;
           const label = displayLabels[point.dataIndex] || point.name || 'Item';
           const value = Number(displayValues[point.dataIndex] ?? 0);
           return `${label}<br/>Rank: <b>${value}</b>${selectedYear !== null && selectedYear !== undefined && selectedYear !== 'all' ? `<br/>Year: <b>${Number(selectedYear)}</b>` : ''}`;
         } },
         grid: { left: '6%', right: '6%', bottom: '6%', top: '6%', containLabel: true },
-        xAxis: { type: 'value', min: 0, axisLabel: { color: '#4b5563' } },
-        yAxis: { type: 'category', data: displayLabels, axisLabel: { color: '#4b5563', fontSize: 11 }, inverse: false },
+        xAxis: { type: 'value', min: 0, axisLabel: { color: textColor }, splitLine: { lineStyle: { color: gridColor } } },
+        yAxis: { type: 'category', data: displayLabels, axisLabel: { color: textColor, fontSize: 11 }, inverse: false },
         series: [{
           name: seriesName,
           type: 'bar',
           data: rankedSeries,
           itemStyle: { color: '#10b981', borderRadius: [0, 4, 4, 0] },
-          label: { show: true, position: 'right', color: '#111827', formatter: params => Number(params.data?.rawValue ?? params.value ?? 0) }
+          label: { show: true, position: 'right', color: labelColor, textBorderColor: 'transparent', textBorderWidth: 0, formatter: params => Number(params.data?.rawValue ?? params.value ?? 0) }
         }]
       };
     }
 
     if (type === 'pie' || type === 'doughnut') {
       return {
+        textStyle: { color: textColor },
         color: ['#10b981', '#34d399', '#3b82f6', '#f59e0b', '#8b5cf6', '#f97316', '#14b8a6'],
-        tooltip: { trigger: 'item', formatter: '{b}: {c} ({d}%)' },
-        legend: { type: 'scroll', bottom: 0, data: labels },
-        series: [{ type: 'pie', radius: type === 'doughnut' ? ['45%', '70%'] : '65%', center: ['50%', '45%'], data: labels.map((label, index) => ({ name: label || `Item ${index + 1}`, value: Number(values[index] ?? 0) })) }]
+        tooltip: { ...tooltipStyle, trigger: 'item', formatter: '{b}: {c} ({d}%)' },
+        legend: { type: 'scroll', bottom: 0, data: labels, textStyle: { color: textColor } },
+        series: [{
+          type: 'pie',
+          radius: type === 'doughnut' ? ['45%', '70%'] : '65%',
+          center: ['50%', '45%'],
+          label: { show: true, color: labelColor, textBorderColor: 'transparent', textBorderWidth: 0 },
+          data: labels.map((label, index) => ({ name: label || `Item ${index + 1}`, value: Number(values[index] ?? 0) }))
+        }]
       };
     }
 
     if (type === 'polarArea') {
       return {
-        tooltip: { trigger: 'axis' },
+        textStyle: { color: textColor },
+        tooltip: { ...tooltipStyle, trigger: 'axis' },
         polar: {},
-        angleAxis: { type: 'category', data: labels, startAngle: 90 },
-        radiusAxis: { type: 'value' },
+        angleAxis: { type: 'category', data: labels, startAngle: 90, axisLabel: { color: textColor } },
+        radiusAxis: { type: 'value', axisLabel: { color: textColor }, splitLine: { lineStyle: { color: gridColor } } },
         series: [{ name: seriesName, type: 'bar', coordinateSystem: 'polar', data: values.map((value, index) => ({ value: Number(value ?? 0), name: labels[index] || `Item ${index + 1}` })) }]
       };
     }
@@ -161,19 +179,24 @@
 
     return {
       backgroundColor: 'transparent',
-      tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' } },
+      textStyle: { color: textColor },
+      tooltip: { ...tooltipStyle, trigger: 'axis', axisPointer: { type: 'shadow' } },
       grid: { left: '4%', right: '4%', bottom: axisLabels.length > 7 ? '15%' : '6%', top: '8%', containLabel: true },
       xAxis: {
         type: 'category',
         data: axisLabels,
         inverse: reverse && type === 'bar',
-        axisLabel: { rotate: axisLabels.length > 6 ? 35 : 0 }
+        axisLine: { lineStyle: { color: gridColor } },
+        axisLabel: { rotate: axisLabels.length > 6 ? 35 : 0, color: textColor }
       },
       yAxis: {
         type: 'value',
         min: axisMin,
         max: axisMax,
         inverse: reverse || (source.rankSemantic === true || source.rank_semantic === true),
+        axisLine: { lineStyle: { color: gridColor } },
+        axisLabel: { color: textColor },
+        splitLine: { lineStyle: { color: gridColor } }
       },
       series: [{
         name: seriesName,

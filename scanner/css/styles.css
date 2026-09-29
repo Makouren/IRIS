@@ -1880,6 +1880,22 @@ html:not(.dark) .dropzone-container:hover, html:not(.dark) .dropzone-container.d
   border-color: #B91C1C;
 }
 
+.admin-record-actions {
+  display: grid;
+  grid-template-columns: 6rem 7.5rem 5.8rem;
+  align-items: center;
+  gap: 0.5rem;
+  white-space: nowrap;
+}
+
+.admin-record-actions > button {
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  justify-content: center;
+  padding-inline: 0.4rem;
+}
+
 .btn-icon {
   background: var(--clsu-green);
   color: #FFFFFF;
@@ -2436,6 +2452,9 @@ html.dark select {
 html.dark #studioChartTitleInput {
   color: #34D399 !important;
 }
+html.dark #studioActiveFileName {
+  color: #F8FAFC !important;
+}
 html.dark #studioFieldMappingRow {
   background: rgba(59,130,246,0.12) !important;
   border-color: rgba(147,197,253,0.4) !important;
@@ -2509,6 +2528,7 @@ html.dark .progress-card {
   color: var(--text-main) !important;
   border-color: var(--border-light) !important;
 }
+#studioContainer { scroll-margin-top: 6rem; }
 html.dark .studio-chart-box,
 html.dark .studio-data-manager,
 html.dark .studio-left-card,
@@ -2545,7 +2565,8 @@ html.dark .archive-delete-button { background: rgba(15,23,42,0.2) !important; co
 html.dark .archive-delete-button:hover { background: rgba(127,29,29,0.22) !important; color: #FECACA !important; }
 
 html.dark #scannerWorkspaceView label,
-html.dark #adminDatabaseView label { color: #CBD5E1 !important; }
+html.dark #adminDatabaseView label,
+html.dark #adminSavedGraphsPanel label { color: #CBD5E1 !important; }
 html.dark #scannerWorkspaceView p { color: #CBD5E1; }
 html.dark #scannerWorkspaceView strong { color: #F8FAFC; }
 

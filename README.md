@@ -48,6 +48,7 @@ Registration creates a `user` role. An administrator must promote an account exp
 2. Browser JavaScript parses the workbook and creates an editable pending record. Upload handoff between admin pages uses IndexedDB; MySQL persistence is performed through the PHP API.
 3. The Review Editor can update record fields, extracted data, notes, and chart configuration. Save keeps the record in its selected review status and leaves the active graph unpublished.
 4. Studio Publish sets `records.status` to `Approved` and saves the active chart with `saved_graphs.is_published = 1`. It does not publish every saved graph belonging to that record.
+5. The archive can publish or unpublish selected records in bulk. File-level Unpublish returns the record to `Pending Review` and hides every saved graph linked by `record_id`; it does not delete either the record or its charts.
 
 Parser and viewer modules for PDF, DOCX, and image OCR are present in the codebase, but the current Scanner upload widget accepts spreadsheets only. Smart Upload currently performs rule-based mapping for CSV files.
 
@@ -55,6 +56,7 @@ Parser and viewer modules for PDF, DOCX, and image OCR are present in the codeba
 
 - Saved Graphs Publish sends the selected graph IDs to the authenticated graph API and changes only those graph rows.
 - Observatory Unpublish changes the same graph's publication flag back to false. The chart remains saved and can be published again.
+- Archive file-level Unpublish resets one record to `Pending Review` and unpublishes all of its linked saved graphs. Bulk Publish/Unpublish applies the same record-and-chart behavior to each selected record in a single database transaction.
 - Public Scanner-Published Analytics includes only saved graph rows whose `is_published` value is true. Its endpoint sends no-cache headers so state changes appear after refresh.
 
 ### Performance Snapshot Cards
@@ -79,6 +81,39 @@ Approving a record does not implicitly publish its saved graphs. The public grap
 - **Database:** MySQL or MariaDB, database name `iris_db` by default.
 - **Frontend:** browser JavaScript modules and CSS. Pages load Tailwind, Flowbite, Font Awesome, ECharts, and parser libraries from CDNs, so the browser needs access to those hosts.
 - **Tests:** Node.js is optional and is used only for the dependency-free test suite.
+
+### System Architecture
+
+The application is a server-rendered PHP site with browser-side modules. PHP owns authentication, authorization, validation, and MySQL transactions; JavaScript owns interactive page behavior, spreadsheet parsing, editing, and chart rendering. The browser talks directly to the PHP JSON API rather than to a separate Node service.
+
+```mermaid
+flowchart LR
+   Browser[Browser]
+   Pages[PHP pages<br/>login, admin, review, Observatory]
+   Modules[JavaScript modules<br/>ingestion, review, charts, exports]
+   API[PHP JSON APIs<br/>session auth and admin checks]
+   DB[(MySQL / MariaDB)]
+   CDNs[Browser libraries<br/>Tailwind, Flowbite, ECharts, parsers]
+
+   Browser --> Pages
+   Pages --> Modules
+   Modules --> API
+   Pages --> API
+   API --> DB
+   Browser --> CDNs
+```
+
+| Component | Responsibility |
+| --- | --- |
+| `index.php`, `auth/` | Route users into the application and manage login, registration, and PHP sessions. |
+| `admin/` | Provide ingestion, review, Smart Upload, extraction review, and saved-graph management pages. |
+| `scanner/js/` | Run browser workflows and call the PHP API through `DatabaseManager`; parsing and charting happen client-side. |
+| `api/iris.php` | Authenticate record and graph reads; require admin authorization for mutations; persist changes using PDO. |
+| `api/dashboard_graphs.php`, `api/summary.php` | Supply Observatory graph/card data and authenticated summary data. |
+| `config/db.php`, `database.sql` | Configure the PDO connection and create the institutional and Scanner schema. |
+| `user/dashboard.php` | Render institutional analytics and only explicitly published Scanner graphs and summary cards. |
+
+For Scanner publication, a record is linked to its charts by `saved_graphs.record_id`. Record-level unpublishing changes `records.status` and the linked charts' `is_published` flags together. Summary cards are independent rows in `summary_cards` and are not associated with a Scanner file.
 
 ### Main Data Tables
 
@@ -110,6 +145,9 @@ Approving a record does not implicitly publish its saved graphs. The public grap
 | `PUT /api/iris.php?resource=records&id={recordId}` | Update record fields and review status. |
 | `DELETE /api/iris.php?resource=records&id={recordId}` | Delete a record and its linked saved graphs. |
 | `POST /api/iris.php?resource=records&action=bulk-approve` | Approve selected records; does not publish their graphs. |
+| `POST /api/iris.php?resource=records&id={recordId}&action=unpublish` | Return one record to Pending Review and unpublish all linked saved graphs. |
+| `POST /api/iris.php?resource=records&action=bulk-publish` | Publish selected records and their linked saved graphs transactionally. |
+| `POST /api/iris.php?resource=records&action=bulk-unpublish` | Return selected records to Pending Review and unpublish their linked graphs transactionally. |
 | `GET /api/iris.php?resource=graphs` | List saved graphs. |
 | `POST /api/iris.php?resource=graphs` | Save a graph and its chart data. |
 | `POST /api/iris.php?resource=graphs&id={graphId}&action=publish` | Set one graph's `is_published` flag to true. |

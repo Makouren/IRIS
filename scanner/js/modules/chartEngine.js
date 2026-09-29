@@ -36,31 +36,55 @@ export function createChart(ctx, type, chartData, { reverseOrder = false } = {})
   if (reverseOrder) { labels.reverse(); values.reverse(); }
 
   const colors = source.color || ['#009639', '#E0A70D', '#1E6031', '#3B82F6', '#0D9488', '#D97706'];
+  const isDark = document.documentElement.classList.contains('dark');
+  const textColor = isDark ? '#F8FAFC' : '#4B5563';
+  const labelColor = isDark ? '#F8FAFC' : '#1F2937';
+  const gridLineColor = isDark ? '#475569' : 'rgba(0, 0, 0, 0.12)';
   const option = {
     color: colors,
-    tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' } },
-    legend: { data: [seriesName] },
+    textStyle: { color: textColor },
+    tooltip: {
+      trigger: 'axis',
+      axisPointer: { type: 'shadow' },
+      backgroundColor: isDark ? '#172033' : '#FFFFFF',
+      borderColor: isDark ? '#475569' : '#E5E7EB',
+      textStyle: { color: labelColor }
+    },
+    legend: { data: [seriesName], textStyle: { color: textColor } },
     series: []
   };
   if (type === 'pie' || type === 'doughnut') {
-    option.tooltip = { trigger: 'item', formatter: '{b}: {c} ({d}%)' };
-    option.legend = { data: labels, type: 'scroll', bottom: 0 };
+    option.tooltip = {
+      trigger: 'item',
+      formatter: '{b}: {c} ({d}%)',
+      backgroundColor: isDark ? '#172033' : '#FFFFFF',
+      borderColor: isDark ? '#475569' : '#E5E7EB',
+      textStyle: { color: labelColor }
+    };
+    option.legend = { data: labels, type: 'scroll', bottom: 0, textStyle: { color: textColor } };
     option.series = [{
       name: seriesName,
       type: 'pie',
       radius: type === 'doughnut' ? ['45%', '72%'] : '68%',
       data: labels.map((name, index) => ({ name, value: values[index] })),
-      label: { show: true, formatter: '{b}: {d}%' },
+      label: { show: true, color: labelColor, formatter: '{b}: {d}%' },
       itemStyle: { borderColor: '#FFFFFF', borderWidth: 2 }
     }];
   } else if (type === 'polarArea') {
     option.polar = {};
-    option.angleAxis = { type: 'category', data: labels, startAngle: 90 };
-    option.radiusAxis = { type: 'value' };
+    option.angleAxis = { type: 'category', data: labels, startAngle: 90, axisLabel: { color: textColor } };
+    option.radiusAxis = { type: 'value', axisLabel: { color: textColor }, splitLine: { lineStyle: { color: gridLineColor } } };
     option.series = [{ name: seriesName, type: 'bar', coordinateSystem: 'polar', data: values }];
   } else {
-    option.xAxis = { type: 'category', data: labels, axisLabel: { interval: 0 } };
-    option.yAxis = { type: 'value', name: seriesName };
+    option.xAxis = { type: 'category', data: labels, axisLine: { lineStyle: { color: gridLineColor } }, axisLabel: { interval: 0, color: textColor } };
+    option.yAxis = {
+      type: 'value',
+      name: seriesName,
+      nameTextStyle: { color: labelColor },
+      axisLine: { lineStyle: { color: gridLineColor } },
+      axisLabel: { color: textColor },
+      splitLine: { lineStyle: { color: gridLineColor } }
+    };
     option.series = [{
       name: seriesName,
       type: type === 'line' ? 'line' : 'bar',

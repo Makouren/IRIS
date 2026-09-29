@@ -57,7 +57,7 @@ $pageTitle = $pageTitle ?? 'IRIS Admin Control Panel';
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <link rel="stylesheet" href="<?= e(base_url('scanner/css/styles.css')) ?>">
+    <link rel="stylesheet" href="<?= e(base_url('scanner/css/styles.css')) ?>?v=<?= (int) filemtime(__DIR__.'/../../scanner/css/styles.css') ?>">
     <link href="https://fonts.googleapis.com/css2?family=Libre+Franklin:wght@400;500;600;700;800&family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
     <style>
         /* TODO: Self-host Buttershine Serif for headings when the IAO provides the licensed font file. */
@@ -142,6 +142,22 @@ $pageTitle = $pageTitle ?? 'IRIS Admin Control Panel';
         html.dark button {
             color: #e2e8f0 !important;
         }
+        html.dark #summaryCardEditorPanel {
+            background: #172033 !important;
+            border-color: #334155 !important;
+        }
+        html.dark #summaryCardEditorList > div {
+            background: #273449 !important;
+            border-color: #475569 !important;
+        }
+        html.dark #summaryCardEditorList .bg-emerald-100 {
+            background: rgba(16, 185, 129, 0.18) !important;
+            color: #6ee7b7 !important;
+        }
+        html.dark #summaryCardEditorList .bg-slate-200 {
+            background: #334155 !important;
+            color: #e2e8f0 !important;
+        }
     </style>
 </head>
 <body class="bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-gray-100 min-h-screen flex flex-col">
@@ -187,8 +203,6 @@ $pageTitle = $pageTitle ?? 'IRIS Admin Control Panel';
         html:not(.dark) .admin-dropdown .signout:hover{background:#fef2f2!important;color:#991b1b!important;}
         #page-loader{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;background:rgba(15,23,42,.68);backdrop-filter:blur(6px);z-index:10000;transition:opacity .3s ease,visibility .3s ease;}
         #page-loader.hidden{opacity:0;visibility:hidden;pointer-events:none;}
-        .active-hamburger-item { background:rgba(16,185,129,.12)!important; color:#ecfdf5!important; border-left:3px solid #f59e0b!important; }
-        html:not(.dark) .active-hamburger-item { background: #EEF6F0 !important; color: #1E6031 !important; border-left: 3px solid #E0A70D !important; }
         .iris-loader{position:relative;width:72px;height:72px;border-radius:50%;background:conic-gradient(#10b981,#34d399,#fbbf24,#10b981);animation:spin 1s linear infinite;box-shadow:0 0 30px rgba(16,185,129,.5)}
         .iris-loader::before{content:"";position:absolute;inset:10px;border-radius:50%;background:rgba(15,23,42,.9);border:2px solid rgba(255,255,255,.18)}
         .iris-loader::after{content:"IRIS";position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:800;letter-spacing:.12em;color:#d1fae5}
@@ -222,30 +236,6 @@ $pageTitle = $pageTitle ?? 'IRIS Admin Control Panel';
                     <a href="<?= e(base_url('user/dashboard.php')) ?>" class="admin-nav-link public-link" aria-label="Open Observatory" title="Open Observatory">
                         <i class="fa-solid fa-chart-pie" aria-hidden="true"></i><span>Observatory</span>
                     </a>
-                    <div class="relative">
-                        <button type="button" class="admin-profile-btn flex items-center justify-center p-2.5 rounded-lg focus:ring-2 focus:ring-emerald-500" id="hamburger-menu-button" aria-expanded="false" data-dropdown-toggle="hamburger-dropdown" data-dropdown-placement="bottom">
-                            <i class="fa-solid fa-bars text-base"></i>
-                        </button>
-                        <div class="admin-dropdown z-50 hidden my-3 w-56 text-base list-none rounded-xl shadow-2xl" id="hamburger-dropdown">
-                            <ul class="py-2" aria-labelledby="hamburger-menu-button">
-                                <li>
-                                    <a href="<?= e(base_url('admin/dashboard.php')) ?>" class="block px-4 py-2 text-sm <?= $activeNav === 'ingestion' ? 'active-hamburger-item' : '' ?>">
-                                        <i class="fa-solid fa-cloud-arrow-up mr-2"></i> File Ingestion
-                                    </a>
-                                </li>
-                                <li>
-                                    <a href="<?= e(base_url('admin/review_editor.php')) ?>" class="block px-4 py-2 text-sm <?= $activeNav === 'review' ? 'active-hamburger-item' : '' ?>">
-                                        <i class="fa-solid fa-pen-to-square mr-2"></i> Review Editor
-                                    </a>
-                                </li>
-                                <li>
-                                    <a href="<?= e(base_url('admin/saved_graphs.php')) ?>" class="block px-4 py-2 text-sm <?= $activeNav === 'saved_graphs' ? 'active-hamburger-item' : '' ?>">
-                                        <i class="fa-solid fa-chart-line mr-2"></i> Saved Graphs
-                                    </a>
-                                </li>
-                            </ul>
-                        </div>
-                    </div>
                     <button id="theme-toggle" type="button" class="admin-theme-btn rounded-lg text-sm p-2.5" aria-label="Toggle theme">
                         <i id="theme-toggle-dark-icon" class="hidden fa-solid fa-moon text-base"></i>
                         <i id="theme-toggle-light-icon" class="hidden fa-solid fa-sun text-base text-amber-400"></i>

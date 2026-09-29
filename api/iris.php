@@ -164,6 +164,61 @@ try {
             foreach($ids as $x) $results[]=['id'=>$x,'success'=>isset($set[$x]),'error'=>isset($set[$x])?null:'Record not found'];
             echo json_encode(['results'=>$results,'successCount'=>count($existing),'failureCount'=>count($ids)-count($existing)]); exit;
         }
+        if ($_SERVER['REQUEST_METHOD'] === 'POST' && in_array($action, ['bulk-publish', 'bulk-unpublish'], true)) {
+            ensure_admin_for_mutation();
+            $data = json_input();
+            $ids = array_values(array_unique(array_filter($data['ids'] ?? [], fn($x) => is_scalar($x) && $x !== '')));
+            if (!$ids) bad('ids must be a non-empty array');
+            $published = $action === 'bulk-publish';
+            $placeholders = implode(',', array_fill(0, count($ids), '?'));
+            $pdo->beginTransaction();
+            try {
+                $query = $pdo->prepare("SELECT id FROM records WHERE id IN ($placeholders) FOR UPDATE");
+                $query->execute($ids);
+                $existing = $query->fetchAll(PDO::FETCH_COLUMN);
+                $graphCount = 0;
+                if ($existing) {
+                    $recordPlaceholders = implode(',', array_fill(0, count($existing), '?'));
+                    $pdo->prepare('UPDATE records SET status=?, updatedAt=NOW() WHERE id IN ('.$recordPlaceholders.')')->execute(array_merge([$published ? 'Approved' : 'Pending Review'], $existing));
+                    $graphs = $pdo->prepare('UPDATE saved_graphs SET is_published=? WHERE record_id IN ('.$recordPlaceholders.') AND is_published<>?');
+                    $graphs->execute(array_merge([$published ? 1 : 0], $existing, [$published ? 1 : 0]));
+                    $graphCount = $graphs->rowCount();
+                }
+                $pdo->commit();
+            } catch (Throwable $e) {
+                if ($pdo->inTransaction()) $pdo->rollBack();
+                throw $e;
+            }
+            $existingSet = array_fill_keys($existing, true);
+            $results = [];
+            foreach ($ids as $recordId) $results[] = ['id'=>$recordId,'success'=>isset($existingSet[$recordId]),'error'=>isset($existingSet[$recordId]) ? null : 'Record not found'];
+            echo json_encode(['results'=>$results,'successCount'=>count($existing),'failureCount'=>count($ids)-count($existing),'published_graph_count'=>$graphCount]);
+            exit;
+        }
+        if ($_SERVER['REQUEST_METHOD'] === 'POST' && $action === 'unpublish') {
+            ensure_admin_for_mutation();
+            if ($id === null) bad('Record id is required');
+            $pdo->beginTransaction();
+            try {
+                $q = $pdo->prepare('SELECT id FROM records WHERE id=? FOR UPDATE');
+                $q->execute([$id]);
+                if (!$q->fetch()) {
+                    $pdo->rollBack();
+                    bad('Record not found', 404);
+                }
+                $pdo->prepare("UPDATE records SET status='Pending Review', updatedAt=NOW() WHERE id=?")->execute([$id]);
+                $graphs = $pdo->prepare('UPDATE saved_graphs SET is_published=0 WHERE record_id=? AND is_published=1');
+                $graphs->execute([$id]);
+                $pdo->commit();
+            } catch (Throwable $e) {
+                if ($pdo->inTransaction()) $pdo->rollBack();
+                throw $e;
+            }
+            $q = $pdo->prepare('SELECT * FROM records WHERE id=?');
+            $q->execute([$id]);
+            echo json_encode(['success'=>true,'record'=>output_record($q->fetch(PDO::FETCH_ASSOC)),'unpublished_graph_count'=>$graphs->rowCount()]);
+            exit;
+        }
         if ($_SERVER['REQUEST_METHOD'] === 'POST' && $action === 'bulk-delete') {
             ensure_admin_for_mutation();
             $data=json_input(); $ids=array_values(array_unique(array_filter($data['ids']??[], fn($x)=>is_scalar($x)&&$x!=='')));

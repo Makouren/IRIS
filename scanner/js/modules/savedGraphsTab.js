@@ -1,5 +1,5 @@
 import { $, escapeHtml } from '../utils/helpers.js';
-import { createChart } from './chartEngine.js';
+import { createChart } from './chartEngine.js?v=dark-contrast-20260929';
 
 function getRecordName(graph, records) {
   const record = records.find(item => item.id === graph.record_id);

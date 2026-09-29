@@ -14,7 +14,7 @@
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flowbite@2.5.2/dist/flowbite.min.css">
   
   <!-- CSS Stylesheet -->
-  <link rel="stylesheet" href="css/styles.css">
+  <link rel="stylesheet" href="css/styles.css?v=<?= (int) filemtime(__DIR__.'/css/styles.css') ?>">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf_viewer.min.css">
 
   <!-- External Parsing & Charting CDN Libraries -->
@@ -412,7 +412,7 @@
                     <option value="pie"><i class="fa-solid fa-chart-pie" aria-hidden="true"></i> Pie Chart</option>
                     <option value="doughnut"><i class="fa-solid fa-circle-half-stroke" aria-hidden="true"></i> Doughnut Chart</option>
                     <option value="polarArea"><i class="fa-solid fa-compass" aria-hidden="true"></i> Polar Area</option>
-                    <option value="rankedBar"><i class="fa-solid fa-ranking-star" aria-hidden="true"></i> Ranked Bar Chart</option>
+                    <!-- Temporarily disabled: <option value="rankedBar"><i class="fa-solid fa-ranking-star" aria-hidden="true"></i> Ranked Bar Chart</option> -->
                   </select>
                 </div>
               </div>
@@ -570,7 +570,8 @@
       <div class="table-container" style="box-shadow: var(--card-shadow);">
         <div id="adminBulkActions" class="admin-bulk-actions" hidden>
           <span id="adminBulkSelectionCount">0 records selected</span>
-          <button id="adminBulkApprove" type="button" class="btn-approve-modal" disabled><i class="fa-solid fa-circle-check" aria-hidden="true"></i> Bulk Approve</button>
+          <button id="adminBulkPublish" type="button" class="archive-load-button" disabled><i class="fa-solid fa-circle-check" aria-hidden="true"></i> Publish</button>
+          <button id="adminBulkUnpublish" type="button" class="export-cancel-button" disabled><i class="fa-solid fa-eye-slash" aria-hidden="true"></i> Unpublish</button>
           <button id="adminBulkDelete" type="button" class="archive-delete-button" disabled><i class="fa-solid fa-trash" aria-hidden="true"></i> Bulk Delete</button>
           <button id="adminClearSelection" type="button" class="export-cancel-button">Clear selection</button>
         </div>
@@ -600,7 +601,7 @@
   <!-- JavaScript Modules in Order -->
   <script src="js/parsers/excelParser.js"></script>
   <script src="js/ai/graphEngine.js"></script>
-  <script src="js/database/dbManager.js"></script>
+  <script src="js/database/dbManager.js?v=<?= (int) filemtime(__DIR__.'/js/database/dbManager.js') ?>"></script>
   <script src="js/samples.js"></script>
   <script src="js/scanner.js"></script>
   <script src="js/tableFilter.js"></script>
@@ -609,7 +610,7 @@
   <script src="js/sourceIngestion.js"></script>
   <script src="js/documentPagination.js"></script>
   <script src="js/graphExport.js"></script>
-  <script type="module" src="js/app.js"></script>
+  <script type="module" src="js/app.js?v=<?= (int) filemtime(__DIR__.'/js/app.js') ?>"></script>
 
 </body>
 </html>

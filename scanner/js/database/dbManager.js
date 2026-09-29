@@ -205,6 +205,47 @@ class DatabaseManager {
     return payload;
   }
 
+  async unpublishRecord(id) {
+    await this.initPromise;
+    const response = await fetch(`${this.config.endpoints.recordById(id)}&action=unpublish`, { method: 'POST' });
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(payload.error || `Unable to unpublish record (HTTP ${response.status})`);
+    const record = payload.record;
+    if (record && this.db) {
+      try { this.db.transaction('records', 'readwrite').objectStore('records').put(record); } catch (e) {}
+    }
+    if (record) {
+      const local = this.getLocalStorageRecords().map(item => item.id === record.id ? record : item);
+      localStorage.setItem('iris_db_records', JSON.stringify(local));
+    }
+    return payload;
+  }
+
+  async setRecordsPublication(ids, published) {
+    await this.initPromise;
+    const recordIds = [...new Set((ids || []).filter(Boolean))];
+    if (!recordIds.length) throw new Error('No records selected.');
+    const response = await fetch(`${this.config.endpoints.records}&action=bulk-${published ? 'publish' : 'unpublish'}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ids: recordIds })
+    });
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(payload.error || `Bulk ${published ? 'publish' : 'unpublish'} failed (HTTP ${response.status})`);
+    const selected = new Set(recordIds);
+    const status = published ? 'Approved' : 'Pending Review';
+    if (this.db) {
+      try {
+        const current = await this.getAllRecords();
+        const store = this.db.transaction('records', 'readwrite').objectStore('records');
+        current.filter(record => selected.has(String(record.id))).forEach(record => store.put({ ...record, status }));
+      } catch (e) {}
+    }
+    const local = this.getLocalStorageRecords().map(record => selected.has(String(record.id)) ? { ...record, status } : record);
+    localStorage.setItem('iris_db_records', JSON.stringify(local));
+    return payload;
+  }
+
   async saveGraph(graphData) {
     const chartData = graphData.chart_data || graphData.chartData || graphData.option || graphData.config || {};
     const payload = {

@@ -152,7 +152,7 @@ require_once __DIR__.'/includes/header.php';
                                 <option value="pie">Pie Chart</option>
                                 <option value="doughnut">Doughnut Chart</option>
                                 <option value="polarArea">Polar Area</option>
-                                <option value="rankedBar">Ranked Bar Chart</option>
+                                <!-- Temporarily disabled: <option value="rankedBar">Ranked Bar Chart</option> -->
                             </select>
                         </div>
                     </div>
@@ -295,7 +295,8 @@ require_once __DIR__.'/includes/header.php';
     <div class="table-container" style="box-shadow: var(--card-shadow);">
         <div id="adminBulkActions" class="admin-bulk-actions" hidden>
             <span id="adminBulkSelectionCount">0 records selected</span>
-            <button id="adminBulkApprove" type="button" class="btn-approve-modal" disabled><i class="fa-solid fa-circle-check" aria-hidden="true"></i> Bulk Approve</button>
+            <button id="adminBulkPublish" type="button" class="archive-load-button" disabled><i class="fa-solid fa-circle-check" aria-hidden="true"></i> Publish</button>
+            <button id="adminBulkUnpublish" type="button" class="export-cancel-button" disabled><i class="fa-solid fa-eye-slash" aria-hidden="true"></i> Unpublish</button>
             <button id="adminBulkDelete" type="button" class="archive-delete-button" disabled><i class="fa-solid fa-trash" aria-hidden="true"></i> Bulk Delete</button>
             <button id="adminClearSelection" type="button" class="export-cancel-button">Clear selection</button>
         </div>

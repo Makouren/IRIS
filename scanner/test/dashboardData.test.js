@@ -5,7 +5,50 @@ const path = require('node:path');
 const { prepareCircularData, serializeChartState } = require('../js/chartData');
 const { pairSelectedText } = require('../js/sourceIngestion');
 const { normalizeGraphExportItem, buildPrintableGraphSheet, buildSavedChartOption } = require('../js/graphExport');
+const { createChart } = require('../js/modules/chartEngine');
 const savedGraphsSource = fs.readFileSync(path.join(__dirname, '..', 'js', 'modules', 'savedGraphsTab.js'), 'utf8');
+
+test('saved chart options use readable colors in dark mode', () => {
+  let option;
+  const originalWindow = global.window;
+  const originalDocument = global.document;
+  global.window = { echarts: { init: () => ({ setOption: value => { option = value; } }) } };
+  global.document = { documentElement: { classList: { contains: className => className === 'dark' } } };
+
+  try {
+    createChart({}, 'bar', { labels: ['North'], datasets: [{ label: 'Score', data: [82] }] });
+    assert.equal(option.legend.textStyle.color, '#F8FAFC');
+    assert.equal(option.xAxis.axisLabel.color, '#F8FAFC');
+    assert.equal(option.yAxis.axisLabel.color, '#F8FAFC');
+    assert.equal(option.tooltip.textStyle.color, '#F8FAFC');
+  } finally {
+    if (originalWindow === undefined) delete global.window;
+    else global.window = originalWindow;
+    if (originalDocument === undefined) delete global.document;
+    else global.document = originalDocument;
+  }
+});
+
+test('published pie labels are white with no text stroke in dark mode', () => {
+  const originalDocument = global.document;
+  global.document = { documentElement: { classList: { contains: className => className === 'dark' } } };
+
+  try {
+    const option = buildSavedChartOption({
+      chart_type: 'pie',
+      labels: ['SDG 1', 'SDG 2'],
+      values_data: [60, 40]
+    });
+    const label = option.series[0].label;
+    assert.equal(option.legend.textStyle.color, '#FFFFFF');
+    assert.equal(label.color, '#FFFFFF');
+    assert.equal(label.textBorderWidth, 0);
+    assert.equal(label.textBorderColor, 'transparent');
+  } finally {
+    if (originalDocument === undefined) delete global.document;
+    else global.document = originalDocument;
+  }
+});
 
 test('deduplicates circular chart legend labels while grouping remains optional', () => {
   const rows = [{ label: 'North', value: 2 }, { label: 'North', value: 3 }, { label: 'South', value: 4 }];
@@ -143,6 +186,26 @@ test('Studio Publish approves the record and publishes only its active chart', (
   assert.match(studioSource, /status: approve \? 'Approved'/);
   assert.match(studioSource, /savedChart\.is_published = approve === true/);
   assert.match(studioSource, /saveGraph\(savedChart\)/);
+});
+
+test('archive unpublish resets a record and unpublishes its associated charts', () => {
+  const apiSource = fs.readFileSync(path.join(__dirname, '..', '..', 'api', 'iris.php'), 'utf8');
+  const adminPortalSource = fs.readFileSync(path.join(__dirname, '..', 'js', 'modules', 'adminPortal.js'), 'utf8');
+  const dbManagerSource = fs.readFileSync(path.join(__dirname, '..', 'js', 'database', 'dbManager.js'), 'utf8');
+  const appSource = fs.readFileSync(path.join(__dirname, '..', 'js', 'app.js'), 'utf8');
+  const stylesSource = fs.readFileSync(path.join(__dirname, '..', 'css', 'styles.css'), 'utf8');
+  assert.match(apiSource, /\$action === 'unpublish'[\s\S]*?UPDATE records SET status='Pending Review'[\s\S]*?UPDATE saved_graphs SET is_published=0 WHERE record_id=\?/);
+  assert.match(adminPortalSource, /btn-table-unpublish/);
+  assert.match(adminPortalSource, /class="admin-record-actions"/);
+  assert.match(stylesSource, /\.admin-record-actions\s*\{[\s\S]*?grid-template-columns:\s*6rem 7\.5rem 5\.8rem/);
+  assert.match(adminPortalSource, /ctx\.dbManager\.unpublishRecord\(id\)/);
+  assert.match(adminPortalSource, /requestAnimationFrame\(\(\) => workbench\.scrollIntoView/);
+  assert.match(dbManagerSource, /async unpublishRecord\(id\)/);
+  assert.match(appSource, /modules\/adminPortal\.js\?v=archive-bulk-actions/);
+  assert.match(adminPortalSource, /adminBulkPublish/);
+  assert.match(adminPortalSource, /adminBulkUnpublish/);
+  assert.match(dbManagerSource, /async setRecordsPublication\(ids, published\)/);
+  assert.match(apiSource, /bulk-publish', 'bulk-unpublish/);
 });
 
 test('saved graph publish helpers are exposed globally for all files', () => {

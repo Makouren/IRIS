@@ -81,7 +81,7 @@
 
     <script src="<?= e(base_url('scanner/js/parsers/excelParser.js')) ?>"></script>
     <script src="<?= e(base_url('scanner/js/ai/graphEngine.js')) ?>"></script>
-    <script src="<?= e(base_url('scanner/js/database/dbManager.js')) ?>"></script>
+    <script src="<?= e(base_url('scanner/js/database/dbManager.js')) ?>?v=<?= (int) filemtime(__DIR__.'/../../scanner/js/database/dbManager.js') ?>"></script>
     <script src="<?= e(base_url('scanner/js/samples.js')) ?>"></script>
     <script src="<?= e(base_url('scanner/js/scanner.js')) ?>"></script>
     <script src="<?= e(base_url('scanner/js/tableFilter.js')) ?>"></script>
@@ -90,6 +90,6 @@
     <script src="<?= e(base_url('scanner/js/sourceIngestion.js')) ?>"></script>
     <script src="<?= e(base_url('scanner/js/documentPagination.js')) ?>"></script>
     <script src="<?= e(base_url('scanner/js/graphExport.js')) ?>"></script>
-    <script type="module" src="<?= e(base_url('scanner/js/app.js')) ?>"></script>
+    <script type="module" src="<?= e(base_url('scanner/js/app.js')) ?>?v=<?= (int) filemtime(__DIR__.'/../../scanner/js/app.js') ?>"></script>
 </body>
 </html>

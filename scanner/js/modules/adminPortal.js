@@ -16,12 +16,14 @@ export function initAdminPortal(ctx) {
     const bar = $('adminBulkActions');
     const count = $('adminBulkSelectionCount');
     const deleteBtn = $('adminBulkDelete');
-    const approveBtn = $('adminBulkApprove');
+    const publishBtn = $('adminBulkPublish');
+    const unpublishBtn = $('adminBulkUnpublish');
     const n = selectedRecordIds.size;
     if (bar) bar.hidden = n === 0;
     if (count) count.textContent = `${n} record${n === 1 ? '' : 's'} selected`;
     if (deleteBtn) deleteBtn.disabled = n === 0;
-    if (approveBtn) approveBtn.disabled = n === 0;
+    if (publishBtn) publishBtn.disabled = n === 0;
+    if (unpublishBtn) unpublishBtn.disabled = n === 0;
   };
 
   const syncSelectAll = () => {
@@ -75,9 +77,9 @@ export function initAdminPortal(ctx) {
         <td>${escape((record.fileType || 'UNKNOWN').toUpperCase())}</td>
         <td><span class="badge">${escape(displayStatus)}</span></td>
         <td>${scannedDate ? escape(new Date(scannedDate).toLocaleString()) : 'N/A'}</td>
-        <td><div style="display:flex;align-items:center;gap:.5rem;white-space:nowrap;">
+        <td><div class="admin-record-actions">
           <button class="archive-load-button btn-table-load-studio" data-id="${escape(record.id)}"><i class="fa-solid fa-palette" aria-hidden="true"></i> Review</button>
-          ${approved ? '<span class="badge" style="font-weight:800;"><i class="fa-solid fa-check" aria-hidden="true"></i> Published</span>' : `<button class="archive-load-button btn-table-approve" data-id="${escape(record.id)}"><i class="fa-solid fa-circle-check" aria-hidden="true"></i> Publish</button>`}
+          ${approved ? `<button class="archive-load-button btn-table-unpublish" data-id="${escape(record.id)}" title="Unpublish this record and its saved charts"><i class="fa-solid fa-eye-slash" aria-hidden="true"></i> Unpublish</button>` : `<button class="archive-load-button btn-table-approve" data-id="${escape(record.id)}"><i class="fa-solid fa-circle-check" aria-hidden="true"></i> Publish</button>`}
           <button class="archive-delete-button btn-table-delete" data-id="${escape(record.id)}" title="Delete record"><i class="fa-solid fa-trash" aria-hidden="true"></i> Delete</button>
         </div></td>
       </tr>`;
@@ -89,6 +91,8 @@ export function initAdminPortal(ctx) {
       if (record) {
         ctx.state.studioActiveRecord = record;
         ctx.api.renderStudioWorkbench(record);
+        const workbench = $('studioContainer');
+        if (workbench) requestAnimationFrame(() => workbench.scrollIntoView({ behavior: 'smooth', block: 'start' }));
       }
     });
 
@@ -99,6 +103,23 @@ export function initAdminPortal(ctx) {
       ctx.api.renderStudioWorkbench(record);
       $('studioChartCanvas')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
       showToast('Review detected column roles and acknowledge warnings before approval.');
+    });
+
+    all('.btn-table-unpublish').forEach(button => button.onclick = async () => {
+      const id = button.dataset.id;
+      const record = filtered.find(item => String(item.id) === String(id));
+      if (!record || !confirm(`Unpublish "${record.fileName || id}" and all of its published charts? The record will return to Pending Review.`)) return;
+      button.disabled = true;
+      try {
+        const result = await ctx.dbManager.unpublishRecord(id);
+        selectedRecordIds.delete(id);
+        await ctx.api.renderAdminPortal();
+        const chartCount = Number(result.unpublished_graph_count || 0);
+        showToast(`${record.fileName || id} unpublished with ${chartCount} related chart${chartCount === 1 ? '' : 's'}.`);
+      } catch (error) {
+        button.disabled = false;
+        alert(`Unpublish failed: ${error.message}`);
+      }
     });
 
     all('.btn-table-delete').forEach(button => button.onclick = async () => {
@@ -119,23 +140,24 @@ export function initAdminPortal(ctx) {
     bindSelection();
   };
 
-  const confirmBulk = async (mode) => {
-    if (mode === 'approve') {
-      alert('Bulk publish is disabled so each chart can be reviewed and its warnings acknowledged in Studio.');
-      return;
-    }
+  const confirmBulk = async mode => {
     const ids = [...selectedRecordIds];
     if (!ids.length) return;
     const records = await ctx.dbManager.getAllRecords();
     const selected = records.filter(record => ids.includes(String(record.id)));
-    const verb = mode === 'approve' ? 'publish' : 'delete';
+    const verb = mode;
+    const description = mode === 'delete'
+      ? `Permanently delete <strong>${selected.length}</strong> selected upload${selected.length === 1 ? '' : 's'} and their saved charts?`
+      : `${mode === 'publish' ? 'Publish' : 'Unpublish'} <strong>${selected.length}</strong> selected upload${selected.length === 1 ? '' : 's'} and all saved charts attached to them?`;
+    const actionClass = mode === 'delete' ? 'archive-delete-button' : 'archive-load-button';
+    const actionLabel = mode === 'delete' ? 'Delete selected' : `${mode === 'publish' ? 'Publish' : 'Unpublish'} selected`;
     const modal = document.createElement('div');
     modal.className = 'modal-overlay active';
     modal.innerHTML = `<div class="modal-card" style="max-width:620px;">
       <div class="modal-header"><h3 class="modal-title">Confirm bulk ${verb}</h3><button type="button" class="export-cancel-button" data-close>Cancel</button></div>
-      <p>${mode === 'approve' ? 'Publish' : 'Permanently delete'} <strong>${selected.length}</strong> selected upload${selected.length === 1 ? '' : 's'}${mode === 'approve' ? '?' : ' and their published Observatory charts?'}</p>
+      <p>${description}</p>
       <ul style="max-height:260px;overflow:auto;">${selected.map(r => `<li>${escape(r.fileName || 'Untitled')} <small>(${escape(r.id)})</small></li>`).join('')}</ul>
-      <div style="display:flex;justify-content:flex-end;gap:.75rem;margin-top:1rem;"><button type="button" class="${mode === 'approve' ? 'btn-approve-modal' : 'archive-delete-button'}" data-confirm>${mode === 'approve' ? '<i class="fa-solid fa-circle-check" aria-hidden="true"></i> Publish records' : '<i class="fa-solid fa-trash" aria-hidden="true"></i> Delete records'}</button></div>
+      <div style="display:flex;justify-content:flex-end;gap:.75rem;margin-top:1rem;"><button type="button" class="${actionClass}" data-confirm>${actionLabel}</button></div>
     </div>`;
     document.body.appendChild(modal);
     const close = () => modal.remove();
@@ -144,14 +166,20 @@ export function initAdminPortal(ctx) {
       const action = modal.querySelector('[data-confirm]');
       action.disabled = true;
       try {
-        const result = mode === 'approve' ? await ctx.dbManager.approveRecords(ids) : await ctx.dbManager.deleteRecords(ids);
+        const result = mode === 'delete'
+          ? await ctx.dbManager.deleteRecords(ids)
+          : await ctx.dbManager.setRecordsPublication(ids, mode === 'publish');
         close();
         selectedRecordIds.clear();
         await ctx.api.renderAdminPortal();
-        showToast(`${result.successCount} of ${ids.length} records ${mode === 'approve' ? 'published' : 'deleted'} successfully.`);
+        const relatedCharts = Number(result.published_graph_count || 0);
+        const message = mode === 'delete'
+          ? `${result.successCount} of ${ids.length} records deleted successfully.`
+          : `${result.successCount} of ${ids.length} records ${mode}ed with ${relatedCharts} related chart${relatedCharts === 1 ? '' : 's'}.`;
+        showToast(message);
       } catch (error) {
         action.disabled = false;
-        alert(`${mode === 'approve' ? 'Publish' : 'Delete'} failed: ${error.message}`);
+        alert(`${mode[0].toUpperCase()}${mode.slice(1)} failed: ${error.message}`);
       }
     };
   };
@@ -204,7 +232,8 @@ export function initAdminPortal(ctx) {
   };
 
   $('adminBulkDelete')?.addEventListener('click', () => confirmBulk('delete'));
-  $('adminBulkApprove')?.addEventListener('click', () => confirmBulk('approve'));
+  $('adminBulkPublish')?.addEventListener('click', () => confirmBulk('publish'));
+  $('adminBulkUnpublish')?.addEventListener('click', () => confirmBulk('unpublish'));
   $('adminClearSelection')?.addEventListener('click', () => { selectedRecordIds.clear(); bindSelection(); });
   $('adminSearchInput')?.addEventListener('input', () => ctx.api.renderAdminPortal());
   $('adminStatusFilter')?.addEventListener('change', () => ctx.api.renderAdminPortal());
