@@ -47,12 +47,14 @@ require_auth();
     <script src="https://cdnjs.cloudflare.com/ajax/libs/flowbite/2.3.0/flowbite.min.js"></script>
     <!-- Apache ECharts CDN -->
     <script src="https://cdn.jsdelivr.net/npm/echarts@5.5.0/dist/echarts.min.js"></script>
+    <script src="<?= e(base_url('scanner/js/chartConfig.js')) ?>"></script>
     <script src="<?= e(base_url('scanner/js/chartMapping.js')) ?>"></script>
     <script src="<?= e(base_url('scanner/js/graphExport.js')) ?>?v=<?= (int) filemtime(__DIR__.'/../scanner/js/graphExport.js') ?>"></script>
     <!-- Font Awesome -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <!-- Google Fonts -->
     <link href="https://fonts.googleapis.com/css2?family=Libre+Franklin:wght@400;500;600;700;800&family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="<?= e(base_url('scanner/css/tokens.css')) ?>">
     <style>
         body { font-family: 'Libre Franklin', 'Inter', sans-serif; }
         .admin-nav { background: linear-gradient(180deg, rgba(15,23,42,.98), rgba(15,23,42,.92)) !important; border-bottom: 1px solid rgba(148,163,184,.22) !important; box-shadow: 0 10px 30px rgba(2,6,23,.24) !important; }
@@ -189,6 +191,14 @@ require_auth();
             --iris-text-soft: #475569;
             --iris-text-faint: #64748b;
         }
+
+        body { font-size: var(--iris-font-base); }
+        .ranking-panel { background: var(--iris-surface); border: 1px solid var(--iris-border); box-shadow: 0 12px 32px rgba(30, 96, 49, 0.08); }
+        .ranking-table th { color: var(--iris-text-faint); font-size: var(--iris-font-xs); letter-spacing: .08em; text-transform: uppercase; }
+        .ranking-table td { color: var(--iris-text); font-size: var(--iris-font-sm); }
+        .rank-change-up { color: #15803d; }
+        .rank-change-down { color: #b91c1c; }
+        .rank-change-same { color: var(--iris-text-faint); }
 
         html.dark {
             --iris-green: #6ee7b7;
@@ -406,6 +416,37 @@ require_auth();
             <?php endif; ?>
 
             <div id="summaryCardsGrid" class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4"></div>
+        </section>
+
+        <section id="ranking-history" class="space-y-4">
+            <div class="flex flex-col sm:flex-row sm:items-end justify-between gap-3">
+                <div>
+                    <h2 class="text-xl font-bold text-gray-900 dark:text-white flex items-center">
+                        <i class="fa-solid fa-ranking-star text-amber-500 mr-2"></i> Ranking History
+                    </h2>
+                    <p class="text-xs text-gray-500 dark:text-gray-400">Compare institutional rankings across available years.</p>
+                </div>
+                <label class="flex items-center gap-2 text-sm font-semibold text-gray-700 dark:text-gray-200">
+                    Year
+                    <select id="rankingYearFilter" class="rounded-xl border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 px-3 py-2 text-sm" disabled>
+                        <option>Loading...</option>
+                    </select>
+                </label>
+            </div>
+            <div class="grid grid-cols-1 xl:grid-cols-5 gap-6">
+                <div class="ranking-panel rounded-2xl p-5 xl:col-span-2">
+                    <div id="rankingTableStatus" class="text-sm text-gray-500 dark:text-gray-400 py-8 text-center">Loading ranking data...</div>
+                    <div class="overflow-x-auto">
+                        <table id="rankingTable" class="ranking-table hidden w-full text-left">
+                            <thead><tr><th class="pb-3 pr-4">Organization</th><th class="pb-3 pr-4">Category</th><th class="pb-3 pr-4">Global Rank</th><th class="pb-3">Change</th></tr></thead>
+                            <tbody></tbody>
+                        </table>
+                    </div>
+                </div>
+                <div class="ranking-panel rounded-2xl p-5 xl:col-span-3">
+                    <div id="rankingChart" class="w-full h-80"></div>
+                </div>
+            </div>
         </section>
 
         <section id="scanner-published-graphs" class="space-y-4">
@@ -776,6 +817,87 @@ require_auth();
             refreshSummaryCardsAdmin().catch(() => {});
         <?php endif; ?>
 
+        const rankingPalette = window.IRISChartConfig?.palettes || { default: ['#0F766E', '#5EEAD4'] };
+        let rankingRows = [];
+        let rankingChartInstance = null;
+
+        function rankingColor(shortName) {
+            return rankingPalette[shortName] || rankingPalette.default;
+        }
+
+        function rankingChange(row, selectedYear) {
+            if (!Number.isFinite(Number(row.rank_value))) return null;
+            const previous = rankingRows
+                .filter(item => item.body_short_name === row.body_short_name && item.category === row.category && Number(item.year) < Number(selectedYear) && Number.isFinite(Number(item.rank_value)))
+                .sort((a, b) => Number(b.year) - Number(a.year))[0];
+            if (!previous) return null;
+            const difference = Number(row.rank_value) - Number(previous.rank_value);
+            return { difference, symbol: difference < 0 ? '▲' : difference > 0 ? '▼' : '–', className: difference < 0 ? 'rank-change-up' : difference > 0 ? 'rank-change-down' : 'rank-change-same' };
+        }
+
+        function renderRankingHistory(year) {
+            const table = document.getElementById('rankingTable');
+            const status = document.getElementById('rankingTableStatus');
+            const body = table?.querySelector('tbody');
+            const rows = rankingRows.filter(row => Number(row.year) === Number(year) && row.rank_value !== null && row.rank_value !== '');
+            if (!table || !status || !body) return;
+            body.innerHTML = '';
+            if (!rows.length) {
+                table.classList.add('hidden');
+                status.textContent = `No numeric rankings are available for ${year}.`;
+                status.classList.remove('hidden');
+                rankingChartInstance?.clear();
+                return;
+            }
+            status.classList.add('hidden');
+            table.classList.remove('hidden');
+            rows.forEach(row => {
+                const change = rankingChange(row, year);
+                const changeText = change ? `${change.symbol} ${Math.abs(change.difference)}` : 'New';
+                const tr = document.createElement('tr');
+                tr.className = 'border-t border-gray-100 dark:border-gray-700';
+                tr.innerHTML = `<td class="py-3 pr-4 font-semibold">${escapeHtmlDashboard(row.body_short_name || row.body_name)}</td><td class="py-3 pr-4">${escapeHtmlDashboard(row.category || 'Overall')}</td><td class="py-3 pr-4 font-bold">${escapeHtmlDashboard(row.global_rank || row.rank_value)}</td><td class="py-3"><span class="${change?.className || 'rank-change-same'} font-bold">${changeText}</span></td>`;
+                body.appendChild(tr);
+            });
+
+            const chartElement = document.getElementById('rankingChart');
+            if (!chartElement) return;
+            rankingChartInstance?.dispose();
+            rankingChartInstance = echarts.init(chartElement);
+            const labels = rows.map(row => `${row.body_short_name || row.body_name}${row.category ? ` · ${row.category}` : ''}`);
+            const values = rows.map(row => Number(row.rank_value));
+            rankingChartInstance.setOption({
+                color: rows.map(row => rankingColor(row.body_short_name)[0]),
+                tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' }, backgroundColor: document.documentElement.classList.contains('dark') ? '#172033' : '#fff', borderColor: '#dfe7df', textStyle: { color: document.documentElement.classList.contains('dark') ? '#f8fafc' : '#1f2937', fontSize: 13 }, formatter: params => { const point = params[0]; const row = rows[point.dataIndex]; return `${escapeHtmlDashboard(row.body_name)}<br/>${escapeHtmlDashboard(row.category || 'Overall')}: <b>${escapeHtmlDashboard(row.global_rank || row.rank_value)}</b>`; } },
+                grid: { left: '4%', right: '5%', top: '5%', bottom: '8%', containLabel: true },
+                xAxis: { type: 'value', inverse: true, min: 0, axisLabel: { fontSize: 12, color: document.documentElement.classList.contains('dark') ? '#cbd5e1' : '#475569' }, splitLine: { lineStyle: { color: document.documentElement.classList.contains('dark') ? 'rgba(148,163,184,.18)' : 'rgba(30,96,49,.10)' } } },
+                yAxis: { type: 'category', data: labels, axisLabel: { fontSize: 12, color: document.documentElement.classList.contains('dark') ? '#e2e8f0' : '#334155' } },
+                series: [{ type: 'bar', data: rows.map((row, index) => ({ value: values[index], itemStyle: { color: new echarts.graphic.LinearGradient(1, 0, 0, 0, [{ offset: 0, color: rankingColor(row.body_short_name)[0] }, { offset: 1, color: rankingColor(row.body_short_name)[1] }]), borderRadius: [0, 7, 7, 0] } })) }]
+            });
+        }
+
+        function loadRankingHistory() {
+            const select = document.getElementById('rankingYearFilter');
+            fetch('<?= e(base_url('api/rankings.php')) ?>', { headers: { Accept: 'application/json' }, cache: 'no-store' })
+                .then(response => { if (!response.ok) throw new Error('Ranking request failed'); return response.json(); })
+                .then(payload => {
+                    rankingRows = Array.isArray(payload.rankings) ? payload.rankings : [];
+                    const years = Array.isArray(payload.years) ? payload.years : [];
+                    if (!select || !years.length) throw new Error('No ranking years available');
+                    select.innerHTML = years.map(year => `<option value="${year}">${year}</option>`).join('');
+                    select.disabled = false;
+                    select.value = String(years[0]);
+                    renderRankingHistory(years[0]);
+                })
+                .catch(() => {
+                    if (select) { select.innerHTML = '<option>Unavailable</option>'; select.disabled = true; }
+                    const status = document.getElementById('rankingTableStatus');
+                    if (status) status.textContent = 'Ranking data could not be loaded.';
+                });
+        }
+
+        document.getElementById('rankingYearFilter')?.addEventListener('change', event => renderRankingHistory(event.target.value));
+
         // --- Apache ECharts Data & Initialization ---
         const trendYears = [];
         const trendRanks = [];
@@ -1078,9 +1200,11 @@ require_auth();
 
         document.addEventListener('DOMContentLoaded', () => {
             loadSummaryCards();
+            loadRankingHistory();
             loadPublishedScannerGraphs();
             window.addEventListener('resize', () => {
                 chartInstances.forEach(chart => chart?.resize?.());
+                rankingChartInstance?.resize?.();
             });
         });
     </script>

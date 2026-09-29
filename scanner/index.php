@@ -15,10 +15,12 @@
   
   <!-- CSS Stylesheet -->
   <link rel="stylesheet" href="css/styles.css?v=<?= (int) filemtime(__DIR__.'/css/styles.css') ?>">
+  <link rel="stylesheet" href="css/tokens.css">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf_viewer.min.css">
 
   <!-- External Parsing & Charting CDN Libraries -->
   <script src="https://cdn.jsdelivr.net/npm/echarts@5.5.1/dist/echarts.min.js"></script>
+  <script src="js/chartConfig.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/mammoth@1.6.0/mammoth.browser.min.js"></script>

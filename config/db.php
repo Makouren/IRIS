@@ -1,5 +1,5 @@
 <?php
-const IRIS_DB_HOST='127.0.0.1'; const IRIS_DB_PORT='3306'; const IRIS_DB_NAME='iris_db'; const IRIS_DB_USER='root'; const IRIS_DB_PASS='';
+const IRIS_DB_HOST='127.0.0.1'; const IRIS_DB_PORT='3306'; const IRIS_DB_NAME='iris_db1'; const IRIS_DB_USER='root'; const IRIS_DB_PASS='rooters';
 
 function ensure_scanner_table_columns(PDO $pdo, string $table, array $columns): void {
     $existing = $pdo->query("SHOW COLUMNS FROM `$table`")->fetchAll(PDO::FETCH_COLUMN);

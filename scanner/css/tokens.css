@@ -1,0 +1,13 @@
+:root {
+  --iris-font-base: 16px;
+  --iris-font-xs: 0.75rem;
+  --iris-font-sm: 0.875rem;
+  --iris-font-md: 1rem;
+  --iris-font-lg: 1.25rem;
+  --iris-font-xl: 1.5rem;
+  --iris-font-display: 2rem;
+}
+
+body {
+  font-size: var(--iris-font-base);
+}

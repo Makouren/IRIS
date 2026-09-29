@@ -46,16 +46,20 @@ if($_SERVER['REQUEST_METHOD']==='POST'){verify_csrf();$u=trim($_POST['username']
     <link href="https://cdnjs.cloudflare.com/ajax/libs/flowbite/2.3.0/flowbite.min.css" rel="stylesheet" />
     <script src="https://cdnjs.cloudflare.com/ajax/libs/flowbite/2.3.0/flowbite.min.js"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="<?= e(base_url('scanner/css/tokens.css')) ?>">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
     <style>
         body { font-family: 'Inter', sans-serif; }
+        .register-page { position: relative; isolation: isolate; overflow: hidden; background: #1E6031; }
+        .register-page::before { content: ''; position: absolute; inset: 0; z-index: -1; background: linear-gradient(120deg, rgba(2, 6, 23, .76), rgba(30, 96, 49, .42)), radial-gradient(circle at 15% 20%, rgba(245, 158, 11, .22), transparent 32%), radial-gradient(circle at 85% 80%, rgba(16, 185, 129, .2), transparent 34%); }
+        .register-page > * { position: relative; z-index: 1; }
         .bg-dots {
             background-image: radial-gradient(rgba(255,255,255,0.08) 1px, transparent 1px);
             background-size: 18px 18px;
         }
     </style>
 </head>
-<body class="min-h-screen flex items-center justify-center p-4 bg-gradient-to-br from-brand-950 via-brand-900 to-brand-800 bg-dots">
+<body class="register-page min-h-screen flex items-center justify-center p-4 bg-dots">
 
     <div class="w-full max-w-4xl grid md:grid-cols-2 rounded-3xl overflow-hidden shadow-2xl border border-white/10">
 

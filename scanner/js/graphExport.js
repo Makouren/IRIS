@@ -96,6 +96,7 @@
     const textColor = isDark ? '#FFFFFF' : '#4b5563';
     const labelColor = isDark ? '#FFFFFF' : '#111827';
     const gridColor = isDark ? 'rgba(226, 232, 240, 0.3)' : '#e5e7eb';
+    const sharedColors = globalThis.IRISChartConfig?.colors || ['#1E6031', '#B7791F', '#0F766E', '#2563EB', '#C2410C', '#7C3AED'];
     const tooltipStyle = {
       backgroundColor: isDark ? '#172033' : '#FFFFFF',
       borderColor: isDark ? '#475569' : '#E5E7EB',
@@ -137,7 +138,7 @@
           name: seriesName,
           type: 'bar',
           data: rankedSeries,
-          itemStyle: { color: '#10b981', borderRadius: [0, 4, 4, 0] },
+          itemStyle: { color: sharedColors[0], borderRadius: [0, 7, 7, 0] },
           label: { show: true, position: 'right', color: labelColor, textBorderColor: 'transparent', textBorderWidth: 0, formatter: params => Number(params.data?.rawValue ?? params.value ?? 0) }
         }]
       };
@@ -146,7 +147,7 @@
     if (type === 'pie' || type === 'doughnut') {
       return {
         textStyle: { color: textColor },
-        color: ['#10b981', '#34d399', '#3b82f6', '#f59e0b', '#8b5cf6', '#f97316', '#14b8a6'],
+        color: sharedColors,
         tooltip: { ...tooltipStyle, trigger: 'item', formatter: '{b}: {c} ({d}%)' },
         legend: { type: 'scroll', bottom: 0, data: labels, textStyle: { color: textColor } },
         series: [{
@@ -154,6 +155,7 @@
           radius: type === 'doughnut' ? ['45%', '70%'] : '65%',
           center: ['50%', '45%'],
           label: { show: true, color: labelColor, textBorderColor: 'transparent', textBorderWidth: 0 },
+          itemStyle: { borderColor: isDark ? '#111827' : '#FFFFFF', borderWidth: 2, borderRadius: 5 },
           data: labels.map((label, index) => ({ name: label || `Item ${index + 1}`, value: Number(values[index] ?? 0) }))
         }]
       };
@@ -203,8 +205,8 @@
         type: type === 'line' ? 'line' : 'bar',
         smooth: type === 'line',
         data: values.map((value, index) => ({ value: Number(value ?? 0), name: axisLabels[index] || `Item ${index + 1}` })),
-        itemStyle: { color: '#10b981' },
-        lineStyle: type === 'line' ? { color: '#10b981', width: 3 } : undefined
+        itemStyle: { color: sharedColors[0], borderRadius: type === 'line' ? 0 : [0, 7, 7, 0] },
+        lineStyle: type === 'line' ? { color: sharedColors[0], width: 3 } : undefined
       }]
     };
   }

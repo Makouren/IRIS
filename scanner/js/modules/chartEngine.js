@@ -35,7 +35,11 @@ export function createChart(ctx, type, chartData, { reverseOrder = false } = {})
   values = values.map(value => value && typeof value === 'object' ? value.value : value);
   if (reverseOrder) { labels.reverse(); values.reverse(); }
 
-  const colors = source.color || ['#009639', '#E0A70D', '#1E6031', '#3B82F6', '#0D9488', '#D97706'];
+  const palette = window.IRISChartConfig || {};
+  const colors = source.color || palette.colors || ['#1E6031', '#B7791F', '#0F766E', '#2563EB', '#C2410C', '#7C3AED'];
+  const barFill = window.echarts?.graphic?.LinearGradient
+    ? new window.echarts.graphic.LinearGradient(0, 0, 1, 0, [{ offset: 0, color: colors[0] }, { offset: 1, color: colors[1] || colors[0] }])
+    : colors[0];
   const isDark = document.documentElement.classList.contains('dark');
   const textColor = isDark ? '#F8FAFC' : '#4B5563';
   const labelColor = isDark ? '#F8FAFC' : '#1F2937';
@@ -48,7 +52,7 @@ export function createChart(ctx, type, chartData, { reverseOrder = false } = {})
       axisPointer: { type: 'shadow' },
       backgroundColor: isDark ? '#172033' : '#FFFFFF',
       borderColor: isDark ? '#475569' : '#E5E7EB',
-      textStyle: { color: labelColor }
+      textStyle: { color: labelColor, fontSize: 13 }
     },
     legend: { data: [seriesName], textStyle: { color: textColor } },
     series: []
@@ -68,7 +72,7 @@ export function createChart(ctx, type, chartData, { reverseOrder = false } = {})
       radius: type === 'doughnut' ? ['45%', '72%'] : '68%',
       data: labels.map((name, index) => ({ name, value: values[index] })),
       label: { show: true, color: labelColor, formatter: '{b}: {d}%' },
-      itemStyle: { borderColor: '#FFFFFF', borderWidth: 2 }
+      itemStyle: { borderColor: '#FFFFFF', borderWidth: 2, borderRadius: 5 }
     }];
   } else if (type === 'polarArea') {
     option.polar = {};
@@ -90,7 +94,7 @@ export function createChart(ctx, type, chartData, { reverseOrder = false } = {})
       type: type === 'line' ? 'line' : 'bar',
       data: values,
       smooth: type === 'line',
-      itemStyle: { color: colors[0] },
+      itemStyle: { color: type === 'line' ? colors[0] : barFill, borderRadius: type === 'line' ? 0 : [0, 7, 7, 0] },
       lineStyle: type === 'line' ? { color: colors[0], width: 3 } : undefined
     }];
   }
