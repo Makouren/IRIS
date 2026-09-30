@@ -7,7 +7,7 @@ import { initViewerTab } from './modules/viewerTab.js';
 import { initGraphsTab } from './modules/graphsTab.js';
 import { initSavedGraphsTab } from './modules/savedGraphsTab.js?v=dark-contrast-20260929';
 import { initAdminPortal } from './modules/adminPortal.js?v=archive-bulk-actions-20260929';
-import { initStudioWorkbench } from './modules/studioWorkbench.js';
+import { initStudioWorkbench } from './modules/studioWorkbench.js?v=data-preserving-colors-20260930';
 import { initStudioActions } from './modules/studioActions.js';
 import { initDocumentViewer } from './modules/documentViewer.js';
 import { initTableGrid } from './modules/tableGrid.js';
@@ -56,6 +56,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   window.IRISApp = ctx;
 
   if (document.getElementById('savedDashboardGraphsContainer')) {
+    await ctx.api.fieldColorsReady;
     await ctx.api.renderSavedGraphsTab?.();
   }
 });

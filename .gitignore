@@ -2,5 +2,8 @@
 *.log
 node_modules/
 vendor/
+!scanner/vendor/
+!scanner/vendor/vanilla-colorful/
+!scanner/vendor/vanilla-colorful/**
 .DS_Store
 .vscode/

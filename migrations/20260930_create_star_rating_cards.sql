@@ -1,0 +1,22 @@
+CREATE TABLE IF NOT EXISTS star_rating_cards (
+    id INT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+    title VARCHAR(255) NOT NULL,
+    logo_path VARCHAR(255) NULL,
+    year VARCHAR(10) NULL,
+    display_order INT NOT NULL DEFAULT 0,
+    is_published TINYINT(1) NOT NULL DEFAULT 0,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS star_rating_rows (
+    id INT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+    card_id INT UNSIGNED NOT NULL,
+    label VARCHAR(80) NOT NULL,
+    max_stars TINYINT UNSIGNED NOT NULL,
+    score DECIMAL(3,1) NOT NULL,
+    display_order INT NOT NULL DEFAULT 0,
+    KEY idx_star_rating_rows_card_order (card_id, display_order),
+    CONSTRAINT fk_star_rating_rows_card
+        FOREIGN KEY (card_id) REFERENCES star_rating_cards(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;

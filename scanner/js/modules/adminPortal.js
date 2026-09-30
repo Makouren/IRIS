@@ -11,6 +11,69 @@ export function initAdminPortal(ctx) {
     document.body.appendChild(toast);
     setTimeout(() => toast.remove(), 3000);
   };
+  const setEditorRecordUrl = recordId => {
+    const url = new URL(window.location.href);
+    if (recordId) url.searchParams.set('record_id', recordId);
+    else url.searchParams.delete('record_id');
+    window.history.replaceState(null, '', url);
+  };
+  const manualDatasetModal = $('manualDatasetModal');
+  const manualDatasetForm = $('manualDatasetForm');
+  const manualDatasetName = $('manualDatasetFileName');
+  const closeManualDatasetModal = () => {
+    manualDatasetModal?.classList.remove('active');
+    manualDatasetModal?.setAttribute('aria-hidden', 'true');
+  };
+
+  $('createManualDataset')?.addEventListener('click', () => {
+    manualDatasetForm?.reset();
+    manualDatasetName?.setCustomValidity('');
+    manualDatasetModal?.classList.add('active');
+    manualDatasetModal?.setAttribute('aria-hidden', 'false');
+    manualDatasetName?.focus();
+  });
+  $('cancelManualDataset')?.addEventListener('click', closeManualDatasetModal);
+  $('cancelManualDatasetFooter')?.addEventListener('click', closeManualDatasetModal);
+  manualDatasetModal?.addEventListener('click', event => {
+    if (event.target === manualDatasetModal) closeManualDatasetModal();
+  });
+  document.addEventListener('keydown', event => {
+    if (event.key === 'Escape' && manualDatasetModal?.classList.contains('active')) closeManualDatasetModal();
+  });
+  manualDatasetForm?.addEventListener('submit', async event => {
+    event.preventDefault();
+    const fileName = manualDatasetName?.value.trim() || '';
+    if (!fileName) {
+      manualDatasetName?.setCustomValidity('Enter a file name.');
+      manualDatasetName?.reportValidity();
+      return;
+    }
+    manualDatasetName?.setCustomValidity('');
+    const submit = $('submitManualDataset');
+    if (submit) submit.disabled = true;
+    try {
+      const record = await ctx.dbManager.saveRecord({
+        fileName,
+        fileType: 'manual',
+        extractedData: { Manual_Data: { name: 'Manual Data', headers: [], rows: [] } },
+        metadata: { creationMethod: 'manual' }
+      });
+      selectedRecordIds.clear();
+      ctx.state.docWindowActiveSheetKey = 'Manual_Data';
+      ctx.state.studioChartConfig = {};
+      ctx.state.studioChartInstance?.dispose?.();
+      ctx.state.studioChartInstance = null;
+      window.IRIS_STUDIO_DIRTY = false;
+      setEditorRecordUrl(record.id);
+      closeManualDatasetModal();
+      await ctx.api.renderAdminPortal(record.id);
+      showToast(`Created empty dataset: ${record.fileName}`);
+    } catch (error) {
+      alert(`Unable to create dataset: ${error.message}`);
+    } finally {
+      if (submit) submit.disabled = false;
+    }
+  });
 
   const updateBulkActions = () => {
     const bar = $('adminBulkActions');
@@ -90,6 +153,7 @@ export function initAdminPortal(ctx) {
       const record = filtered.find(item => String(item.id) === String(button.dataset.id));
       if (record) {
         ctx.state.studioActiveRecord = record;
+        setEditorRecordUrl(record.id);
         ctx.api.renderStudioWorkbench(record);
         const workbench = $('studioContainer');
         if (workbench) requestAnimationFrame(() => workbench.scrollIntoView({ behavior: 'smooth', block: 'start' }));
@@ -184,9 +248,15 @@ export function initAdminPortal(ctx) {
     };
   };
 
-  ctx.api.renderAdminPortal = async () => {
+  ctx.api.renderAdminPortal = async (preferredRecordId = null) => {
     const select = $('studioRecordSelect');
     try {
+      try {
+        globalThis.IRISFieldColors = await ctx.dbManager.getFieldColors();
+      } catch (error) {
+        globalThis.IRISFieldColors = globalThis.IRISFieldColors || {};
+        console.warn('Field colors are temporarily unavailable:', error);
+      }
       const records = await ctx.dbManager.getAllRecords();
       if ($('statTotalDb')) $('statTotalDb').textContent = records.length;
       if ($('statPendingDb')) $('statPendingDb').textContent = records.filter(r => r.status === 'Pending Review' || !r.status).length;
@@ -198,13 +268,15 @@ export function initAdminPortal(ctx) {
           select.innerHTML = records.map(r => `<option value="${escape(r.id)}">${escape(r.fileName)} (${escape((r.fileType || '').toUpperCase())})</option>`).join('');
           select.onchange = event => {
             ctx.state.studioActiveRecord = records.find(r => String(r.id) === String(event.target.value)) || null;
+            setEditorRecordUrl(ctx.state.studioActiveRecord?.id);
             ctx.api.renderStudioWorkbench(ctx.state.studioActiveRecord);
           };
         }
         const urlParams = new URLSearchParams(window.location.search);
         const urlRecordId = urlParams.get('record_id');
+        const preferredRecord = preferredRecordId ? records.find(r => String(r.id) === String(preferredRecordId)) : null;
         const matchedRecord = urlRecordId ? records.find(r => String(r.id) === String(urlRecordId)) : null;
-        ctx.state.studioActiveRecord = matchedRecord || records.find(r => String(r.id) === String(ctx.state.studioActiveRecord?.id)) || records[0];
+        ctx.state.studioActiveRecord = preferredRecord || matchedRecord || records.find(r => String(r.id) === String(ctx.state.studioActiveRecord?.id)) || records[0];
         if (select) select.value = String(ctx.state.studioActiveRecord.id);
         ctx.api.renderStudioWorkbench(ctx.state.studioActiveRecord);
       } else {

@@ -1,9 +1,17 @@
 import { $, parseEditableValue } from '../utils/helpers.js';
-import { renderStudioChart } from './chartEngine.js';
+import { renderStudioChart } from './chartEngine.js?v=data-preserving-colors-20260930';
+import { initStudioColorCustomizer } from './studioColorCustomizer.js';
 
 export function initStudioWorkbench(ctx) {
+  initStudioColorCustomizer(ctx);
   ctx.api.renderStudioWorkbench = record => {
     if (!record) return;
+    if (ctx.state.studioChartColorRecordId !== record.id) {
+      ctx.api.resetStudioColorChanges?.();
+      ctx.state.studioChartColorRecordId = record.id;
+      ctx.state.studioChartColors = null;
+      ctx.state.studioChartOverrides = null;
+    }
     ctx.api.ensureTableDataStructure(record);
     if ($('studioActiveFileName')) $('studioActiveFileName').textContent = `${record.fileName} (${(record.fileType || '').toUpperCase()})`;
     if ($('studioDocTypeInput')) $('studioDocTypeInput').value = record.docType || 'General Institutional Data';
@@ -63,7 +71,8 @@ export function initStudioWorkbench(ctx) {
     const info = ctx.api.getStudioActiveSheet(record); const sheet = info?.data;
     document.querySelectorAll('.studio-cell-input').forEach(input => { const row = Number(input.dataset.row); const column = Number(input.dataset.col); if (sheet?.rows?.[row]) sheet.rows[row][column] = parseEditableValue(input.value); });
     let savedChart = null; const chart = ctx.state.studioChartInstance;
-    if (chart) { const options = chart.getOption(); const current = window.ChartData.serializeChartState(options, ctx.state.studioChartConfig || {}); const selectedType = $('studioChartTypeSelect')?.value || 'bar'; const sheet = ctx.api.getStudioActiveSheet(record)?.data; const yearColumn = selectedType === 'rankedBar' ? window.ChartMapping.detectYearColumn(sheet?.headers || [], sheet?.rows || []) : null; const categoryField = Number($('studioCategoryCol')?.value ?? -1); const valueField = Number($('studioValueCol')?.value ?? -1); savedChart = { record_id: record.id, title: $('studioChartTitleInput')?.value || 'Observatory Draft', chart_type: selectedType, orientation: ctx.state.studioChartConfig?.orientation || 'vertical', rankSemantic: ctx.state.studioChartConfig?.rankSemantic === true, rankValueMin: ctx.state.studioChartConfig?.rankValueMin, rankValueMax: ctx.state.studioChartConfig?.rankValueMax, valueAxisMin: ctx.state.studioChartConfig?.valueAxisMin, valueAxisMax: ctx.state.studioChartConfig?.valueAxisMax, labels: current.labels, values_data: current.values, chart_data: { ...options, rankedBar: { selectedYear: ctx.state.studioChartConfig?.selectedYear ?? ctx.state.studioChartConfig?.rankedYear ?? null, yearColumn, reverseOrder: Boolean(ctx.state.studioChartConfig?.reverseOrder), categoryField: Number.isInteger(categoryField) && categoryField >= 0 ? categoryField : null, valueField: Number.isInteger(valueField) && valueField >= 0 ? valueField : null, yearField: yearColumn, chartType: selectedType } } }; }
+    if (chart) { const options = chart.getOption(); const current = window.ChartData.serializeChartState(options, ctx.state.studioChartConfig || {}); const selectedType = $('studioChartTypeSelect')?.value || 'bar'; const sheet = ctx.api.getStudioActiveSheet(record)?.data; const yearColumn = selectedType === 'rankedBar' ? window.ChartMapping.detectYearColumn(sheet?.headers || [], sheet?.rows || []) : null; const categoryField = Number($('studioCategoryCol')?.value ?? -1); const valueField = Number($('studioValueCol')?.value ?? -1); savedChart = { record_id: record.id, title: $('studioChartTitleInput')?.value || 'Observatory Draft', chart_type: selectedType, colors: $('studioColorApplyAll')?.checked ? null : ctx.state.studioChartOverrides, orientation: ctx.state.studioChartConfig?.orientation || 'vertical', rankSemantic: ctx.state.studioChartConfig?.rankSemantic === true, rankValueMin: ctx.state.studioChartConfig?.rankValueMin, rankValueMax: ctx.state.studioChartConfig?.rankValueMax, valueAxisMin: ctx.state.studioChartConfig?.valueAxisMin, valueAxisMax: ctx.state.studioChartConfig?.valueAxisMax, labels: current.labels, values_data: current.values, chart_data: { ...options, rankedBar: { selectedYear: ctx.state.studioChartConfig?.selectedYear ?? ctx.state.studioChartConfig?.rankedYear ?? null, yearColumn, reverseOrder: Boolean(ctx.state.studioChartConfig?.reverseOrder), categoryField: Number.isInteger(categoryField) && categoryField >= 0 ? categoryField : null, valueField: Number.isInteger(valueField) && valueField >= 0 ? valueField : null, yearField: yearColumn, chartType: selectedType } } }; }
+    await ctx.api.persistStudioFieldColors?.();
     const updated = await ctx.dbManager.updateRecord(record.id, { docType: $('studioDocTypeInput')?.value.trim() || record.docType, status: approve ? 'Approved' : ($('studioStatusSelect')?.value || record.status), adminNotes: $('studioNotesInput')?.value.trim() || record.adminNotes, extractedData: record.extractedData, graphDrafts: [] });
     if (savedChart) {
       savedChart.chart_data = {

@@ -89,14 +89,14 @@
     return rawConfig;
   }
 
-  function buildSavedChartOption(graph) {
+  function buildSavedChartOption(graph, options = {}) {
     const source = graph || {};
     const chartData = readChartConfig(source.chart_data || source.chartData || source.chartDataJson || source.option || source.config || {});
     const isDark = typeof document !== 'undefined' && document.documentElement?.classList?.contains('dark');
     const textColor = isDark ? '#FFFFFF' : '#4b5563';
     const labelColor = isDark ? '#FFFFFF' : '#111827';
     const gridColor = isDark ? 'rgba(226, 232, 240, 0.3)' : '#e5e7eb';
-    const sharedColors = globalThis.IRISChartConfig?.colors || ['#1E6031', '#B7791F', '#0F766E', '#2563EB', '#C2410C', '#7C3AED'];
+    const defaultColors = globalThis.IRISChartConfig?.colors || ['#1E6031', '#B7791F', '#0F766E', '#2563EB', '#C2410C', '#7C3AED'];
     const tooltipStyle = {
       backgroundColor: isDark ? '#172033' : '#FFFFFF',
       borderColor: isDark ? '#475569' : '#E5E7EB',
@@ -105,8 +105,27 @@
     const explicitType = resolveChartType({ ...source, chartData }, 'bar');
     const labels = Array.isArray(source.labels) && source.labels.length ? source.labels : chartLabels(chartData);
     const values = Array.isArray(source.values_data) && source.values_data.length ? source.values_data : chartValues(chartData);
+    const storedColors = Array.isArray(source.colors) ? source.colors : [];
     const type = explicitType;
     const seriesName = source.title || 'Value';
+    const chartSeries = Array.isArray(chartData.series) ? chartData.series : [];
+    const colorFields = type === 'pie' || type === 'doughnut'
+      ? labels
+      : type === 'line'
+        ? (chartSeries.length ? chartSeries.map((series, index) => series.name || `${seriesName} ${index + 1}`) : [chartSeries[0]?.name || seriesName])
+        : labels.length ? labels : [seriesName];
+    const sharedColors = root.IRISChartColors
+      ? root.IRISChartColors.resolveFieldColors(colorFields, {
+          chartColors: storedColors,
+          fieldColors: options.fieldColors || root.IRISFieldColors || {},
+          legacyColors: defaultColors,
+          defaultColors
+        })
+      : Array.from({ length: Math.max(1, colorFields.length) }, (_, index) =>
+          typeof storedColors[index] === 'string' && /^#[0-9A-Fa-f]{6}$/.test(storedColors[index])
+            ? storedColors[index].toUpperCase()
+            : defaultColors[index % defaultColors.length]
+        );
     const reverse = Boolean(
       source.value_axis_reversed === true || source.valueAxisReversed === true || source.value_axis_reversed === 1 || source.valueAxisReversed === 1 ||
       source.reverse_order === true || source.reverseOrder === true || source.reverse_order === 1 || source.reverseOrder === 1 ||
@@ -121,7 +140,8 @@
       const rankedSeries = displayValues.map((value, index) => ({
         value: Number(value ?? 0),
         rawValue: Number(value ?? 0),
-        name: displayLabels[index] || `Item ${index + 1}`
+        name: displayLabels[index] || `Item ${index + 1}`,
+        itemStyle: { color: sharedColors[index] || sharedColors[0] }
       }));
       return {
         textStyle: { color: textColor },
@@ -154,9 +174,9 @@
           type: 'pie',
           radius: type === 'doughnut' ? ['45%', '70%'] : '65%',
           center: ['50%', '45%'],
-          label: { show: true, color: labelColor, textBorderColor: 'transparent', textBorderWidth: 0 },
+          label: { show: true, color: labelColor, textBorderColor: 'transparent', textBorderWidth: 0, formatter: params => `${params.name}: ${params.percent}%` },
           itemStyle: { borderColor: isDark ? '#111827' : '#FFFFFF', borderWidth: 2, borderRadius: 5 },
-          data: labels.map((label, index) => ({ name: label || `Item ${index + 1}`, value: Number(values[index] ?? 0) }))
+          data: labels.map((label, index) => ({ name: label || `Item ${index + 1}`, value: Number(values[index] ?? 0), itemStyle: { color: sharedColors[index] } }))
         }]
       };
     }
@@ -200,14 +220,15 @@
         axisLabel: { color: textColor },
         splitLine: { lineStyle: { color: gridColor } }
       },
-      series: [{
-        name: seriesName,
+      series: (type === 'line' && chartSeries.length ? chartSeries : [{ name: seriesName, data: values }]).map((lineSeries, index) => ({
+        ...lineSeries,
+        name: lineSeries.name || seriesName,
         type: type === 'line' ? 'line' : 'bar',
         smooth: type === 'line',
-        data: values.map((value, index) => ({ value: Number(value ?? 0), name: axisLabels[index] || `Item ${index + 1}` })),
-        itemStyle: { color: sharedColors[0], borderRadius: type === 'line' ? 0 : [0, 7, 7, 0] },
-        lineStyle: type === 'line' ? { color: sharedColors[0], width: 3 } : undefined
-      }]
+        data: (lineSeries.data || values).map((value, valueIndex) => ({ value: Number(value?.value ?? value ?? 0), name: axisLabels[valueIndex] || `Item ${valueIndex + 1}`, itemStyle: { color: type === 'line' ? sharedColors[index] : sharedColors[valueIndex] || sharedColors[0] } })),
+        itemStyle: { ...(lineSeries.itemStyle || {}), color: type === 'line' ? sharedColors[index] : sharedColors[0], borderRadius: type === 'line' ? 0 : [0, 7, 7, 0] },
+        lineStyle: type === 'line' ? { ...(lineSeries.lineStyle || {}), color: sharedColors[index], width: 3 } : undefined
+      }))
     };
   }
 
@@ -232,6 +253,7 @@
       rankValueMax: source.rankValueMax ?? chartData.rankValueMax,
       labels: labels.length ? labels : (Array.isArray(chartData.labels) ? chartData.labels : []),
       values_data: numericSeries.length ? numericSeries : (Array.isArray(source.data) ? source.data : []),
+      colors: Array.isArray(source.colors) && source.colors.every(color => typeof color === 'string' && /^#[0-9A-Fa-f]{6}$/.test(color)) ? source.colors : null,
       chart_data: chartData && Object.keys(chartData).length ? chartData : undefined
     };
 
@@ -330,6 +352,7 @@
 
     return `
       <!DOCTYPE html>
+        color: sharedColors,
       <html lang="en">
       <head>
         <meta charset="UTF-8" />

@@ -1,3 +1,6 @@
+import '../chartColors.js?v=data-preserving-colors-20260930';
+const { DEFAULT_CHART_COLORS, buildColoredSeriesData, resolveFieldColors } = globalThis.IRISChartColors;
+
 export function formatChartValueForDisplay(value, precision = 2) {
   const raw = String(value ?? '').trim();
   if (raw === '') return '';
@@ -18,9 +21,10 @@ export function formatChartValueForDisplay(value, precision = 2) {
   });
 }
 
-export function createChart(ctx, type, chartData, { reverseOrder = false } = {}) {
+export function createChart(ctx, type, chartData, { reverseOrder = false, colors: customColors = null } = {}) {
   const source = chartData || {};
   const sourceSeries = source.series?.[0];
+  const sourceSeriesList = Array.isArray(source.series) ? source.series : [];
   const firstDataset = source.datasets?.[0];
   const axis = Array.isArray(source.xAxis) ? source.xAxis[0] : source.xAxis;
   const polarAxis = source.angleAxis;
@@ -35,8 +39,19 @@ export function createChart(ctx, type, chartData, { reverseOrder = false } = {})
   values = values.map(value => value && typeof value === 'object' ? value.value : value);
   if (reverseOrder) { labels.reverse(); values.reverse(); }
 
-  const palette = window.IRISChartConfig || {};
-  const colors = source.color || palette.colors || ['#1E6031', '#B7791F', '#0F766E', '#2563EB', '#C2410C', '#7C3AED'];
+  const colorFields = type === 'pie' || type === 'doughnut'
+    ? labels
+    : type === 'line' && sourceSeriesList.length > 1
+      ? sourceSeriesList.map((series, index) => series.name || `${seriesName} ${index + 1}`)
+      : type === 'line'
+        ? [sourceSeries?.name || seriesName]
+        : labels.length ? labels : [seriesName];
+  const colors = resolveFieldColors(colorFields, {
+    chartColors: customColors,
+    fieldColors: globalThis.IRISFieldColors || {},
+    legacyColors: source.color || globalThis.IRISChartConfig?.colors || DEFAULT_CHART_COLORS,
+    defaultColors: DEFAULT_CHART_COLORS
+  });
   const barFill = window.echarts?.graphic?.LinearGradient
     ? new window.echarts.graphic.LinearGradient(0, 0, 1, 0, [{ offset: 0, color: colors[0] }, { offset: 1, color: colors[1] || colors[0] }])
     : colors[0];
@@ -54,7 +69,7 @@ export function createChart(ctx, type, chartData, { reverseOrder = false } = {})
       borderColor: isDark ? '#475569' : '#E5E7EB',
       textStyle: { color: labelColor, fontSize: 13 }
     },
-    legend: { data: [seriesName], textStyle: { color: textColor } },
+    legend: { data: type === 'line' && sourceSeriesList.length > 1 ? colorFields : [seriesName], textStyle: { color: textColor } },
     series: []
   };
   if (type === 'pie' || type === 'doughnut') {
@@ -70,7 +85,7 @@ export function createChart(ctx, type, chartData, { reverseOrder = false } = {})
       name: seriesName,
       type: 'pie',
       radius: type === 'doughnut' ? ['45%', '72%'] : '68%',
-      data: labels.map((name, index) => ({ name, value: values[index] })),
+      data: buildColoredSeriesData(values.map((value, index) => ({ name: labels[index], value })), labels, colors),
       label: { show: true, color: labelColor, formatter: '{b}: {d}%' },
       itemStyle: { borderColor: '#FFFFFF', borderWidth: 2, borderRadius: 5 }
     }];
@@ -79,6 +94,16 @@ export function createChart(ctx, type, chartData, { reverseOrder = false } = {})
     option.angleAxis = { type: 'category', data: labels, startAngle: 90, axisLabel: { color: textColor } };
     option.radiusAxis = { type: 'value', axisLabel: { color: textColor }, splitLine: { lineStyle: { color: gridLineColor } } };
     option.series = [{ name: seriesName, type: 'bar', coordinateSystem: 'polar', data: values }];
+  } else if (type === 'line' && sourceSeriesList.length > 1) {
+    option.series = sourceSeriesList.map((series, index) => ({
+      ...series,
+      name: series.name || colorFields[index],
+      type: 'line',
+      smooth: series.smooth ?? true,
+      data: series.data || [],
+      itemStyle: { ...(series.itemStyle || {}), color: colors[index] },
+      lineStyle: { ...(series.lineStyle || {}), color: colors[index] }
+    }));
   } else {
     option.xAxis = { type: 'category', data: labels, axisLine: { lineStyle: { color: gridLineColor } }, axisLabel: { interval: 0, color: textColor } };
     option.yAxis = {
@@ -89,10 +114,24 @@ export function createChart(ctx, type, chartData, { reverseOrder = false } = {})
       axisLabel: { color: textColor },
       splitLine: { lineStyle: { color: gridLineColor } }
     };
-    option.series = [{
+    option.series = type === 'line' && sourceSeriesList.length > 1
+      ? sourceSeriesList.map((series, index) => ({
+          ...series,
+          name: series.name || colorFields[index],
+          type: 'line',
+          smooth: true,
+          data: series.data || [],
+          itemStyle: { ...(series.itemStyle || {}), color: colors[index] },
+          lineStyle: { ...(series.lineStyle || {}), color: colors[index], width: series.lineStyle?.width || 3 }
+        }))
+      : [{
       name: seriesName,
       type: type === 'line' ? 'line' : 'bar',
-      data: values,
+      data: buildColoredSeriesData(
+        values.map((value, index) => ({ name: labels[index], value })),
+        labels,
+        type === 'line' ? labels.map(() => colors[0]) : colors
+      ),
       smooth: type === 'line',
       itemStyle: { color: type === 'line' ? colors[0] : barFill, borderRadius: type === 'line' ? 0 : [0, 7, 7, 0] },
       lineStyle: type === 'line' ? { color: colors[0], width: 3 } : undefined
@@ -149,9 +188,22 @@ export function renderStudioChart(arg1, arg2, arg3 = {}) {
   const value = Number(elements.valueSelect?.value ?? document.getElementById('studioValueCol')?.value);
   const type = typeSelect.value || 'bar';
   const rankedMode = type === 'rankedBar';
-  const labelCol = Number.isInteger(category) && category >= 0 && category < sheet.headers.length ? category : inferred.labelColumn;
-  const valueCol = Number.isInteger(value) && value >= 0 && value < sheet.headers.length ? value : inferred.valueColumn;
-  const yearColumn = rankedMode ? window.ChartMapping.detectYearColumn(sheet.headers, sheet.rows) : null;
+  let labelCol = Number.isInteger(category) && category >= 0 && category < sheet.headers.length ? category : inferred.labelColumn;
+  let valueCol = Number.isInteger(value) && value >= 0 && value < sheet.headers.length ? value : inferred.valueColumn;
+  const yearColumn = typeof window.ChartMapping.detectYearColumn === 'function'
+    ? window.ChartMapping.detectYearColumn(sheet.headers, sheet.rows)
+    : null;
+  if (yearColumn !== null && valueCol === yearColumn && labelCol !== yearColumn) {
+    const alternativeValueColumn = inferred.numericColumns.find(column => column !== labelCol && column !== yearColumn);
+    if (alternativeValueColumn !== undefined) {
+      valueCol = alternativeValueColumn;
+      const valueSelect = elements.valueSelect || document.getElementById('studioValueCol');
+      if (valueSelect) valueSelect.value = String(valueCol);
+    } else {
+      warn('Year fields are categorical labels, not numeric chart values. Choose another Value field.');
+      return empty('Year fields are categorical labels, not numeric chart values. Please select another Value field.');
+    }
+  }
   if (rankedMode && yearColumn !== null && labelCol === yearColumn) {
     const fallbackLabel = sheet.headers.findIndex((header, idx) => idx !== yearColumn && idx !== valueCol && !/year/i.test(String(header || '')) && String(header || '').trim() !== '');
     const nextLabel = fallbackLabel >= 0 ? fallbackLabel : sheet.headers.findIndex((header, idx) => idx !== yearColumn && idx !== valueCol);
@@ -248,11 +300,21 @@ export function renderStudioChart(arg1, arg2, arg3 = {}) {
   }
   const fullLabels = chartRows.map(row => row.label);
   const labels = fullLabels.slice();
+  const colorFields = circular || type === 'bar' || rankedMode ? fullLabels : [headerName];
+  const legacyStudioColors = circular
+    ? ['#009639', '#1E6031', '#E0A70D', '#3B82F6', '#8B5CF6', '#F59E0B', '#10B981', '#EF4444', '#38BDF8', '#F97316']
+    : ['#009639'];
+  const chartColors = resolveFieldColors(colorFields, {
+    chartColors: state.studioChartOverrides,
+    fieldColors: globalThis.IRISFieldColors || {},
+    legacyColors: legacyStudioColors,
+    defaultColors: DEFAULT_CHART_COLORS
+  });
+  state.studioChartColors = [...chartColors];
   const rawValues = chartRows.map(row => rankedMode ? Number(row.rawValue ?? row.value ?? 0) : row.value);
   const values = rankedMode ? chartRows.map(row => Number(row.visualValue ?? row.value ?? 0)) : (rankSemantic ? (() => { const maximum = Math.max(...rawValues); return rawValues.map(value => maximum - value); })() : rawValues);
   const yMin = Math.min(...values); const yMax = Math.max(...values); const axisMin = rankedMode ? 0 : (rankSemantic ? 0 : yMin >= 0 && yMin <= yMax * 0.8 ? 0 : Math.floor(yMin * 0.9));
-  const yearOnValueAxis = valueIsYear && !labelIsYear;
-  const horizontal = rankedMode ? true : (yearOnValueAxis && type === 'bar');
+  const horizontal = rankedMode;
   const rankValueMin = rankedMode ? 0 : (rankSemantic ? 0 : undefined);
   const rankValueMax = rankedMode ? Math.max(...rawValues) : (rankSemantic ? Math.max(...rawValues) : undefined);
   state.studioChartConfig = {
@@ -280,6 +342,7 @@ export function renderStudioChart(arg1, arg2, arg3 = {}) {
 
   state.studioChartInstance = window.echarts.init(canvas);
   state.studioChartInstance.setOption({
+    color: chartColors,
     animationDuration: 350,
     title: {
       text: titleInput?.value || `${headerName} — ${info.name}`,
@@ -324,7 +387,7 @@ export function renderStudioChart(arg1, arg2, arg3 = {}) {
         fontSize: 11,
         fontWeight: 600,
         color: textColor,
-        formatter: value => formatValue(value)
+        formatter: value => horizontal ? formatValue(value) : String(value ?? '')
       },
       splitLine: horizontal ? { lineStyle: { type: 'dashed', color: gridLineColor, width: 1 } } : { show: false }
     },
@@ -340,7 +403,7 @@ export function renderStudioChart(arg1, arg2, arg3 = {}) {
         color: textColor,
         fontSize: 11,
         fontWeight: 600,
-        formatter: value => formatValue(value)
+        formatter: value => horizontal ? String(value ?? '') : formatValue(value)
       },
       splitLine: horizontal ? { show: false } : { lineStyle: { type: 'dashed', color: gridLineColor, width: 1 } }
     },
@@ -358,11 +421,7 @@ export function renderStudioChart(arg1, arg2, arg3 = {}) {
       type: 'pie',
       radius: type === 'doughnut' ? ['45%', '72%'] : '68%',
       center: ['50%', '45%'],
-      data: fullLabels.map((label, index) => ({
-        name: label,
-        value: values[index],
-        itemStyle: { color: ['#009639', '#1E6031', '#E0A70D', '#3B82F6', '#8B5CF6', '#F59E0B', '#10B981', '#EF4444', '#38BDF8', '#F97316'][index % 10] }
-      })),
+      data: buildColoredSeriesData(values.map((value, index) => ({ name: fullLabels[index], value })), fullLabels, chartColors),
       label: { show: true, position: 'outside', color: textColor, fontSize: 11, fontWeight: 600, formatter: params => `${params.name}: ${formatValue(params.value)}`, distance: 12 },
       labelLine: { show: true, length: 12, length2: 8, lineStyle: { color: subtextColor, width: 1 } },
       itemStyle: { borderColor: isDark ? '#1F2937' : '#FFFFFF', borderWidth: 2 },
@@ -370,9 +429,13 @@ export function renderStudioChart(arg1, arg2, arg3 = {}) {
     } : {
       type: rankedMode ? 'bar' : type,
       smooth: type === 'line',
-      data: rankedMode ? values.map((value, index) => ({ value, rawValue: rawValues[index], name: labels[index] })) : (rankSemantic ? values.map((value, index) => ({ value, rawValue: rawValues[index] })) : values),
-      itemStyle: { color: '#009639', borderRadius: type === 'bar' || rankedMode ? (horizontal ? [0, 4, 4, 0] : [4, 4, 0, 0]) : undefined },
-      lineStyle: type === 'line' ? { width: 3, color: '#009639' } : undefined,
+      data: buildColoredSeriesData(values.map((value, index) => ({
+        value,
+        ...(rankedMode ? { rawValue: rawValues[index] } : rankSemantic ? { rawValue: rawValues[index] } : {}),
+        name: labels[index]
+      })), labels, chartColors),
+      itemStyle: { color: chartColors[0], borderRadius: type === 'bar' || rankedMode ? (horizontal ? [0, 4, 4, 0] : [4, 4, 0, 0]) : undefined },
+      lineStyle: type === 'line' ? { width: 3, color: chartColors[0] } : undefined,
       label: {
         show: chartRows.length <= 20,
         position: horizontal ? 'right' : 'top',
@@ -383,5 +446,6 @@ export function renderStudioChart(arg1, arg2, arg3 = {}) {
       }
     }]
   });
+  ctx?.api?.renderStudioColorCustomizer?.({ chartType: type, labels: colorFields, colors: chartColors, overrides: state.studioChartOverrides });
   if (typeof ResizeObserver !== 'undefined') { canvas._studioResizeObserver?.disconnect?.(); canvas._studioResizeObserver = new ResizeObserver(() => state.studioChartInstance?.resize?.()); canvas._studioResizeObserver.observe(canvas); }
 }

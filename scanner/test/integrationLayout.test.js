@@ -5,6 +5,9 @@ const path = require('node:path');
 
 const html = fs.readFileSync(path.join(__dirname, '..', 'index.php'), 'utf8');
 const styles = fs.readFileSync(path.join(__dirname, '..', 'css', 'styles.css'), 'utf8');
+const adminEditor = fs.readFileSync(path.join(__dirname, '..', '..', 'admin', 'review_editor.php'), 'utf8');
+const adminPortal = fs.readFileSync(path.join(__dirname, '..', 'js', 'modules', 'adminPortal.js'), 'utf8');
+const dbManager = fs.readFileSync(path.join(__dirname, '..', 'js', 'database', 'dbManager.js'), 'utf8');
 
 test('review flow removes the admin destination and fake auth affordances', () => {
   assert.equal(html.includes('id="navAdminBtn"'), false, 'Admin navigation destination should be retired');
@@ -35,4 +38,28 @@ test('review and dashboard layouts have mobile overflow protections', () => {
   assert.match(styles, /@media \(max-width: 700px\)/);
   assert.match(styles, /\.table-container\s*\{[\s\S]*overflow-x: auto/);
   assert.match(styles, /\.modal-card\s*\{[\s\S]*max-height: calc\(100vh - 2rem\)/);
+});
+
+test('manual dataset creation persists a distinct empty record and selects it by ID', () => {
+  assert.match(adminEditor, /id="createManualDataset"/);
+  assert.match(adminEditor, /id="manualDatasetForm"/);
+  assert.match(adminPortal, /const fileName = manualDatasetName\?\.value\.trim\(\)/);
+  assert.match(adminPortal, /fileType: 'manual',[\s\S]*headers: \[\], rows: \[\]/);
+  assert.match(adminPortal, /ctx\.api\.renderAdminPortal\(record\.id\)/);
+  assert.match(adminPortal, /preferredRecord \|\| matchedRecord/);
+  assert.match(adminPortal, /setEditorRecordUrl\(record\.id\)/);
+  assert.ok(dbManager.includes('id: record.id || `rec_${Date.now()}_'), 'New records receive their own generated ID');
+  assert.ok(dbManager.includes('extractedData: record.extractedData ||'), 'Manual sheet data is sent to the records API');
+});
+
+test('summary-card editing uses a modal instead of expanding the admin page', () => {
+  assert.match(adminEditor, /id="summaryCardEditorPanel" class="modal-overlay"/);
+  assert.match(adminEditor, /id="summaryCardEditorList"/);
+  assert.match(adminEditor, /id="summaryCardManagerView"/);
+  assert.match(adminEditor, /id="summaryCardEditorForm" style="display:none;"/);
+  assert.match(adminEditor, /const openEditor = \(\) =>/);
+  assert.match(adminEditor, /const closeEditor = \(\) =>/);
+  assert.match(adminEditor, /id="addSummaryCardFromManager"/);
+  assert.match(adminEditor, /document\.getElementById\('closeSummaryCardEditor'\)\.addEventListener/);
+  assert.match(adminEditor, /event\.key === 'Escape'/);
 });

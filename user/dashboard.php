@@ -1,6 +1,16 @@
 <?php
 require_once __DIR__.'/../includes/functions.php';
 require_auth();
+$fieldColors = [];
+try {
+    $storedFieldColors = db()->query('SELECT field_key, color FROM field_colors')->fetchAll(PDO::FETCH_KEY_PAIR);
+    foreach ($storedFieldColors as $fieldKey => $color) {
+        $key = strtolower(preg_replace('/\s+/', ' ', trim((string)$fieldKey)) ?? '');
+        if ($key !== '' && is_string($color) && preg_match('/^#[0-9A-Fa-f]{6}$/', $color) === 1) $fieldColors[$key] = strtoupper($color);
+    }
+} catch (Throwable $e) {
+    $fieldColors = [];
+}
 ?>
 
 <!DOCTYPE html>
@@ -49,6 +59,8 @@ require_auth();
     <script src="https://cdn.jsdelivr.net/npm/echarts@5.5.0/dist/echarts.min.js"></script>
     <script src="<?= e(base_url('scanner/js/chartConfig.js')) ?>"></script>
     <script src="<?= e(base_url('scanner/js/chartMapping.js')) ?>"></script>
+    <script src="<?= e(base_url('scanner/js/chartColors.js')) ?>?v=<?= (int) filemtime(__DIR__.'/../scanner/js/chartColors.js') ?>"></script>
+    <script>window.IRISFieldColors = <?= json_encode($fieldColors, JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>;</script>
     <script src="<?= e(base_url('scanner/js/graphExport.js')) ?>?v=<?= (int) filemtime(__DIR__.'/../scanner/js/graphExport.js') ?>"></script>
     <!-- Font Awesome -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
@@ -396,6 +408,12 @@ require_auth();
                             <input type="number" name="display_order" id="summaryCardDisplayOrder" value="0" min="0" class="mt-1 w-full rounded-xl border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 px-3 py-2 text-sm">
                         </label>
                         <label class="block text-sm font-semibold text-gray-700 dark:text-gray-200">
+                            Categories
+                            <select name="category_ids[]" id="summaryCardCategory" multiple size="3" aria-describedby="summaryCardCategoryHelp" class="mt-1 w-full rounded-xl border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 px-3 py-2 text-sm"></select>
+                            <span id="summaryCardCategoryHelp" class="mt-1 block text-xs font-normal text-gray-500 dark:text-gray-400">Select one or more; leave empty for Uncategorized.</span>
+                            <span class="mt-2 flex items-center gap-2"><button type="button" id="summaryCardAddCategory" class="rounded-lg border border-green-800/30 px-2.5 py-1 text-xs font-semibold text-green-900 hover:bg-green-50 dark:border-gray-600 dark:text-gray-100 dark:hover:bg-gray-700">+ New category</button><input type="text" id="summaryCardNewCategory" maxlength="40" placeholder="Category name" class="hidden min-w-0 flex-1 rounded-xl border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 px-3 py-2 text-sm"></span>
+                        </label>
+                        <label class="block text-sm font-semibold text-gray-700 dark:text-gray-200">
                             Display Precision
                             <select name="display_precision" id="summaryCardDisplayPrecision" class="mt-1 w-full rounded-xl border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 px-3 py-2 text-sm">
                                 <option value="0">No decimals</option>
@@ -415,6 +433,9 @@ require_auth();
                 </div>
             <?php endif; ?>
 
+            <div id="summaryCardCategoryFilter" class="hidden -mx-4 px-4 sm:mx-0 sm:px-0 overflow-x-auto" aria-label="Filter summary cards by category">
+                <div id="summaryCardCategoryChips" class="flex w-max min-w-full items-center gap-2 pb-1" role="group" aria-label="Summary card categories"></div>
+            </div>
             <div id="summaryCardsGrid" class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4"></div>
         </section>
 
@@ -426,27 +447,50 @@ require_auth();
                     </h2>
                     <p class="text-xs text-gray-500 dark:text-gray-400">Compare institutional rankings across available years.</p>
                 </div>
-                <label class="flex items-center gap-2 text-sm font-semibold text-gray-700 dark:text-gray-200">
-                    Year
-                    <select id="rankingYearFilter" class="rounded-xl border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 px-3 py-2 text-sm" disabled>
-                        <option>Loading...</option>
-                    </select>
-                </label>
+                <div class="flex flex-wrap items-center justify-end gap-2 text-sm font-semibold text-gray-700 dark:text-gray-200" aria-label="Filter Ranking History">
+                    <label class="flex items-center gap-1.5">Level
+                        <select id="rankingLevelFilter" class="rounded-xl border border-gray-300 bg-white px-3 py-2 text-sm dark:border-gray-600 dark:bg-gray-900"><option value="all">All levels</option></select>
+                    </label>
+                    <label class="flex items-center gap-1.5">Scope
+                        <select id="rankingScopeFilter" class="rounded-xl border border-gray-300 bg-white px-3 py-2 text-sm dark:border-gray-600 dark:bg-gray-900"><option value="all">All scopes</option></select>
+                    </label>
+                    <label class="flex items-center gap-1.5">Ranking type
+                        <select id="rankingTypeFilter" class="rounded-xl border border-gray-300 bg-white px-3 py-2 text-sm dark:border-gray-600 dark:bg-gray-900"><option value="all">All types</option></select>
+                    </label>
+                    <button id="rankingAllYears" type="button" class="rounded-lg border border-green-800 bg-green-800 px-3 py-2 text-white dark:border-amber-500 dark:bg-amber-500 dark:text-gray-950" aria-pressed="true">All years</button>
+                    <label class="flex items-center gap-1.5">From
+                        <select id="rankingYearFrom" class="rounded-xl border border-gray-300 bg-white px-3 py-2 text-sm dark:border-gray-600 dark:bg-gray-900" disabled><option>Loading...</option></select>
+                    </label>
+                    <label class="flex items-center gap-1.5">To
+                        <select id="rankingYearTo" class="rounded-xl border border-gray-300 bg-white px-3 py-2 text-sm dark:border-gray-600 dark:bg-gray-900" disabled><option>Loading...</option></select>
+                    </label>
+                </div>
             </div>
             <div class="grid grid-cols-1 xl:grid-cols-5 gap-6">
                 <div class="ranking-panel rounded-2xl p-5 xl:col-span-2">
                     <div id="rankingTableStatus" class="text-sm text-gray-500 dark:text-gray-400 py-8 text-center">Loading ranking data...</div>
                     <div class="overflow-x-auto">
-                        <table id="rankingTable" class="ranking-table hidden w-full text-left">
-                            <thead><tr><th class="pb-3 pr-4">Organization</th><th class="pb-3 pr-4">Category</th><th class="pb-3 pr-4">Global Rank</th><th class="pb-3">Change</th></tr></thead>
+                        <table id="rankingTable" class="ranking-table hidden min-w-[820px] w-full text-left">
+                            <thead><tr><th class="pb-3 pr-4">Year / Edition</th><th class="pb-3 pr-4">Ranking type</th><th class="pb-3 pr-4">Level</th><th class="pb-3 pr-4">Scope / Category</th><th class="pb-3 pr-4">Rank</th><th class="pb-3">Change</th></tr></thead>
                             <tbody></tbody>
                         </table>
                     </div>
                 </div>
                 <div class="ranking-panel rounded-2xl p-5 xl:col-span-3">
-                    <div id="rankingChart" class="w-full h-80"></div>
+                    <div id="rankingChart" class="grid min-h-64 w-full grid-cols-1 gap-4 md:grid-cols-2 2xl:grid-cols-3"></div>
                 </div>
             </div>
+        </section>
+
+        <section id="star-rating-cards-section" class="hidden space-y-4">
+            <div class="flex items-center gap-2">
+                <i class="fa-solid fa-star text-amber-500" aria-hidden="true"></i>
+                <h2 class="text-xl font-bold text-gray-900 dark:text-white">University Star Ratings</h2>
+            </div>
+            <div id="star-rating-category-filter" class="hidden -mx-4 overflow-x-auto px-4 sm:mx-0 sm:px-0" aria-label="Filter star rating cards by category">
+                <div id="star-rating-category-chips" class="flex w-max min-w-full items-center gap-2 pb-1" role="group" aria-label="Star rating categories"></div>
+            </div>
+            <div id="star-rating-cards-grid" class="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3"></div>
         </section>
 
         <section id="scanner-published-graphs" class="space-y-4">
@@ -531,6 +575,7 @@ require_auth();
             document.documentElement.classList.toggle('dark', nextMode === 'dark');
             localStorage.setItem('color-theme', nextMode);
             localStorage.setItem('iris-theme', nextMode);
+            if (rankingRows.length) renderRankingHistoryFromControls();
             loadPublishedScannerGraphs();
         });
 
@@ -555,17 +600,165 @@ require_auth();
             });
         }
 
+        const dashboardBaseUrl = <?= json_encode(base_url('')) ?>;
+        const ratingStarPath = 'M12 2.5 14.9 8.4l6.6 1-4.75 4.62 1.12 6.53L12 17.47l-5.87 3.08 1.12-6.53L2.5 9.4l6.6-1L12 2.5Z';
+        let starRatingCardsData = [];
+        let starRatingCategories = [];
+        let activeStarRatingCategorySlug = '';
+
+        function renderRatingStars(maxStars, score, prefix) {
+            return Array.from({ length: maxStars }, (_, index) => {
+                const remaining = score - index;
+                const gradientId = `${prefix}-half-${index}`;
+                const isHalf = remaining >= 0.5 && remaining < 1;
+                const fill = remaining >= 1 ? '#E0A70D' : isHalf ? `url(#${gradientId})` : 'none';
+                const gradient = isHalf ? `<defs><linearGradient id="${gradientId}"><stop offset="50%" stop-color="#E0A70D"/><stop offset="50%" stop-color="transparent"/></linearGradient></defs>` : '';
+                const stroke = remaining >= 0.5 ? '#E0A70D' : '#9CA3AF';
+                return `<svg class="h-8 w-8 shrink-0" viewBox="0 0 24 24" aria-hidden="true">${gradient}<path d="${ratingStarPath}" fill="${fill}" stroke="${stroke}" stroke-width="1.5" stroke-linejoin="round"/></svg>`;
+            }).join('');
+        }
+
+        function updateStarRatingCategoryUrl(slug, replace = false) {
+            const url = new URL(window.location.href);
+            if (slug) url.searchParams.set('star_category', slug);
+            else url.searchParams.delete('star_category');
+            window.history[replace ? 'replaceState' : 'pushState']({}, '', url);
+        }
+
+        function renderStarRatingCategoryChips() {
+            const filter = document.getElementById('star-rating-category-filter');
+            const chips = document.getElementById('star-rating-category-chips');
+            if (!filter || !chips) return;
+            if (!starRatingCategories.length) {
+                filter.classList.add('hidden');
+                chips.innerHTML = '';
+                return;
+            }
+            filter.classList.remove('hidden');
+            const options = [{ slug: '', name: 'All' }, ...starRatingCategories];
+            chips.innerHTML = options.map(category => {
+                const selected = activeStarRatingCategorySlug === category.slug;
+                return `<button type="button" class="shrink-0 rounded-full border px-4 py-2 text-sm font-semibold transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-gray-900 ${selected ? 'border-green-800 bg-green-800 text-white dark:border-amber-500 dark:bg-amber-500 dark:text-gray-950' : 'border-green-800/30 bg-white text-green-900 hover:bg-green-50 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100 dark:hover:bg-gray-700'}" data-star-category-slug="${escapeHtmlDashboard(category.slug)}" aria-pressed="${selected ? 'true' : 'false'}">${escapeHtmlDashboard(category.name)}</button>`;
+            }).join('');
+            chips.querySelectorAll('button[data-star-category-slug]').forEach(button => button.addEventListener('click', () => {
+                const slug = button.dataset.starCategorySlug || '';
+                if (slug === activeStarRatingCategorySlug) return;
+                activeStarRatingCategorySlug = slug;
+                updateStarRatingCategoryUrl(slug);
+                renderStarRatingCategoryChips();
+                renderStarRatingCards(starRatingCardsData);
+            }));
+        }
+
+        function restoreStarRatingCategoryFromUrl(replaceUnknown = false) {
+            const requested = new URL(window.location.href).searchParams.get('star_category') || '';
+            const match = starRatingCategories.find(category => category.slug === requested);
+            activeStarRatingCategorySlug = match ? match.slug : '';
+            if (requested && !match && replaceUnknown) updateStarRatingCategoryUrl('', true);
+            renderStarRatingCategoryChips();
+            renderStarRatingCards(starRatingCardsData);
+        }
+
+        window.addEventListener('popstate', () => restoreStarRatingCategoryFromUrl(true));
+
+        function renderStarRatingCards(cards) {
+            const section = document.getElementById('star-rating-cards-section');
+            const grid = document.getElementById('star-rating-cards-grid');
+            if (!section || !grid) return;
+            const publishedCards = Array.isArray(cards) ? cards.filter(card => card && (card.is_published === true || card.is_published === 1 || card.is_published === '1')) : [];
+            if (!publishedCards.length) {
+                section.classList.add('hidden');
+                grid.innerHTML = '';
+                return;
+            }
+            section.classList.remove('hidden');
+            const visibleCards = publishedCards.filter(card => !activeStarRatingCategorySlug || (Array.isArray(card.category_slugs) && card.category_slugs.includes(activeStarRatingCategorySlug)));
+            if (!visibleCards.length) {
+                grid.innerHTML = '<div class="rounded-xl border border-dashed border-gray-300 bg-gray-50 py-8 text-center text-sm text-gray-500 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-400">No published star rating cards are available in this category.</div>';
+                return;
+            }
+            grid.innerHTML = visibleCards.map((card, cardIndex) => {
+                const title = escapeHtmlDashboard(card.title || 'Star ratings');
+                const logo = card.logo_path ? `<img src="${escapeHtmlDashboard(dashboardBaseUrl + card.logo_path)}" alt="${title} logo" class="mb-2 max-h-14 max-w-40 object-contain">` : '';
+                const year = card.year ? `<div class="mt-3 border-y border-gray-200 py-1.5 text-center text-xs font-semibold text-gray-600 dark:border-gray-700 dark:text-gray-300">${escapeHtmlDashboard(card.year)}</div>` : '';
+                const rows = (Array.isArray(card.rows) ? card.rows : []).map((row, rowIndex) => {
+                    const maxStars = Math.max(1, Math.min(10, Math.trunc(Number(row.max_stars) || 1)));
+                    const rawScore = Number(row.score);
+                    const score = Math.max(0, Math.min(maxStars, Number.isFinite(rawScore) ? rawScore : 0));
+                    const scoreText = Number.isInteger(score) ? String(score) : score.toFixed(1);
+                    const label = String(row.label || 'Category');
+                    const accessibleLabel = `${label}: ${scoreText} out of ${maxStars} stars`;
+                    return `<div class="flex flex-wrap items-center justify-between gap-x-3 gap-y-2 border-t border-gray-200 py-2.5 dark:border-gray-700" aria-label="${escapeHtmlDashboard(accessibleLabel)}" title="${escapeHtmlDashboard(accessibleLabel)}"><div class="flex max-w-full flex-wrap items-center gap-0.5">${renderRatingStars(maxStars, score, `rating-${cardIndex}-${rowIndex}`)}<span class="ml-1 whitespace-nowrap text-xs font-medium text-gray-600 dark:text-gray-300">${scoreText} / ${maxStars}</span></div><span class="min-w-0 break-words text-sm font-semibold text-gray-800 dark:text-gray-100">${escapeHtmlDashboard(label)}</span></div>`;
+                }).join('');
+                return `<article class="rounded-xl border border-gray-200 bg-white p-5 shadow-sm dark:border-gray-700 dark:bg-gray-900"><header class="flex min-h-20 flex-col items-center justify-center text-center">${logo}<h3 class="text-base font-bold text-gray-900 dark:text-white">${title}</h3></header>${year}<div class="mt-2">${rows}</div></article>`;
+            }).join('');
+        }
+
+        const summaryCardsCsrfToken = <?= json_encode(csrf_token()) ?>;
+        let summaryCardsData = [];
+        let summaryCardCategories = [];
+        let activeSummaryCategorySlug = '';
+
+        function updateSummaryCategoryUrl(slug, replace = false) {
+            const url = new URL(window.location.href);
+            if (slug) url.searchParams.set('category', slug);
+            else url.searchParams.delete('category');
+            const method = replace ? 'replaceState' : 'pushState';
+            window.history[method]({}, '', url);
+        }
+
+        function renderSummaryCategoryChips() {
+            const filter = document.getElementById('summaryCardCategoryFilter');
+            const chips = document.getElementById('summaryCardCategoryChips');
+            if (!filter || !chips) return;
+            if (summaryCardCategories.length === 0) {
+                filter.classList.add('hidden');
+                chips.innerHTML = '';
+                return;
+            }
+            filter.classList.remove('hidden');
+            const options = [{ slug: '', name: 'All' }, ...summaryCardCategories];
+            chips.innerHTML = options.map(category => {
+                const selected = activeSummaryCategorySlug === category.slug;
+                return `<button type="button" class="shrink-0 rounded-full border px-4 py-2 text-sm font-semibold transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-gray-900 ${selected ? 'border-green-800 bg-green-800 text-white dark:border-amber-500 dark:bg-amber-500 dark:text-gray-950' : 'border-green-800/30 bg-white text-green-900 hover:bg-green-50 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100 dark:hover:bg-gray-700'}" data-category-slug="${escapeHtmlDashboard(category.slug)}" aria-pressed="${selected ? 'true' : 'false'}">${escapeHtmlDashboard(category.name)}</button>`;
+            }).join('');
+            chips.querySelectorAll('button[data-category-slug]').forEach(button => button.addEventListener('click', () => {
+                const slug = button.dataset.categorySlug || '';
+                if (slug === activeSummaryCategorySlug) return;
+                activeSummaryCategorySlug = slug;
+                updateSummaryCategoryUrl(slug);
+                renderSummaryCategoryChips();
+                renderSummaryCards(summaryCardsData);
+            }));
+        }
+
+        function restoreSummaryCategoryFromUrl(replaceUnknown = false) {
+            const requested = new URL(window.location.href).searchParams.get('category') || '';
+            const category = summaryCardCategories.find(item => item.slug === requested);
+            activeSummaryCategorySlug = category ? category.slug : '';
+            if (requested && !category && replaceUnknown) updateSummaryCategoryUrl('', true);
+            renderSummaryCategoryChips();
+            renderSummaryCards(summaryCardsData);
+        }
+
+        window.addEventListener('popstate', () => restoreSummaryCategoryFromUrl());
+
         function renderSummaryCards(cards) {
             const grid = document.getElementById('summaryCardsGrid');
             if (!grid) return;
-            const visibleCards = Array.isArray(cards) ? cards.filter(card => card && (card.is_published === true || card.is_published === 1 || card.is_published === '1')) : [];
+            const publishedCards = Array.isArray(cards) ? cards.filter(card => card && (card.is_published === true || card.is_published === 1 || card.is_published === '1')) : [];
+            const visibleCards = publishedCards.filter(card => !activeSummaryCategorySlug || (Array.isArray(card.category_slugs) && card.category_slugs.includes(activeSummaryCategorySlug)));
             if (!visibleCards.length) {
-                grid.innerHTML = '<div class="md:col-span-2 xl:col-span-4 rounded-2xl border border-dashed border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-800/60 text-center text-sm text-gray-500 dark:text-gray-400 py-10">No performance snapshot cards are currently published.</div>';
+                const message = activeSummaryCategorySlug
+                    ? 'There are no published summary cards in this category yet.'
+                    : 'No performance snapshot cards are currently published.';
+                grid.innerHTML = `<div class="md:col-span-2 xl:col-span-4 rounded-2xl border border-dashed border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-800/60 text-center text-sm text-gray-500 dark:text-gray-400 py-10">${message}</div>`;
                 return;
             }
 
             const isAdmin = <?= json_encode(($_SESSION['role'] ?? null) === 'admin') ?>;
             grid.innerHTML = visibleCards
+                .slice()
                 .sort((a, b) => Number(a.display_order || 0) - Number(b.display_order || 0))
                 .map(card => {
                     const mainValue = formatSummaryCardValue(card.main_value, card.display_precision ?? 2);
@@ -628,7 +821,7 @@ require_auth();
                         const published = button.dataset.published === '1';
                         await fetch('<?= e(base_url('api/iris.php')) ?>?resource=summary_cards&id=' + encodeURIComponent(id), {
                             method: 'PUT',
-                            headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+                            headers: { 'Content-Type': 'application/json', 'Accept': 'application/json', 'X-CSRF-Token': summaryCardsCsrfToken },
                             body: JSON.stringify({ is_published: !published })
                         });
                         if (typeof refreshSummaryCardsAdmin === 'function') {
@@ -644,7 +837,7 @@ require_auth();
                         if (!confirm('Delete this summary card?')) return;
                         await fetch('<?= e(base_url('api/iris.php')) ?>?resource=summary_cards&id=' + encodeURIComponent(id), {
                             method: 'DELETE',
-                            headers: { Accept: 'application/json' }
+                            headers: { Accept: 'application/json', 'X-CSRF-Token': summaryCardsCsrfToken }
                         });
                         if (typeof refreshSummaryCardsAdmin === 'function') {
                             refreshSummaryCardsAdmin();
@@ -660,7 +853,12 @@ require_auth();
                 const response = await fetch('<?= e(base_url('api/dashboard_graphs.php')) ?>', { headers: { Accept: 'application/json' } });
                 if (!response.ok) throw new Error('Unable to load summary cards');
                 const payload = await response.json();
-                renderSummaryCards(payload.cards || []);
+                summaryCardsData = payload.cards || [];
+                summaryCardCategories = payload.categories || [];
+                restoreSummaryCategoryFromUrl(true);
+                starRatingCardsData = payload.star_rating_cards || [];
+                starRatingCategories = payload.star_rating_categories || [];
+                restoreStarRatingCategoryFromUrl(true);
             } catch (error) {
                 const grid = document.getElementById('summaryCardsGrid');
                 if (grid) {
@@ -674,11 +872,21 @@ require_auth();
             const summaryCardsAdminFormPanel = document.getElementById('summaryCardsAdminFormPanel');
             const toggleSummaryCardFormButton = document.getElementById('toggleSummaryCardForm');
             const cancelSummaryCardFormButton = document.getElementById('cancelSummaryCardForm');
+            const summaryCardCategorySelect = document.getElementById('summaryCardCategory');
+            const summaryCardNewCategory = document.getElementById('summaryCardNewCategory');
+            const summaryCardAddCategory = document.getElementById('summaryCardAddCategory');
 
             async function refreshSummaryCardsAdmin() {
-                const response = await fetch('<?= e(base_url('api/iris.php')) ?>?resource=summary_cards', { headers: { Accept: 'application/json' } });
-                if (!response.ok) throw new Error('Unable to load summary cards');
+                const [response, categoryResponse] = await Promise.all([
+                    fetch('<?= e(base_url('api/iris.php')) ?>?resource=summary_cards', { headers: { Accept: 'application/json' } }),
+                    fetch('<?= e(base_url('api/iris.php')) ?>?resource=summary_card_categories', { headers: { Accept: 'application/json' } })
+                ]);
+                if (!response.ok || !categoryResponse.ok) throw new Error('Unable to load summary cards');
                 const cards = await response.json();
+                const categories = await categoryResponse.json();
+                const selectedCategories = [...summaryCardCategorySelect.selectedOptions].map(option => option.value);
+                summaryCardCategorySelect.innerHTML = categories.map(category => `<option value="${escapeHtmlDashboard(category.id)}">${escapeHtmlDashboard(category.name)}</option>`).join('');
+                [...summaryCardCategorySelect.options].forEach(option => { option.selected = selectedCategories.includes(option.value); });
                 const container = document.getElementById('summaryCardAdminList');
                 if (!container) return;
                 if (!Array.isArray(cards) || cards.length === 0) {
@@ -693,6 +901,7 @@ require_auth();
                                 <div>
                                     <div class="text-sm font-bold text-gray-900 dark:text-white">${escapeHtmlDashboard(card.title || 'Snapshot Card')}</div>
                                     <div class="text-xs text-gray-500 dark:text-gray-400">${escapeHtmlDashboard(card.main_value || '')} · ${escapeHtmlDashboard(card.main_label || '')}</div>
+                                    <span class="mt-1 inline-flex rounded-full bg-green-100 px-2 py-0.5 text-[10px] font-semibold text-green-900 dark:bg-green-900/30 dark:text-green-200">${escapeHtmlDashboard(card.category_name || 'Uncategorized')}</span>
                                 </div>
                                 <span class="rounded-full px-2 py-1 text-[10px] font-bold uppercase tracking-wide ${card.is_published ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-300' : 'bg-gray-200 text-gray-700 dark:bg-gray-800 dark:text-gray-300'}">${card.is_published ? 'Published' : 'Draft'}</span>
                             </div>
@@ -718,6 +927,10 @@ require_auth();
                         document.getElementById('summaryCardSecondaryValue').value = card.secondary_value || '';
                         document.getElementById('summaryCardDescription').value = card.description || '';
                         document.getElementById('summaryCardDisplayOrder').value = card.display_order ?? 0;
+                        const selectedIds = (card.category_ids || (card.category_id ? [card.category_id] : [])).map(String);
+                        [...summaryCardCategorySelect.options].forEach(option => { option.selected = selectedIds.includes(option.value); });
+                        summaryCardNewCategory.value = '';
+                        summaryCardNewCategory.classList.add('hidden');
                         document.getElementById('summaryCardDisplayPrecision').value = String(card.display_precision ?? 2);
                         document.getElementById('summaryCardPublished').checked = !!card.is_published;
                         summaryCardsAdminFormPanel.classList.remove('hidden');
@@ -731,7 +944,7 @@ require_auth();
                         const published = button.dataset.published === '1';
                         await fetch('<?= e(base_url('api/iris.php')) ?>?resource=summary_cards&id=' + encodeURIComponent(id), {
                             method: 'PUT',
-                            headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+                            headers: { 'Content-Type': 'application/json', 'Accept': 'application/json', 'X-CSRF-Token': summaryCardsCsrfToken },
                             body: JSON.stringify({ is_published: !published })
                         });
                         refreshSummaryCardsAdmin();
@@ -745,7 +958,7 @@ require_auth();
                         if (!confirm('Delete this summary card?')) return;
                         await fetch('<?= e(base_url('api/iris.php')) ?>?resource=summary_cards&id=' + encodeURIComponent(id), {
                             method: 'DELETE',
-                            headers: { Accept: 'application/json' }
+                            headers: { Accept: 'application/json', 'X-CSRF-Token': summaryCardsCsrfToken }
                         });
                         refreshSummaryCardsAdmin();
                         loadSummaryCards();
@@ -770,13 +983,16 @@ require_auth();
                     })(),
                     is_published: document.getElementById('summaryCardPublished').checked
                 };
+                payload.category_ids = [...summaryCardCategorySelect.selectedOptions].map(option => Number(option.value));
+                const newCategoryName = summaryCardNewCategory.value.trim();
+                if (newCategoryName) payload.category_names = [newCategoryName];
 
                 const id = document.getElementById('summaryCardId').value;
                 const url = '<?= e(base_url('api/iris.php')) ?>?resource=summary_cards' + (id ? '&id=' + encodeURIComponent(id) : '');
                 const method = id ? 'PUT' : 'POST';
                 const response = await fetch(url, {
                     method,
-                    headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+                    headers: { 'Content-Type': 'application/json', 'Accept': 'application/json', 'X-CSRF-Token': summaryCardsCsrfToken },
                     body: JSON.stringify(payload)
                 });
                 if (!response.ok) {
@@ -785,6 +1001,9 @@ require_auth();
                     return;
                 }
                 summaryCardsAdminForm.reset();
+                [...summaryCardCategorySelect.options].forEach(option => { option.selected = false; });
+                summaryCardNewCategory.classList.add('hidden');
+                summaryCardNewCategory.value = '';
                 document.getElementById('summaryCardDisplayOrder').value = '0';
                 document.getElementById('summaryCardDisplayPrecision').value = '2';
                 document.getElementById('summaryCardPublished').checked = true;
@@ -797,6 +1016,9 @@ require_auth();
                 summaryCardsAdminForm.reset();
                 summaryCardsAdminFormPanel.classList.toggle('hidden');
                 document.getElementById('summaryCardId').value = '';
+                [...summaryCardCategorySelect.options].forEach(option => { option.selected = false; });
+                summaryCardNewCategory.classList.add('hidden');
+                summaryCardNewCategory.value = '';
                 document.getElementById('summaryCardDisplayOrder').value = '0';
                 document.getElementById('summaryCardDisplayPrecision').value = '2';
                 document.getElementById('summaryCardPublished').checked = true;
@@ -804,7 +1026,15 @@ require_auth();
 
             cancelSummaryCardFormButton?.addEventListener('click', () => {
                 summaryCardsAdminForm.reset();
+                [...summaryCardCategorySelect.options].forEach(option => { option.selected = false; });
+                summaryCardNewCategory.classList.add('hidden');
+                summaryCardNewCategory.value = '';
                 summaryCardsAdminFormPanel.classList.add('hidden');
+            });
+
+            summaryCardAddCategory.addEventListener('click', () => {
+                summaryCardNewCategory.classList.toggle('hidden');
+                if (!summaryCardNewCategory.classList.contains('hidden')) summaryCardNewCategory.focus();
             });
 
             const summaryCardAdminList = document.createElement('div');
@@ -819,84 +1049,451 @@ require_auth();
 
         const rankingPalette = window.IRISChartConfig?.palettes || { default: ['#0F766E', '#5EEAD4'] };
         let rankingRows = [];
-        let rankingChartInstance = null;
+        let rankingScopes = [];
+        let rankingTypes = [];
+        let rankingChartInstances = [];
+        let rankingAllYearsActive = true;
+        let activeRankingLevel = 'all';
+        let activeRankingScope = 'all';
+        let activeRankingType = 'all';
+        let rankingChartColorOverrides = {};
+        try {
+            const storedRankingColors = JSON.parse(localStorage.getItem('iris-ranking-series-colors') || '{}');
+            if (storedRankingColors && typeof storedRankingColors === 'object' && !Array.isArray(storedRankingColors)) {
+                rankingChartColorOverrides = storedRankingColors;
+            }
+        } catch (error) {}
 
         function rankingColor(shortName) {
             return rankingPalette[shortName] || rankingPalette.default;
         }
 
+        function rankingSeriesColor(name, body) {
+            const override = rankingChartColorOverrides[name];
+            const legacyColors = document.documentElement.classList.contains('dark')
+                ? ['#34D399', '#E0A70D', '#60A5FA', '#F87171', '#C084FC', '#22D3EE']
+                : rankingColor(body);
+            return window.IRISChartColors.resolveFieldColors([name], {
+                chartColors: [override],
+                fieldColors: window.IRISFieldColors || {},
+                legacyColors: [legacyColors[0]],
+                defaultColors: window.IRISChartColors.DEFAULT_CHART_COLORS
+            })[0];
+        }
+
+        function bindRankingFamilyColor(input, familyName) {
+            input.addEventListener('change', () => {
+                rankingChartColorOverrides[familyName] = input.value.toUpperCase();
+                try { localStorage.setItem('iris-ranking-series-colors', JSON.stringify(rankingChartColorOverrides)); } catch (error) {}
+                renderRankingHistoryFromControls();
+            });
+        }
+
+        function getRankingRowsForLevelAndScope() {
+            return rankingRows.filter(row => {
+                const matchesLevel = activeRankingLevel === 'all'
+                    || (activeRankingLevel === 'unassigned' ? !row.level : row.level === activeRankingLevel);
+                const matchesScope = activeRankingScope === 'all'
+                    || (activeRankingScope === 'unassigned' ? !row.scope_id : String(row.scope_id) === activeRankingScope);
+                return matchesLevel && matchesScope;
+            });
+        }
+
+        function getFilteredRankingRows() {
+            return getRankingRowsForLevelAndScope().filter(row => activeRankingType === 'all'
+                || String(row.ranking_type || row.body_short_name || row.body_name) === activeRankingType);
+        }
+
+        function renderRankingTypeOptions() {
+            const select = document.getElementById('rankingTypeFilter');
+            if (!select) return;
+            const selected = activeRankingType;
+            const availableTypes = [...new Set(rankingTypes.map(type => String(type)))].sort((left, right) => left.localeCompare(right));
+            select.innerHTML = '<option value="all">All types</option>' + availableTypes.map(type => `<option value="${escapeHtmlDashboard(type)}">${escapeHtmlDashboard(type)}</option>`).join('');
+            activeRankingType = [...select.options].some(option => option.value === selected) ? selected : 'all';
+            select.value = activeRankingType;
+        }
+
+        function renderRankingScopeOptions() {
+            const select = document.getElementById('rankingScopeFilter');
+            if (!select) return;
+            const selected = activeRankingScope;
+            select.innerHTML = '<option value="all">All scopes</option>'
+                + '<option value="unassigned">Unassigned</option>'
+                + rankingScopes.map(scope => `<option value="${escapeHtmlDashboard(scope.id)}">${escapeHtmlDashboard(scope.name)}</option>`).join('');
+            activeRankingScope = [...select.options].some(option => option.value === selected) ? selected : 'all';
+            select.value = activeRankingScope;
+        }
+
+        function getRankingFamily(row) {
+            return (row.ranking_type || row.body_short_name || row.body_name) + ' ' + (row.scope_name || 'Unassigned');
+        }
+
         function rankingChange(row, selectedYear) {
             if (!Number.isFinite(Number(row.rank_value))) return null;
             const previous = rankingRows
-                .filter(item => item.body_short_name === row.body_short_name && item.category === row.category && Number(item.year) < Number(selectedYear) && Number.isFinite(Number(item.rank_value)))
+                .filter(item => (item.ranking_type || item.body_short_name) === (row.ranking_type || row.body_short_name)
+                    && item.scope_id === row.scope_id && item.category === row.category
+                    && Number(item.year) < Number(selectedYear) && Number.isFinite(Number(item.rank_value)))
                 .sort((a, b) => Number(b.year) - Number(a.year))[0];
             if (!previous) return null;
-            const difference = Number(row.rank_value) - Number(previous.rank_value);
-            return { difference, symbol: difference < 0 ? '▲' : difference > 0 ? '▼' : '–', className: difference < 0 ? 'rank-change-up' : difference > 0 ? 'rank-change-down' : 'rank-change-same' };
+            
+            const diff = Number(row.rank_value) - Number(previous.rank_value);
+            const isDown = diff > 0; // larger number = worse rank = DOWN
+            const isUp = diff < 0; // smaller number = better rank = UP
+            const symbol = isUp ? '▲' : isDown ? '▼' : '–';
+            const className = isUp ? 'rank-change-up' : isDown ? 'rank-change-down' : 'rank-change-same';
+            
+            const isBand = (r) => (r.rank_low && r.rank_high && r.rank_low !== r.rank_high) || String(r.global_rank).includes('+') || String(r.global_rank).includes('-');
+            
+            if (isBand(row) || isBand(previous)) {
+                return { difference: diff, symbol, className, previous, text: diff === 0 ? '–' : `${symbol} from ${previous.global_rank || previous.rank_value}` };
+            }
+            return { difference: diff, symbol, className, previous, text: diff === 0 ? '–' : `${symbol} ${Math.abs(diff)}` };
         }
 
-        function renderRankingHistory(year) {
+        function renderRankingHistoryChart(startYear = 'all', endYear = 'all') {
+            const chartElement = document.getElementById('rankingChart');
+            if (!chartElement) return;
+            const allYears = String(startYear) === 'all' || String(endYear) === 'all';
+            const validRows = getFilteredRankingRows().filter(row => row.rank_value !== null && row.rank_value !== ''
+                && Number.isFinite(Number(row.rank_value))
+                && (allYears || (Number(row.year) >= Number(startYear) && Number(row.year) <= Number(endYear))));
+            
+            // Clean up old instances
+            rankingChartInstances.forEach(c => c && c.dispose());
+            rankingChartInstances = [];
+            chartElement.innerHTML = '';
+            
+            if (!validRows.length) return;
+            
+            // SDG Special View
+            if (activeRankingType === 'THE Impact SDG') {
+                renderSDGChart(validRows, chartElement, startYear, endYear);
+                return;
+            }
+
+            const years = [...new Set(validRows.map(row => String(row.year)))].sort((a, b) => Number(a) - Number(b));
+            const families = new Map();
+            validRows.forEach(row => {
+                const type = String(row.ranking_type || row.body_short_name || row.body_name || 'Ranking');
+                if (type === 'THE Impact SDG') return; // Exclude from default view
+                const body = String(row.body_short_name || row.body_name || type);
+                const scope = String(row.scope_name || 'Unassigned');
+                const family = `${type} ${scope}`;
+                if (!families.has(family)) families.set(family, { type, scope, body, dataByYear: new Map() });
+                
+                // Get latest edition per year
+                const yData = families.get(family).dataByYear;
+                if (!yData.has(row.year)) {
+                    yData.set(row.year, []);
+                }
+                yData.get(row.year).push(row);
+            });
+
+            const dark = document.documentElement.classList.contains('dark');
+            const textColor = dark ? '#E5E7EB' : '#475569';
+            const splitLineColor = dark ? 'rgba(203,213,225,.22)' : 'rgba(30,96,49,.10)';
+
+            // Setup responsive grid on parent
+            chartElement.className = 'grid grid-cols-1 md:grid-cols-2 2xl:grid-cols-3 gap-6';
+
+            for (const [family, group] of families.entries()) {
+                const div = document.createElement('div');
+                div.style.minHeight = '300px';
+                div.style.width = '100%';
+                chartElement.appendChild(div);
+                
+                const instance = echarts.init(div);
+                rankingChartInstances.push(instance);
+                
+                const seriesColor = rankingSeriesColor(family, group.body);
+                const data = years.map(y => {
+                    if (!group.dataByYear.has(y)) return null;
+                    const editions = group.dataByYear.get(y);
+                    editions.sort((a, b) => a.edition.localeCompare(b.edition)); // roughly sort by edition
+                    const latest = editions[editions.length - 1]; // pick latest
+                    return {
+                        value: Number(latest.rank_value),
+                        allEditions: editions,
+                        latestRank: latest.global_rank || latest.rank_value
+                    };
+                });
+
+                instance.setOption({
+                    title: { text: family, left: 'center', textStyle: { color: textColor, fontSize: 14 } },
+                    color: [seriesColor],
+                    tooltip: {
+                        trigger: 'item',
+                        backgroundColor: dark ? '#172033' : '#fff',
+                        borderColor: '#dfe7df',
+                        textStyle: { color: dark ? '#f8fafc' : '#1f2937', fontSize: 13 },
+                        formatter: params => {
+                            const d = params.data;
+                            if (!d) return '';
+                            let html = `<b>${escapeHtmlDashboard(family)} - ${params.name}</b><br>`;
+                            d.allEditions.forEach(ed => {
+                                html += `${escapeHtmlDashboard(ed.edition || 'Annual')}: <b>${escapeHtmlDashboard(ed.global_rank || ed.rank_value)}</b><br>`;
+                            });
+                            return html;
+                        }
+                    },
+                    grid: { left: '15%', right: '5%', top: '20%', bottom: '15%', containLabel: false },
+                    xAxis: {
+                        type: 'category',
+                        data: years,
+                        axisLabel: { interval: 0, color: textColor, hideOverlap: true },
+                        axisLine: { lineStyle: { color: splitLineColor } },
+                        splitLine: { show: false }
+                    },
+                    yAxis: {
+                        type: 'value',
+                        inverse: true,
+                        axisLabel: { color: textColor },
+                        splitLine: { lineStyle: { color: splitLineColor } },
+                        scale: true
+                    },
+                    series: [{
+                        type: 'line',
+                        data: data,
+                        symbol: 'circle',
+                        symbolSize: 8,
+                        lineStyle: { width: 3 },
+                        itemStyle: { color: seriesColor }
+                    }]
+                });
+            }
+        }
+
+        function renderSDGChart(validRows, chartElement, startYear, endYear) {
+            const sdgRows = validRows.filter(r => r.ranking_type === 'THE Impact SDG');
+            if (!sdgRows.length) return;
+            // Get selected year or latest
+            const years = [...new Set(sdgRows.map(r => r.year))].sort((a, b) => b - a);
+            const targetYear = startYear !== 'all' ? startYear : years[0];
+            const rows = sdgRows.filter(r => r.year == targetYear).sort((a, b) => Number(a.rank_value) - Number(b.rank_value));
+            
+            chartElement.className = 'grid grid-cols-1 gap-6'; // single column for SDG
+            
+            const div = document.createElement('div');
+            div.style.minHeight = '400px';
+            div.style.width = '100%';
+            chartElement.appendChild(div);
+            
+            const instance = echarts.init(div);
+            rankingChartInstances.push(instance);
+            
+            const dark = document.documentElement.classList.contains('dark');
+            const textColor = dark ? '#E5E7EB' : '#475569';
+            
+            instance.setOption({
+                title: { text: `THE Impact SDG - ${targetYear}`, left: 'center', textStyle: { color: textColor } },
+                tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' } },
+                grid: { left: '30%', right: '10%', top: '15%', bottom: '10%' },
+                xAxis: { type: 'value', inverse: true, show: false },
+                yAxis: { type: 'category', data: rows.map(r => r.category || 'SDG').reverse(), axisLabel: { color: textColor } },
+                series: [{
+                    type: 'bar',
+                    data: rows.map(r => ({ value: Number(r.rank_value), labelText: r.global_rank })).reverse(),
+                    itemStyle: { color: '#0F766E' },
+                    label: { show: true, position: 'right', formatter: p => p.data.labelText, color: textColor }
+                }]
+            });
+        }
+
+        function renderRankingHistory(startYear = 'all', endYear = 'all') {
             const table = document.getElementById('rankingTable');
             const status = document.getElementById('rankingTableStatus');
             const body = table?.querySelector('tbody');
-            const rows = rankingRows.filter(row => Number(row.year) === Number(year) && row.rank_value !== null && row.rank_value !== '');
+            const allYears = String(startYear) === 'all' || String(endYear) === 'all';
+            let rows = getFilteredRankingRows().filter(row => (allYears || (Number(row.year) >= Number(startYear) && Number(row.year) <= Number(endYear)))
+                && row.rank_value !== null && row.rank_value !== '');
+                
             if (!table || !status || !body) return;
             body.innerHTML = '';
+            
+            // Clean up any previously created extra tbodys
+            const allTbodys = table.querySelectorAll('tbody');
+            for (let i = 1; i < allTbodys.length; i++) {
+                allTbodys[i].remove();
+            }
+            
+            renderRankingHistoryChart(startYear, endYear);
+            
             if (!rows.length) {
                 table.classList.add('hidden');
-                status.textContent = `No numeric rankings are available for ${year}.`;
+                status.innerHTML = `<div class="rounded-xl border border-dashed border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-800/60 p-6 text-center"><i class="fa-solid fa-folder-open mb-2 text-2xl text-gray-400"></i><p>No numeric rankings found for the selected filters.</p></div>`;
                 status.classList.remove('hidden');
-                rankingChartInstance?.clear();
                 return;
             }
             status.classList.add('hidden');
             table.classList.remove('hidden');
-            rows.forEach(row => {
-                const change = rankingChange(row, year);
-                const changeText = change ? `${change.symbol} ${Math.abs(change.difference)}` : 'New';
-                const tr = document.createElement('tr');
-                tr.className = 'border-t border-gray-100 dark:border-gray-700';
-                tr.innerHTML = `<td class="py-3 pr-4 font-semibold">${escapeHtmlDashboard(row.body_short_name || row.body_name)}</td><td class="py-3 pr-4">${escapeHtmlDashboard(row.category || 'Overall')}</td><td class="py-3 pr-4 font-bold">${escapeHtmlDashboard(row.global_rank || row.rank_value)}</td><td class="py-3"><span class="${change?.className || 'rank-change-same'} font-bold">${changeText}</span></td>`;
-                body.appendChild(tr);
+            
+            // Default sort: newest year first, then Level, then ranking
+            rows.sort((a, b) => {
+                if (a.year !== b.year) return b.year - a.year;
+                if (a.level !== b.level) return String(a.level).localeCompare(String(b.level));
+                return String(a.ranking_type).localeCompare(String(b.ranking_type));
             });
 
-            const chartElement = document.getElementById('rankingChart');
-            if (!chartElement) return;
-            rankingChartInstance?.dispose();
-            rankingChartInstance = echarts.init(chartElement);
-            const labels = rows.map(row => `${row.body_short_name || row.body_name}${row.category ? ` · ${row.category}` : ''}`);
-            const values = rows.map(row => Number(row.rank_value));
-            rankingChartInstance.setOption({
-                color: rows.map(row => rankingColor(row.body_short_name)[0]),
-                tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' }, backgroundColor: document.documentElement.classList.contains('dark') ? '#172033' : '#fff', borderColor: '#dfe7df', textStyle: { color: document.documentElement.classList.contains('dark') ? '#f8fafc' : '#1f2937', fontSize: 13 }, formatter: params => { const point = params[0]; const row = rows[point.dataIndex]; return `${escapeHtmlDashboard(row.body_name)}<br/>${escapeHtmlDashboard(row.category || 'Overall')}: <b>${escapeHtmlDashboard(row.global_rank || row.rank_value)}</b>`; } },
-                grid: { left: '4%', right: '5%', top: '5%', bottom: '8%', containLabel: true },
-                xAxis: { type: 'value', inverse: true, min: 0, axisLabel: { fontSize: 12, color: document.documentElement.classList.contains('dark') ? '#cbd5e1' : '#475569' }, splitLine: { lineStyle: { color: document.documentElement.classList.contains('dark') ? 'rgba(148,163,184,.18)' : 'rgba(30,96,49,.10)' } } },
-                yAxis: { type: 'category', data: labels, axisLabel: { fontSize: 12, color: document.documentElement.classList.contains('dark') ? '#e2e8f0' : '#334155' } },
-                series: [{ type: 'bar', data: rows.map((row, index) => ({ value: values[index], itemStyle: { color: new echarts.graphic.LinearGradient(1, 0, 0, 0, [{ offset: 0, color: rankingColor(row.body_short_name)[0] }, { offset: 1, color: rankingColor(row.body_short_name)[1] }]), borderRadius: [0, 7, 7, 0] } })) }]
+            // Group THE Impact SDG
+            const groupedRows = [];
+            let sdgGroup = null;
+            
+            rows.forEach(row => {
+                if (row.ranking_type === 'THE Impact SDG') {
+                    if (!sdgGroup) {
+                        sdgGroup = { isGroup: true, rows: [] };
+                        groupedRows.push(sdgGroup);
+                    }
+                    sdgGroup.rows.push(row);
+                } else {
+                    groupedRows.push(row);
+                }
+            });
+
+            groupedRows.forEach(item => {
+                if (item.isGroup) {
+                    const tr = document.createElement('tr');
+                    tr.className = 'border-t border-gray-100 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/50 cursor-pointer';
+                    tr.innerHTML = `<td colspan="6" class="py-3 px-4 font-bold text-gray-700 dark:text-gray-200"><i class="fa-solid fa-chevron-down mr-2 text-xs"></i> THE Impact SDG (${item.rows.length} records)</td>`;
+                    
+                    const tbody = document.createElement('tbody');
+                    tbody.style.display = 'none';
+                    item.rows.forEach(row => {
+                        const change = rankingChange(row, row.year);
+                        const changeText = change ? change.text : 'New';
+                        const changeTooltip = change && change.previous ? ` title="Compared to ${change.previous.year} ${escapeHtmlDashboard(change.previous.edition||'')}"` : '';
+                        const trInner = document.createElement('tr');
+                        trInner.className = 'border-t border-gray-50 dark:border-gray-800 text-sm';
+                        const scopeAndCategory = [row.scope_name, row.category].filter(Boolean).join(' · ') || 'Unassigned';
+                        trInner.innerHTML = `<td class="py-2 pr-4 pl-8">${escapeHtmlDashboard(row.year)}</td><td class="py-2 pr-4 text-gray-500">${escapeHtmlDashboard(row.ranking_type)}</td><td class="py-2 pr-4">${escapeHtmlDashboard(row.level||'')}</td><td class="py-2 pr-4 max-w-[200px] truncate" title="${escapeHtmlDashboard(scopeAndCategory)}">${escapeHtmlDashboard(scopeAndCategory)}</td><td class="py-2 pr-4 font-bold">${escapeHtmlDashboard(row.global_rank || row.rank_value)}</td><td class="py-2"><span class="${change?.className || 'rank-change-same'} font-bold whitespace-nowrap" ${changeTooltip}>${escapeHtmlDashboard(changeText)}</span></td>`;
+                        tbody.appendChild(trInner);
+                    });
+                    
+                    tr.addEventListener('click', () => {
+                        tbody.style.display = tbody.style.display === 'none' ? 'table-row-group' : 'none';
+                        tr.querySelector('i').className = tbody.style.display === 'none' ? 'fa-solid fa-chevron-right mr-2 text-xs' : 'fa-solid fa-chevron-down mr-2 text-xs';
+                    });
+                    
+                    body.appendChild(tr);
+                    table.appendChild(tbody);
+                } else {
+                    const row = item;
+                    const change = rankingChange(row, row.year);
+                    const changeText = change ? change.text : 'New';
+                    const changeTooltip = change && change.previous ? ` title="Compared to ${change.previous.year} ${escapeHtmlDashboard(change.previous.edition||'')}"` : '';
+                    const tr = document.createElement('tr');
+                    tr.className = 'border-t border-gray-100 dark:border-gray-700';
+                    const edition = row.edition && row.edition !== 'Annual' ? ` · ${row.edition}` : '';
+                    const scopeAndCategory = [row.scope_name, row.category].filter(Boolean).join(' · ') || 'Unassigned';
+                    tr.innerHTML = `<td class="py-3 pr-4">${escapeHtmlDashboard(String(row.year) + edition)}</td><td class="py-3 pr-4 font-semibold" style="color: ${rankingSeriesColor(getRankingFamily(row), row.body_short_name||row.body_name)}">${escapeHtmlDashboard(row.ranking_type || row.body_short_name || row.body_name)}</td><td class="py-3 pr-4">${escapeHtmlDashboard(row.level || 'Unclassified')}</td><td class="py-3 pr-4 max-w-[200px] truncate" title="${escapeHtmlDashboard(scopeAndCategory)}">${escapeHtmlDashboard(scopeAndCategory)}</td><td class="py-3 pr-4 font-bold">${escapeHtmlDashboard(row.global_rank || row.rank_value)}</td><td class="py-3"><span class="${change?.className || 'rank-change-same'} font-bold whitespace-nowrap" ${changeTooltip}>${escapeHtmlDashboard(changeText)}</span></td>`;
+                    body.appendChild(tr);
+                }
             });
         }
-
         function loadRankingHistory() {
-            const select = document.getElementById('rankingYearFilter');
+            const fromSelect = document.getElementById('rankingYearFrom');
+            const toSelect = document.getElementById('rankingYearTo');
+            const scopeSelect = document.getElementById('rankingScopeFilter');
+            const levelSelect = document.getElementById('rankingLevelFilter');
+            const typeSelect = document.getElementById('rankingTypeFilter');
             fetch('<?= e(base_url('api/rankings.php')) ?>', { headers: { Accept: 'application/json' }, cache: 'no-store' })
                 .then(response => { if (!response.ok) throw new Error('Ranking request failed'); return response.json(); })
                 .then(payload => {
                     rankingRows = Array.isArray(payload.rankings) ? payload.rankings : [];
+                    rankingScopes = Array.isArray(payload.scopes) ? payload.scopes : [];
+                    rankingTypes = Array.isArray(payload.ranking_types) ? payload.ranking_types : [];
                     const years = Array.isArray(payload.years) ? payload.years : [];
-                    if (!select || !years.length) throw new Error('No ranking years available');
-                    select.innerHTML = years.map(year => `<option value="${year}">${year}</option>`).join('');
-                    select.disabled = false;
-                    select.value = String(years[0]);
-                    renderRankingHistory(years[0]);
+                    if (!fromSelect || !toSelect || !scopeSelect || !levelSelect || !typeSelect || !years.length) throw new Error('No ranking years available');
+                    const ascendingYears = years.map(Number).sort((left, right) => left - right);
+                    const yearOptions = ascendingYears.map(year => `<option value="${year}">${year}</option>`).join('');
+                    fromSelect.innerHTML = yearOptions;
+                    toSelect.innerHTML = yearOptions;
+                    fromSelect.disabled = false;
+                    toSelect.disabled = false;
+                    levelSelect.innerHTML = '<option value="all">All levels</option><option>Local</option><option>ASEAN</option><option>Asia</option><option>World</option><option value="unassigned">Unassigned</option>';
+                    levelSelect.disabled = false;
+                    activeRankingLevel = 'all';
+                    activeRankingScope = 'all';
+                    activeRankingType = 'all';
+                    renderRankingScopeOptions();
+                    renderRankingTypeOptions();
+                    fromSelect.value = String(ascendingYears[0]);
+                    toSelect.value = String(ascendingYears[ascendingYears.length - 1]);
+                    rankingAllYearsActive = true;
+                    updateRankingAllYearsButton();
+                    renderRankingHistory('all', 'all');
                 })
                 .catch(() => {
-                    if (select) { select.innerHTML = '<option>Unavailable</option>'; select.disabled = true; }
+                    if (fromSelect) { fromSelect.innerHTML = '<option>Unavailable</option>'; fromSelect.disabled = true; }
+                    if (toSelect) { toSelect.innerHTML = '<option>Unavailable</option>'; toSelect.disabled = true; }
+                    if (scopeSelect) { scopeSelect.innerHTML = '<option>Unavailable</option>'; scopeSelect.disabled = true; }
+                    if (levelSelect) { levelSelect.innerHTML = '<option>Unavailable</option>'; levelSelect.disabled = true; }
+                    if (typeSelect) { typeSelect.innerHTML = '<option>Unavailable</option>'; typeSelect.disabled = true; }
                     const status = document.getElementById('rankingTableStatus');
                     if (status) status.textContent = 'Ranking data could not be loaded.';
                 });
         }
 
-        document.getElementById('rankingYearFilter')?.addEventListener('change', event => renderRankingHistory(event.target.value));
+        function updateRankingAllYearsButton() {
+            const button = document.getElementById('rankingAllYears');
+            if (!button) return;
+            button.setAttribute('aria-pressed', String(rankingAllYearsActive));
+            button.className = `rounded-lg border px-3 py-2 ${rankingAllYearsActive ? 'border-green-800 bg-green-800 text-white dark:border-amber-500 dark:bg-amber-500 dark:text-gray-950' : 'border-green-800/30 bg-white text-green-900 dark:border-gray-600 dark:bg-gray-900 dark:text-gray-200'}`;
+        }
+
+        function renderRankingHistoryFromControls() {
+            if (rankingAllYearsActive) {
+                renderRankingHistory('all', 'all');
+                return;
+            }
+            const startYear = Number(document.getElementById('rankingYearFrom')?.value);
+            const endYear = Number(document.getElementById('rankingYearTo')?.value);
+            if (Number.isFinite(startYear) && Number.isFinite(endYear)) renderRankingHistory(startYear, endYear);
+        }
+
+        document.getElementById('rankingAllYears')?.addEventListener('click', () => {
+            rankingAllYearsActive = true;
+            const fromSelect = document.getElementById('rankingYearFrom');
+            const toSelect = document.getElementById('rankingYearTo');
+            if (fromSelect?.options.length) fromSelect.selectedIndex = 0;
+            if (toSelect?.options.length) toSelect.selectedIndex = toSelect.options.length - 1;
+            updateRankingAllYearsButton();
+            renderRankingHistoryFromControls();
+        });
+        document.getElementById('rankingYearFrom')?.addEventListener('change', event => {
+            rankingAllYearsActive = false;
+            const toSelect = document.getElementById('rankingYearTo');
+            if (Number(event.target.value) > Number(toSelect.value)) toSelect.value = event.target.value;
+            updateRankingAllYearsButton();
+            renderRankingHistoryFromControls();
+        });
+        document.getElementById('rankingYearTo')?.addEventListener('change', event => {
+            rankingAllYearsActive = false;
+            const fromSelect = document.getElementById('rankingYearFrom');
+            if (Number(event.target.value) < Number(fromSelect.value)) fromSelect.value = event.target.value;
+            updateRankingAllYearsButton();
+            renderRankingHistoryFromControls();
+        });
+        document.getElementById('rankingScopeFilter')?.addEventListener('change', event => {
+            activeRankingScope = event.target.value || 'all';
+            activeRankingType = 'all';
+            renderRankingTypeOptions();
+            renderRankingHistoryFromControls();
+        });
+        document.getElementById('rankingLevelFilter')?.addEventListener('change', event => {
+            activeRankingLevel = event.target.value || 'all';
+            activeRankingScope = 'all';
+            activeRankingType = 'all';
+            renderRankingScopeOptions();
+            renderRankingTypeOptions();
+            renderRankingHistoryFromControls();
+        });
+        document.getElementById('rankingTypeFilter')?.addEventListener('change', event => {
+            activeRankingType = event.target.value || 'all';
+            renderRankingHistoryFromControls();
+        });
 
         // --- Apache ECharts Data & Initialization ---
         const trendYears = [];
@@ -921,6 +1518,7 @@ require_auth();
             // 1. QS Rank Line Chart
             const trendElem = document.getElementById('trendChart');
             if (trendElem) {
+                const trendColor = window.IRISChartColors.resolveFieldColors(['Rank'], { fieldColors: window.IRISFieldColors, legacyColors: ['#10b981'] })[0];
                 const trendChart = echarts.init(trendElem);
                 chartInstances.push(trendChart);
                 trendChart.setOption({
@@ -954,8 +1552,8 @@ require_auth();
                         type: 'line',
                         smooth: true,
                         data: trendRanks,
-                        lineStyle: { width: 3, color: '#10b981' },
-                        itemStyle: { color: '#10b981' },
+                        lineStyle: { width: 3, color: trendColor },
+                        itemStyle: { color: trendColor },
                         areaStyle: {
                             color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
                                 { offset: 0, color: 'rgba(16, 185, 129, 0.35)' },
@@ -969,6 +1567,10 @@ require_auth();
             // 2. College Contribution Doughnut Chart
             const collegeElem = document.getElementById('collegeChart');
             if (collegeElem) {
+                const collegeColors = window.IRISChartColors.resolveFieldColors(collegePieData.map(item => item.name), {
+                    fieldColors: window.IRISFieldColors,
+                    legacyColors: ['#1E6031', '#B7791F', '#0F766E', '#2563EB', '#C2410C', '#7C3AED']
+                });
                 const collegeChart = echarts.init(collegeElem);
                 chartInstances.push(collegeChart);
                 collegeChart.setOption({
@@ -999,7 +1601,8 @@ require_auth();
                             fontSize: 10,
                             formatter: params => {
                                 const name = String(params.name || 'College');
-                                return name.length > 18 ? `${name.slice(0, 18)}...` : name;
+                                const displayName = name.length > 18 ? `${name.slice(0, 18)}...` : name;
+                                return `${displayName}: ${params.percent}%`;
                             }
                         },
                         labelLine: { show: true, length: 10, length2: 8 },
@@ -1008,8 +1611,9 @@ require_auth();
                             borderColor: isDark ? '#1f2937' : '#ffffff',
                             borderWidth: 2
                         },
-                        data: collegePieData
-                    }]
+                        data: collegePieData.map((item, index) => ({ ...item, itemStyle: { ...(item.itemStyle || {}), color: collegeColors[index] } }))
+                    }],
+                    color: collegeColors
                 });
             }
 
@@ -1017,6 +1621,10 @@ require_auth();
             breakdownSections.forEach((section, idx) => {
                 const elem = document.getElementById('breakdownChart' + idx);
                 if (!elem) return;
+                const sectionColors = window.IRISChartColors.resolveFieldColors(section.labels, {
+                    fieldColors: window.IRISFieldColors,
+                    legacyColors: section.labels.map(() => '#10b981')
+                });
                 const chart = echarts.init(elem);
                 chartInstances.push(chart);
                 chart.setOption({
@@ -1051,13 +1659,11 @@ require_auth();
                             }
                         }
                     },
+                    color: sectionColors,
                     series: [{
                         type: 'bar',
-                        data: section.values,
-                        itemStyle: {
-                            color: '#10b981',
-                            borderRadius: [4, 0, 0, 4]
-                        }
+                        data: section.values.map((value, index) => ({ value, itemStyle: { color: sectionColors[index] } })),
+                        itemStyle: { color: '#10b981', borderRadius: [4, 0, 0, 4] }
                     }]
                 });
             });
@@ -1189,7 +1795,10 @@ require_auth();
                     if (!res.ok) throw new Error('Published graph request failed');
                     return res.json();
                 })
-                .then(data => renderPublishedScannerGraphs(data.graphs || []))
+                .then(data => {
+                    window.IRISFieldColors = data.field_colors || window.IRISFieldColors || {};
+                    renderPublishedScannerGraphs(data.graphs || []);
+                })
                 .catch(() => {
                     const count = document.getElementById('publishedGraphCount');
                     const empty = document.getElementById('scannerPublishedGraphsEmpty');

@@ -5,8 +5,15 @@ const path = require('node:path');
 const { prepareCircularData, serializeChartState } = require('../js/chartData');
 const { pairSelectedText } = require('../js/sourceIngestion');
 const { normalizeGraphExportItem, buildPrintableGraphSheet, buildSavedChartOption } = require('../js/graphExport');
-const { createChart } = require('../js/modules/chartEngine');
+const { createChart, renderStudioChart } = require('../js/modules/chartEngine');
+const { buildColoredSeriesData, getChartColors, isValidChartColor, normalizeFieldKey, resolveFieldColors } = require('../js/chartColors');
 const savedGraphsSource = fs.readFileSync(path.join(__dirname, '..', 'js', 'modules', 'savedGraphsTab.js'), 'utf8');
+const studioColorCustomizerSource = fs.readFileSync(path.join(__dirname, '..', 'js', 'modules', 'studioColorCustomizer.js'), 'utf8');
+const studioWorkbenchSource = fs.readFileSync(path.join(__dirname, '..', 'js', 'modules', 'studioWorkbench.js'), 'utf8');
+const publicDashboardSource = fs.readFileSync(path.join(__dirname, '..', '..', 'user', 'dashboard.php'), 'utf8');
+const graphApiSource = fs.readFileSync(path.join(__dirname, '..', '..', 'api', 'iris.php'), 'utf8');
+const publicGraphApiSource = fs.readFileSync(path.join(__dirname, '..', '..', 'api', 'dashboard_graphs.php'), 'utf8');
+const reviewEditorSource = fs.readFileSync(path.join(__dirname, '..', '..', 'admin', 'review_editor.php'), 'utf8');
 
 test('saved chart options use readable colors in dark mode', () => {
   let option;
@@ -44,10 +51,213 @@ test('published pie labels are white with no text stroke in dark mode', () => {
     assert.equal(label.color, '#FFFFFF');
     assert.equal(label.textBorderWidth, 0);
     assert.equal(label.textBorderColor, 'transparent');
+    assert.equal(label.formatter({ name: 'SDG 1', percent: 60 }), 'SDG 1: 60%');
   } finally {
     if (originalDocument === undefined) delete global.document;
     else global.document = originalDocument;
   }
+});
+
+test('chart colors validate strictly and fall back to the CLSU palette', () => {
+  assert.equal(isValidChartColor('#FDB900'), true);
+  assert.equal(isValidChartColor('#12ab'), false);
+  assert.equal(isValidChartColor('red'), false);
+  assert.deepEqual(getChartColors(['#FDB900', 'invalid'], 2), ['#FDB900', '#E0A70D']);
+});
+
+test('field colors normalize labels and resolve chart override before shared field color', () => {
+  assert.equal(normalizeFieldKey('  Total   Students  '), 'total students');
+  assert.deepEqual(resolveFieldColors(['Total Students', 'Faculty'], {
+    chartColors: ['#123456'],
+    fieldColors: { 'total students': '#FDB900', faculty: '#1E7A3C' },
+    legacyColors: ['#6B7280', '#335C81']
+  }), ['#123456', '#1E7A3C']);
+  assert.deepEqual(resolveFieldColors(['Faculty'], {
+    fieldColors: {},
+    legacyColors: ['#335C81']
+  }), ['#335C81']);
+});
+
+test('recoloring the Studio sample preserves every bar value, name, and tooltip value', () => {
+  const labels = ['Total Students', 'International students', 'Total faculty staff'];
+  const values = [14661, 12, 583];
+  const defaultPoints = buildColoredSeriesData(values.map((value, index) => ({ name: labels[index], value })), labels, null);
+  const coloredPoints = buildColoredSeriesData(defaultPoints, labels, ['#FDB900', '#1E7A3C', '#335C81']);
+  assert.deepEqual(coloredPoints.map(point => [point.name, point.value]), labels.map((label, index) => [label, values[index]]));
+  assert.deepEqual(coloredPoints.map(point => point.itemStyle.color), ['#FDB900', '#1E7A3C', '#335C81']);
+  assert.match(studioColorCustomizerSource, /buildColoredSeriesData\(data, fields, currentColors\)/);
+  assert.match(studioColorCustomizerSource, /setOption\(\{ color: \[\.\.\.currentColors\], series \}, \{ notMerge: false \}\)/);
+});
+
+test('initial bar chart options keep the three sample values through custom colors in both themes', () => {
+  const labels = ['Total Students', 'International students', 'Total faculty staff'];
+  const values = [14661, 12, 583];
+  const colors = ['#FDB900', '#1E7A3C', '#335C81'];
+  const originalWindow = global.window;
+  const originalDocument = global.document;
+
+  try {
+    for (const dark of [false, true]) {
+      let option;
+      global.window = { IRISFieldColors: {}, IRISChartConfig: {}, echarts: { init: () => ({ setOption: value => { option = value; } }) } };
+      global.document = { documentElement: { classList: { contains: name => name === 'dark' && dark } } };
+      createChart({}, 'bar', { labels, datasets: [{ label: 'Enrollment', data: values }] }, { colors });
+      assert.deepEqual(option.series[0].data.map(point => [point.name, point.value]), labels.map((label, index) => [label, values[index]]));
+      assert.deepEqual(option.series[0].data.map(point => point.itemStyle.color), colors);
+    }
+  } finally {
+    if (originalWindow === undefined) delete global.window;
+    else global.window = originalWindow;
+    if (originalDocument === undefined) delete global.document;
+    else global.document = originalDocument;
+  }
+});
+
+test('Studio tooltip retains the original numeric value after colorization in both themes', () => {
+  const names = ['Total Students', 'International students', 'Total faculty staff'];
+  const rows = [['Total Students', '14,661'], ['International students', '12'], ['Total faculty staff', '583']];
+  const previous = { window: global.window, document: global.document, chartMapping: global.ChartMapping };
+  const captured = [];
+  global.window = {
+    IRISFieldColors: {},
+    ChartMapping: {
+      inferColumns: () => ({ labelColumn: 0, valueColumn: 1 }),
+      isRankField: () => false,
+      parseNumericValue: value => Number(String(value).replace(/,/g, ''))
+    },
+    ChartData: { groupAndAggregate: chartRows => chartRows },
+    echarts: { init: () => ({ setOption: option => captured.push(option) }) }
+  };
+  global.document = {
+    documentElement: { classList: { contains: name => name === 'dark' && global.__testDarkMode } },
+    getElementById: () => null
+  };
+  const record = { id: 'sample', fileName: 'Sample', extractedData: {} };
+  const state = { studioChartColors: ['#FDB900', '#1E7A3C', '#335C81'], studioChartOverrides: ['#FDB900', '#1E7A3C', '#335C81'] };
+  const ctx = {
+    state,
+    api: {
+      getStudioActiveSheet: () => ({ name: 'Sample', data: { headers: ['Field', 'Value'], rows } }),
+      renderStudioColorCustomizer: () => {}
+    }
+  };
+  const elements = {
+    canvas: { style: {} }, typeSelect: { value: 'bar' }, titleInput: { value: 'Sample', getAttribute: () => 'customized' },
+    subtitle: { textContent: '' }, warning: { style: {}, textContent: '' }, emptyState: { style: {} }, emptyMsg: { textContent: '' },
+    categorySelect: { value: '0' }, valueSelect: { value: '1' }, valuePrecision: { value: '0' }, rankedYearSelect: null,
+    rankedReverseOrder: null, filterField: { value: 'all' }, filterOperator: { value: 'all' }, filterValue: { value: '' },
+    filterUpperValue: { value: '' }, sortOrder: { value: 'source' }, rowLimit: { value: '30' }, groupDuplicates: { checked: false }
+  };
+
+  try {
+      for (const dark of [false, true]) {
+        for (const groupDuplicates of [false, true]) {
+          global.__testDarkMode = dark;
+          elements.groupDuplicates.checked = groupDuplicates;
+      renderStudioChart(ctx, record, { elements });
+      const option = captured.at(-1);
+      const point = option.series[0].data[0];
+      assert.equal(point.name, names[0]);
+      assert.equal(point.value, 14661);
+      assert.equal(point.itemStyle.color, '#FDB900');
+      assert.match(option.tooltip.formatter([{ ...point, dataIndex: 0 }]), /14,661/);
+      assert.deepEqual(option.series[0].data.map(item => item.value), [14661, 12, 583]);
+      }
+    }
+  } finally {
+    if (previous.window === undefined) delete global.window; else global.window = previous.window;
+    if (previous.document === undefined) delete global.document; else global.document = previous.document;
+    if (previous.chartMapping === undefined) delete global.ChartMapping; else global.ChartMapping = previous.chartMapping;
+    delete global.__testDarkMode;
+  }
+});
+
+test('Studio color picker is local and exposes synced HEX, RGB, preset, and reset controls', () => {
+  assert.match(studioColorCustomizerSource, /\.\.\/\.\.\/vendor\/vanilla-colorful\/hex-color-picker\.js/);
+  assert.match(reviewEditorSource, /<hex-color-picker id="studioColorPicker"/);
+  assert.match(reviewEditorSource, /id="studioColorHex"/);
+  assert.match(reviewEditorSource, /id="studioColorR"/);
+  assert.match(reviewEditorSource, /id="studioColorG"/);
+  assert.match(reviewEditorSource, /id="studioColorB"/);
+  assert.match(reviewEditorSource, /id="studioColorPresets"/);
+  assert.match(reviewEditorSource, /id="studioColorReset"/);
+  assert.match(studioWorkbenchSource, /colors: \$\('studioColorApplyAll'\)\?\.checked \? null : ctx\.state\.studioChartOverrides/);
+  assert.match(studioWorkbenchSource, /persistStudioFieldColors/);
+});
+
+test('saved pie and doughnut charts restore stored per-slice colors', () => {
+  const originalDocument = global.document;
+  const originalWindow = global.window;
+  const charts = [];
+  global.document = { documentElement: { classList: { contains: () => false } } };
+  global.window = { IRISChartConfig: {}, echarts: { init: () => ({ setOption: option => charts.push(option) }) } };
+
+  try {
+    createChart({}, 'pie', { labels: ['North', 'South'], datasets: [{ data: [60, 40] }] }, { colors: ['#FDB900', '#1E7A3C'] });
+    assert.deepEqual(charts[0].color, ['#FDB900', '#1E7A3C']);
+    assert.deepEqual(charts[0].series[0].data.map(point => point.itemStyle.color), ['#FDB900', '#1E7A3C']);
+  } finally {
+    if (originalWindow === undefined) delete global.window;
+    else global.window = originalWindow;
+    if (originalDocument === undefined) delete global.document;
+    else global.document = originalDocument;
+  }
+});
+
+test('public Observatory graph options use saved colors with safe defaults', () => {
+  const option = buildSavedChartOption({ chart_type: 'pie', labels: ['North', 'South'], values_data: [6, 4], colors: ['#FDB900', 'bad'] });
+  assert.equal(option.series[0].data[0].itemStyle.color, '#FDB900');
+  assert.equal(option.series[0].data[1].itemStyle.color, '#B7791F');
+  assert.match(publicGraphApiSource, /sg\.colors/);
+});
+
+test('saved pie options use shared field colors when no chart override exists', () => {
+  const originalFieldColors = global.IRISFieldColors;
+  global.IRISFieldColors = { 'total students': '#FDB900' };
+  try {
+    const option = buildSavedChartOption({ chart_type: 'pie', labels: ['Total Students'], values_data: [100] });
+    assert.equal(option.series[0].data[0].itemStyle.color, '#FDB900');
+  } finally {
+    if (originalFieldColors === undefined) delete global.IRISFieldColors;
+    else global.IRISFieldColors = originalFieldColors;
+  }
+});
+
+test('graph API validates and persists custom colors', () => {
+  assert.match(graphApiSource, /function valid_graph_colors/);
+  assert.ok(graphApiSource.includes("preg_match('/^#[0-9A-Fa-f]{6}$/', $color)"));
+  assert.match(graphApiSource, /colors,chart_data|chart_data,colors,is_published/);
+  assert.match(graphApiSource, /normalize_field_key/);
+  assert.match(graphApiSource, /ON DUPLICATE KEY UPDATE label = VALUES\(label\), color = VALUES\(color\)/);
+});
+
+test('public Observatory receives the shared field-color map', () => {
+  assert.match(publicGraphApiSource, /SELECT field_key, color FROM field_colors/);
+  assert.match(publicGraphApiSource, /'field_colors' => \$fieldColors/);
+  assert.match(publicDashboardSource, /window\.IRISFieldColors =/);
+  assert.match(publicDashboardSource, /IRISChartColors\.resolveFieldColors/);
+});
+
+test('admin pie previews show slice percentages without hovering', () => {
+  let option;
+  const originalWindow = global.window;
+  const originalDocument = global.document;
+  global.window = { echarts: { init: () => ({ setOption: value => { option = value; } }) } };
+  global.document = { documentElement: { classList: { contains: () => false } } };
+
+  try {
+    createChart({}, 'pie', { labels: ['North'], datasets: [{ label: 'Share', data: [60] }] });
+    assert.equal(option.series[0].label.formatter, '{b}: {d}%');
+  } finally {
+    if (originalWindow === undefined) delete global.window;
+    else global.window = originalWindow;
+    if (originalDocument === undefined) delete global.document;
+    else global.document = originalDocument;
+  }
+});
+
+test('public Observatory college doughnut labels include percentages', () => {
+  assert.match(publicDashboardSource, /return `\$\{displayName\}: \$\{params\.percent\}%`;/);
 });
 
 test('deduplicates circular chart legend labels while grouping remains optional', () => {

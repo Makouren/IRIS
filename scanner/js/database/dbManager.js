@@ -11,6 +11,7 @@ const DEFAULT_API_ENDPOINTS = {
   recordById: id => `${IRIS_API}?resource=records&id=${encodeURIComponent(id)}`,
   recordsBulkDelete: `${IRIS_API}?resource=records&action=bulk-delete`,
   recordsBulkApprove: `${IRIS_API}?resource=records&action=bulk-approve`,
+  fieldColors: `${IRIS_API}?resource=field_colors`,
   graphs: `${IRIS_API}?resource=graphs`,
   graphById: id => `${IRIS_API}?resource=graphs&id=${encodeURIComponent(id)}`,
   graphsByRecord: recordId => `${IRIS_API}?resource=graphs&record_id=${encodeURIComponent(recordId)}`,
@@ -85,7 +86,7 @@ class DatabaseManager {
       status: record.status || 'Pending Review',
       docType: record.docType || 'General Institutional Data',
       rawText: record.rawText || '',
-      extractedData: record.sheetsData || record.formattedHtml || record.ocrData || {},
+      extractedData: record.extractedData || record.sheetsData || record.formattedHtml || record.ocrData || {},
       graphDrafts: record.graphDrafts || [],
       adminNotes: record.adminNotes || '',
       metadata: record.metadata || {}
@@ -133,6 +134,40 @@ class DatabaseManager {
     }
 
     return this.getLocalStorageRecords();
+  }
+
+  async getFieldColors() {
+    const rows = await this.getFieldColorRows();
+    return Object.fromEntries(rows.map(row => [row.field_key, row.color]));
+  }
+
+  async getFieldColorRows() {
+    const response = await fetch(this.config.endpoints.fieldColors, { headers: { Accept: 'application/json' } });
+    if (!response.ok) throw new Error(`Unable to load field colors (HTTP ${response.status})`);
+    const rows = await response.json();
+    return (Array.isArray(rows) ? rows : [])
+      .filter(row => typeof row.field_key === 'string' && /^#[0-9A-Fa-f]{6}$/.test(row.color || ''))
+      .map(row => ({ ...row, color: row.color.toUpperCase() }));
+  }
+
+  async saveFieldColor(fieldKey, label, color) {
+    if (typeof color !== 'string' || !/^#[0-9A-Fa-f]{6}$/.test(color)) throw new Error('Use a six-digit HEX color.');
+    const response = await fetch(this.config.endpoints.fieldColors, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ field_key: fieldKey, label, color: color.toUpperCase() })
+    });
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(payload.error || 'Unable to save field color.');
+    return payload;
+  }
+
+  async deleteFieldColor(fieldKey) {
+    const url = `${this.config.endpoints.fieldColors}&field_key=${encodeURIComponent(fieldKey)}`;
+    const response = await fetch(url, { method: 'DELETE', headers: { Accept: 'application/json' } });
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(payload.error || 'Unable to reset field color.');
+    return payload;
   }
 
   /**
@@ -262,6 +297,7 @@ class DatabaseManager {
       rankValueMax: graphData.rankValueMax,
       labels: graphData.labels || [],
       values_data: graphData.values_data || graphData.valuesData || graphData.data || [],
+      colors: Array.isArray(graphData.colors) && graphData.colors.every(color => typeof color === 'string' && /^#[0-9A-Fa-f]{6}$/.test(color)) ? graphData.colors : null,
       chart_data: chartData && typeof chartData === 'object' ? chartData : {},
       is_published: graphData.is_published === true || graphData.is_published === 1 || graphData.is_published === '1'
     };

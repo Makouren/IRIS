@@ -1,5 +1,5 @@
 import { $, escapeHtml } from '../utils/helpers.js';
-import { createChart } from './chartEngine.js?v=dark-contrast-20260929';
+import { createChart } from './chartEngine.js?v=data-preserving-colors-20260930';
 
 function getRecordName(graph, records) {
   const record = records.find(item => item.id === graph.record_id);
@@ -183,7 +183,7 @@ export function initSavedGraphsTab(ctx) {
       if (!chartHost) return;
       card._savedChartResizeObserver?.disconnect?.();
       card._savedChart?.dispose?.();
-      card._savedChart = createChart(chartHost, chartType, { orientation: graph.orientation, rankSemantic: graph.rank_semantic === 1 || graph.rank_semantic === true, rankValueMin: graph.rank_value_min, rankValueMax: graph.rank_value_max, valueAxisReversed: graph.value_axis_reversed === 1 || graph.value_axis_reversed === true, valueAxisMin: graph.value_axis_min, valueAxisMax: graph.value_axis_max, labels: graph.labels || [], datasets: [{ label: graph.title || 'Saved Series', data: graph.values_data || [] }] });
+      card._savedChart = createChart(chartHost, chartType, { ...(graph.chart_data && typeof graph.chart_data === 'object' ? graph.chart_data : {}), orientation: graph.orientation, rankSemantic: graph.rank_semantic === 1 || graph.rank_semantic === true, rankValueMin: graph.rank_value_min, rankValueMax: graph.rank_value_max, valueAxisReversed: graph.value_axis_reversed === 1 || graph.value_axis_reversed === true, valueAxisMin: graph.value_axis_min, valueAxisMax: graph.value_axis_max, labels: graph.labels || [], datasets: [{ label: graph.title || 'Saved Series', data: graph.values_data || [] }] }, { colors: graph.colors });
       if (typeof ResizeObserver !== 'undefined') {
         card._savedChartResizeObserver = new ResizeObserver(() => card._savedChart?.resize?.());
         card._savedChartResizeObserver.observe(chartHost);

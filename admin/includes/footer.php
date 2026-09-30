@@ -89,7 +89,8 @@
     <script src="<?= e(base_url('scanner/js/chartMapping.js')) ?>"></script>
     <script src="<?= e(base_url('scanner/js/sourceIngestion.js')) ?>"></script>
     <script src="<?= e(base_url('scanner/js/documentPagination.js')) ?>"></script>
-    <script src="<?= e(base_url('scanner/js/graphExport.js')) ?>"></script>
+    <script src="<?= e(base_url('scanner/js/chartColors.js')) ?>?v=<?= (int) filemtime(__DIR__.'/../../scanner/js/chartColors.js') ?>"></script>
+    <script src="<?= e(base_url('scanner/js/graphExport.js')) ?>?v=<?= (int) filemtime(__DIR__.'/../../scanner/js/graphExport.js') ?>"></script>
     <script type="module" src="<?= e(base_url('scanner/js/app.js')) ?>?v=<?= (int) filemtime(__DIR__.'/../../scanner/js/app.js') ?>"></script>
 </body>
 </html>

@@ -125,8 +125,14 @@
     const numericColumns = [];
     const labelColumns = [];
     const columnTypes = {}; // colIdx -> 'numeric' | 'text' | 'mixed'
+    const yearColumn = detectYearColumn(safeHeaders, safeRows);
 
     for (let column = 0; column < safeHeaders.length; column++) {
+      if (column === yearColumn) {
+        labelColumns.push(column);
+        columnTypes[column] = 'text';
+        continue;
+      }
       const values = safeRows
         .map(row => row && row[column])
         .filter(value => value !== null && value !== undefined && String(value).trim() !== '');
@@ -152,11 +158,12 @@
 
     // Prefer text columns as label
     for (let column = 0; column < safeHeaders.length; column++) {
-      if (column !== valueColumn && columnTypes[column] === 'text') {
+      if (column !== valueColumn && column !== yearColumn && columnTypes[column] === 'text') {
         labelColumn = column;
         break;
       }
     }
+    if (labelColumn === valueColumn && yearColumn !== null && yearColumn !== valueColumn) labelColumn = yearColumn;
     // fallback: first column that isn't valueColumn
     if (labelColumn === valueColumn) {
       for (let column = 0; column < safeHeaders.length; column++) {
