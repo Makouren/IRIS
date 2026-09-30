@@ -1183,12 +1183,13 @@ try {
                 const family = `${type} ${scope}`;
                 if (!families.has(family)) families.set(family, { type, scope, body, dataByYear: new Map() });
                 
-                // Get latest edition per year
+                // Get latest edition per year (key must be String to match years array)
                 const yData = families.get(family).dataByYear;
-                if (!yData.has(row.year)) {
-                    yData.set(row.year, []);
+                const yearKey = String(row.year);
+                if (!yData.has(yearKey)) {
+                    yData.set(yearKey, []);
                 }
-                yData.get(row.year).push(row);
+                yData.get(yearKey).push(row);
             });
 
             const dark = document.documentElement.classList.contains('dark');
@@ -1209,9 +1210,10 @@ try {
                 
                 const seriesColor = rankingSeriesColor(family, group.body);
                 const data = years.map(y => {
-                    if (!group.dataByYear.has(y)) return null;
-                    const editions = group.dataByYear.get(y);
-                    editions.sort((a, b) => a.edition.localeCompare(b.edition)); // roughly sort by edition
+                    const yStr = String(y);
+                    if (!group.dataByYear.has(yStr)) return null;
+                    const editions = group.dataByYear.get(yStr);
+                    editions.sort((a, b) => String(a.edition || '').localeCompare(String(b.edition || ''))); // sort by edition
                     const latest = editions[editions.length - 1]; // pick latest
                     return {
                         value: Number(latest.rank_value),
@@ -1219,6 +1221,19 @@ try {
                         latestRank: latest.global_rank || latest.rank_value
                     };
                 });
+
+                // Calculate bounds so single data point or flat line displays properly
+                const validValues = data.filter(d => d !== null && d.value !== null && Number.isFinite(d.value)).map(d => d.value);
+                let yMin = undefined;
+                let yMax = undefined;
+                if (validValues.length > 0) {
+                    const minVal = Math.min(...validValues);
+                    const maxVal = Math.max(...validValues);
+                    if (minVal === maxVal) {
+                        yMin = Math.max(1, minVal - 5);
+                        yMax = maxVal + 5;
+                    }
+                }
 
                 instance.setOption({
                     title: { text: family, left: 'center', textStyle: { color: textColor, fontSize: 14 } },
@@ -1238,7 +1253,7 @@ try {
                             return html;
                         }
                     },
-                    grid: { left: '15%', right: '5%', top: '20%', bottom: '15%', containLabel: false },
+                    grid: { left: '10%', right: '5%', top: '20%', bottom: '15%', containLabel: true },
                     xAxis: {
                         type: 'category',
                         data: years,
@@ -1249,15 +1264,23 @@ try {
                     yAxis: {
                         type: 'value',
                         inverse: true,
-                        axisLabel: { color: textColor },
+                        min: yMin,
+                        max: yMax,
+                        minInterval: 1,
+                        axisLabel: {
+                            color: textColor,
+                            formatter: value => '#' + Math.round(value)
+                        },
                         splitLine: { lineStyle: { color: splitLineColor } },
                         scale: true
                     },
                     series: [{
                         type: 'line',
                         data: data,
+                        connectNulls: true,
                         symbol: 'circle',
-                        symbolSize: 8,
+                        symbolSize: 10,
+                        showSymbol: true,
                         lineStyle: { width: 3 },
                         itemStyle: { color: seriesColor }
                     }]
@@ -1289,7 +1312,7 @@ try {
             instance.setOption({
                 title: { text: `THE Impact SDG - ${targetYear}`, left: 'center', textStyle: { color: textColor } },
                 tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' } },
-                grid: { left: '30%', right: '10%', top: '15%', bottom: '10%' },
+                grid: { left: '20%', right: '10%', top: '15%', bottom: '10%', containLabel: true },
                 xAxis: { type: 'value', inverse: true, show: false },
                 yAxis: { type: 'category', data: rows.map(r => r.category || 'SDG').reverse(), axisLabel: { color: textColor } },
                 series: [{
