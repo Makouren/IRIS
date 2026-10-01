@@ -419,6 +419,14 @@ try {
                             Description
                             <textarea name="description" id="summaryCardDescription" rows="2" class="mt-1 w-full rounded-xl border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 px-3 py-2 text-sm"></textarea>
                         </label>
+                        <label class="block text-sm font-semibold text-gray-700 dark:text-gray-200 md:col-span-2">
+                            Italic Supporting Text
+                            <textarea name="secondary_description" id="summaryCardSecondaryDescription" rows="2" class="mt-1 w-full rounded-xl border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 px-3 py-2 text-sm"></textarea>
+                        </label>
+                        <label class="block text-sm font-semibold text-gray-700 dark:text-gray-200 md:col-span-2">
+                            ⓘ Information
+                            <textarea name="info_text" id="summaryCardInfoText" rows="2" class="mt-1 w-full rounded-xl border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 px-3 py-2 text-sm"></textarea>
+                        </label>
                         <label class="block text-sm font-semibold text-gray-700 dark:text-gray-200">
                             Display Order
                             <input type="number" name="display_order" id="summaryCardDisplayOrder" value="0" min="0" class="mt-1 w-full rounded-xl border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 px-3 py-2 text-sm">
@@ -781,8 +789,11 @@ try {
                     const secondaryValue = card.secondary_value ? formatSummaryCardValue(card.secondary_value, card.display_precision ?? 2) : '';
                     const secondaryLabel = card.secondary_label ? escapeHtmlDashboard(card.secondary_label) : '';
                     const description = card.description ? escapeHtmlDashboard(card.description) : '';
+                    const secondaryDescription = card.secondary_description ? escapeHtmlDashboard(card.secondary_description) : '';
+                    const infoText = card.info_text ? escapeHtmlDashboard(card.info_text) : '';
                     const mainLabel = escapeHtmlDashboard(card.main_label || 'Current snapshot');
                     const yearDate = escapeHtmlDashboard(card.year_date || '');
+                    const infoLabel = escapeHtmlDashboard(`Information about ${card.title || 'this card'}`);
                     const adminControls = isAdmin ? `
                         <div class="mt-4 flex flex-wrap gap-2">
                             <button type="button" class="summary-card-edit rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 px-2.5 py-1.5 text-[11px] font-semibold text-gray-700 dark:text-gray-200" data-id="${escapeHtmlDashboard(card.id)}">Edit</button>
@@ -796,13 +807,17 @@ try {
                                     <div class="summary-card-title text-[10px] font-bold uppercase tracking-[0.14em]">${escapeHtmlDashboard(card.title || 'Performance Snapshot')}</div>
                                     <div class="mt-2 text-3xl font-extrabold text-gray-900 dark:text-white">${escapeHtmlDashboard(mainValue)}</div>
                                 </div>
-                                ${yearDate ? `<span class="summary-card-year-badge rounded-full px-2 py-1 text-[10px] font-bold uppercase tracking-wide">${yearDate}</span>` : ''}
+                                <div class="flex items-center gap-2">
+                                    ${yearDate ? `<span class="summary-card-year-badge rounded-full px-2 py-1 text-[10px] font-bold uppercase tracking-wide">${yearDate}</span>` : ''}
+                                    ${infoText ? `<details class="relative"><summary class="flex h-7 w-7 cursor-pointer list-none items-center justify-center rounded-full border border-gray-500/40 text-sm text-gray-500 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700" aria-label="${infoLabel}" title="More information"><i class="fa-solid fa-circle-info" aria-hidden="true"></i></summary><div role="note" class="absolute right-0 top-full z-20 mt-2 w-64 max-w-[75vw] rounded-lg border border-gray-200 bg-white p-3 text-left text-xs font-normal normal-case text-gray-700 shadow-xl dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200">${infoText}</div></details>` : ''}
+                                </div>
                             </div>
                             <div class="summary-card-label mt-2 text-xs font-semibold uppercase tracking-wide">${mainLabel}</div>
                             ${secondaryLabel || secondaryValue ? `<div class="summary-card-second-row mt-4 flex items-baseline justify-between gap-3 border-t pt-3 text-xs">
                                 <span class="summary-card-label">${secondaryLabel}</span>
                                 <span class="font-bold text-gray-900 dark:text-white">${escapeHtmlDashboard(secondaryValue)}</span>
                             </div>` : ''}
+                            ${secondaryDescription ? `<p class="mt-2 text-sm italic text-gray-500 dark:text-gray-400">${secondaryDescription}</p>` : ''}
                             ${description ? `<p class="mt-3 text-sm text-gray-600 dark:text-gray-300">${description}</p>` : ''}
                             ${adminControls}
                         </article>`;
@@ -823,6 +838,8 @@ try {
                         document.getElementById('summaryCardSecondaryLabel').value = card.secondary_label || '';
                         document.getElementById('summaryCardSecondaryValue').value = card.secondary_value || '';
                         document.getElementById('summaryCardDescription').value = card.description || '';
+                        document.getElementById('summaryCardSecondaryDescription').value = card.secondary_description || '';
+                        document.getElementById('summaryCardInfoText').value = card.info_text || '';
                         document.getElementById('summaryCardDisplayOrder').value = card.display_order ?? 0;
                         document.getElementById('summaryCardDisplayPrecision').value = String(card.display_precision ?? 2);
                         document.getElementById('summaryCardPublished').checked = !!card.is_published;
@@ -942,6 +959,8 @@ try {
                         document.getElementById('summaryCardSecondaryLabel').value = card.secondary_label || '';
                         document.getElementById('summaryCardSecondaryValue').value = card.secondary_value || '';
                         document.getElementById('summaryCardDescription').value = card.description || '';
+                        document.getElementById('summaryCardSecondaryDescription').value = card.secondary_description || '';
+                        document.getElementById('summaryCardInfoText').value = card.info_text || '';
                         document.getElementById('summaryCardDisplayOrder').value = card.display_order ?? 0;
                         const selectedIds = (card.category_ids || (card.category_id ? [card.category_id] : [])).map(String);
                         [...summaryCardCategorySelect.options].forEach(option => { option.selected = selectedIds.includes(option.value); });
@@ -992,6 +1011,8 @@ try {
                     secondary_label: document.getElementById('summaryCardSecondaryLabel').value.trim(),
                     secondary_value: document.getElementById('summaryCardSecondaryValue').value.trim(),
                     description: document.getElementById('summaryCardDescription').value.trim(),
+                    secondary_description: document.getElementById('summaryCardSecondaryDescription').value.trim(),
+                    info_text: document.getElementById('summaryCardInfoText').value.trim(),
                     display_order: Number(document.getElementById('summaryCardDisplayOrder').value || 0),
                     display_precision: (() => {
                         const precisionValue = Number(document.getElementById('summaryCardDisplayPrecision').value);
@@ -1670,5 +1691,6 @@ try {
             });
         });
     </script>
+<?php require __DIR__ . '/../includes/change_refresh_script.php'; ?>
 </body>
 </html>

@@ -108,7 +108,7 @@ try {
     $insertScope = $pdo->prepare('INSERT INTO ranking_scopes (name, sort_order) VALUES (?, ?)');
     $nextScopeOrder = (int)$pdo->query('SELECT COALESCE(MAX(sort_order), -1) + 1 FROM ranking_scopes')->fetchColumn();
     $scopeIds = [];
-    $findRow = $pdo->prepare('SELECT id, seed_managed FROM rankings WHERE ranking_body_id = ? AND scope_id = ? AND year = ? AND edition = ? LIMIT 1');
+    $findRow = $pdo->prepare('SELECT id, seed_managed FROM rankings WHERE ranking_body_id = ? AND scope_id = ? AND LOWER(ranking_type) = LOWER(?) AND LOWER(level) = LOWER(?) AND year = ? AND LOWER(edition) = LOWER(?) AND (LOWER(category) <=> LOWER(?)) LIMIT 1');
     $insertRow = $pdo->prepare('INSERT INTO rankings (ranking_body_id, scope_id, year, edition, category, ranking_type, level, global_rank, rank_low, rank_high, rank_value, ph_rank, ph_rank_value, note, source, verification_status, seed_managed) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)');
     $updateRow = $pdo->prepare('UPDATE rankings SET category = ?, ranking_type = ?, level = ?, global_rank = ?, rank_low = ?, rank_high = ?, rank_value = ?, ph_rank = ?, ph_rank_value = ?, note = ?, source = ?, verification_status = ?, seed_managed = 1 WHERE id = ? AND seed_managed = 1');
 
@@ -126,7 +126,7 @@ try {
         $scopeId = $scopeIds[$row['scope']];
         $rankValue = $row['low'] === null ? null : ($row['high'] === null ? (float)$row['low'] : ($row['low'] + $row['high']) / 2);
         $phValue = $row['phRank'] !== null ? parse_rank_to_value($row['phRank']) : null;
-        $findRow->execute([$bodyId, $scopeId, $row['year'], $row['edition']]);
+        $findRow->execute([$bodyId, $scopeId, $row['type'], $row['level'], $row['year'], $row['edition'], $row['category']]);
         $existing = $findRow->fetch(PDO::FETCH_ASSOC);
         if ($existing && !(int)$existing['seed_managed']) {
             $skipped++;

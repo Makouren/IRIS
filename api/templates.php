@@ -25,6 +25,52 @@ function templates_csv_has_null_byte(string $path): bool {
 try {
     $method = $_SERVER['REQUEST_METHOD'] ?? 'GET';
     if ($method === 'GET') {
+        if (($_GET['resource'] ?? '') === 'import_records') {
+            requireRole(['super_admin'], true);
+            $destination = (string)($_GET['destination'] ?? '');
+            if (!in_array($destination, ['ranking_history', 'summary_cards'], true)) templates_fail('Choose a valid import destination.');
+            $query = db()->prepare('SELECT records.id, records.fileName, records.fileType, records.status, records.office_name, records.uploaded_at, records.metadata, templates.name AS template_name, profiles.destination AS profile_destination FROM records LEFT JOIN templates ON templates.id = records.template_id LEFT JOIN template_import_profiles profiles ON profiles.template_id = templates.id WHERE (profiles.destination = ? OR JSON_UNQUOTE(JSON_EXTRACT(records.metadata, "$.upload_purpose")) = ?) AND LOWER(records.fileType) IN ("xlsx", "csv", "tsv") ORDER BY records.uploaded_at DESC, records.scannedAt DESC LIMIT 100');
+            $query->execute([$destination, $destination]);
+            $records = [];
+            foreach ($query->fetchAll(PDO::FETCH_ASSOC) as $record) {
+                $metadata = json_decode((string)($record['metadata'] ?? ''), true);
+                $storedFile = is_array($metadata) ? (string)($metadata['stored_file'] ?? '') : '';
+                if (!preg_match('/^[a-f0-9]{48}\.(xlsx|csv|tsv)$/', $storedFile)) continue;
+                $recordedPurpose = is_array($metadata) ? (string)($metadata['upload_purpose'] ?? '') : '';
+                if ($recordedPurpose !== '' ? $recordedPurpose !== $destination : $record['profile_destination'] !== $destination) continue;
+                if ($record['profile_destination'] !== null && $record['profile_destination'] !== $destination) continue;
+                $records[] = [
+                    'id' => $record['id'],
+                    'file_name' => $record['fileName'],
+                    'file_type' => strtolower((string)$record['fileType']),
+                    'status' => $record['status'],
+                    'office_name' => $record['office_name'],
+                    'uploaded_at' => $record['uploaded_at'],
+                    'template_name' => $record['template_name'] ?: 'Built-in Snapshot mapping'
+                ];
+            }
+            echo json_encode($records, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT);
+            exit;
+        }
+        if (($_GET['resource'] ?? '') === 'import_profile_for_record') {
+            requireRole(['super_admin'], true);
+            $recordId = trim((string)($_GET['record_id'] ?? ''));
+            if ($recordId === '') templates_fail('Record id is required.');
+            $profile = db()->prepare('SELECT records.template_id, records.metadata, templates.name AS template_name, profiles.destination FROM records LEFT JOIN templates ON templates.id = records.template_id LEFT JOIN template_import_profiles profiles ON profiles.template_id = templates.id WHERE records.id = ? LIMIT 1');
+            $profile->execute([$recordId]);
+            $row = $profile->fetch(PDO::FETCH_ASSOC);
+            if (!$row) templates_fail('This upload has no linked template.', 409);
+            $metadata = json_decode((string)($row['metadata'] ?? ''), true);
+            $recordedPurpose = is_array($metadata) ? (string)($metadata['upload_purpose'] ?? '') : '';
+            $row['destination'] = $row['destination'] ?: $recordedPurpose;
+            if (!$row['destination']) templates_fail('Configure an import profile for this template first.', 409);
+            if ($recordedPurpose !== '' && $recordedPurpose !== $row['destination']) templates_fail('This upload was submitted for a different destination than the template is currently configured for.', 409);
+            if (empty($row['template_id']) && $row['destination'] !== 'summary_cards') templates_fail('This destination requires a configured template.', 409);
+            $row['template_name'] = $row['template_name'] ?: 'Built-in Snapshot mapping';
+            unset($row['metadata']);
+            echo json_encode($row, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT);
+            exit;
+        }
         if (($_GET['resource'] ?? '') === 'ranking_bodies') {
             requireRole(['super_admin'], true);
             $pdo = db();
@@ -39,10 +85,17 @@ try {
         requireRole(['super_admin', 'admin'], true);
         $pdo = db();
         $query = $pdo->prepare(($_SESSION['role'] ?? '') === 'super_admin'
-            ? 'SELECT templates.id, templates.name, templates.original_filename, templates.ranking_body_id, bodies.name AS ranking_body_name, templates.is_active, templates.created_at FROM templates LEFT JOIN ranking_bodies bodies ON bodies.id = templates.ranking_body_id ORDER BY templates.created_at DESC, templates.id DESC'
-            : 'SELECT templates.id, templates.name, templates.original_filename, templates.ranking_body_id, bodies.name AS ranking_body_name, templates.is_active, templates.created_at FROM templates LEFT JOIN ranking_bodies bodies ON bodies.id = templates.ranking_body_id WHERE templates.is_active = 1 ORDER BY templates.name ASC, templates.id DESC');
+            ? 'SELECT templates.id, templates.name, templates.original_filename, templates.ranking_body_id, bodies.name AS ranking_body_name, templates.is_active, templates.created_at, profiles.destination AS import_destination, profiles.sheet_selector, profiles.header_aliases, profiles.required_columns, profiles.mapping_rules, profiles.defaults_json FROM templates LEFT JOIN ranking_bodies bodies ON bodies.id = templates.ranking_body_id LEFT JOIN template_import_profiles profiles ON profiles.template_id = templates.id ORDER BY templates.created_at DESC, templates.id DESC'
+            : 'SELECT templates.id, templates.name, templates.original_filename, templates.ranking_body_id, bodies.name AS ranking_body_name, templates.is_active, templates.created_at, profiles.destination AS import_destination, profiles.sheet_selector, profiles.header_aliases, profiles.required_columns, profiles.mapping_rules, profiles.defaults_json FROM templates LEFT JOIN ranking_bodies bodies ON bodies.id = templates.ranking_body_id LEFT JOIN template_import_profiles profiles ON profiles.template_id = templates.id WHERE templates.is_active = 1 ORDER BY templates.name ASC, templates.id DESC');
         $query->execute();
-        echo json_encode($query->fetchAll(PDO::FETCH_ASSOC), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT);
+        $templates = $query->fetchAll(PDO::FETCH_ASSOC);
+        foreach ($templates as &$template) {
+            foreach (['header_aliases', 'required_columns', 'mapping_rules', 'defaults_json'] as $field) {
+                $template[$field] = json_decode((string)($template[$field] ?? ''), true) ?: [];
+            }
+        }
+        unset($template);
+        echo json_encode($templates, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT);
         exit;
     }
     if ($method !== 'POST') templates_fail('Method not allowed.', 405);
@@ -54,6 +107,55 @@ try {
 
     $action = (string)($_POST['action'] ?? 'upload');
     $pdo = db();
+    if ($action === 'save-import-profile') {
+        $templateId = filter_var($_POST['id'] ?? null, FILTER_VALIDATE_INT);
+        $destination = (string)($_POST['destination'] ?? '');
+        if (!$templateId || !in_array($destination, ['ranking_history', 'summary_cards'], true)) templates_fail('Choose a valid template and import destination.');
+        $rawProfile = (string)($_POST['profile'] ?? '');
+        if (strlen($rawProfile) > 65535) templates_fail('Import profile must not exceed 64 KB.');
+        $profileData = json_decode($rawProfile, true);
+        if (!is_array($profileData)) templates_fail('Import profile must be valid JSON.');
+        $allowedFields = $destination === 'ranking_history'
+            ? ['year', 'category', 'global_rank', 'ranking_type', 'scope', 'scope_id', 'level', 'level_id', 'edition', 'ph_rank', 'note', 'source', 'verification_status']
+            : ['import_key', 'main_value', 'secondary_value', 'year_date', 'main_label', 'secondary_label', 'description', 'secondary_description', 'info_text', 'period_key'];
+        $aliases = $profileData['header_aliases'] ?? [];
+        $mapping = $profileData['mapping_rules'] ?? [];
+        $required = $profileData['required_columns'] ?? [];
+        $defaults = $profileData['defaults'] ?? [];
+        if (!is_array($aliases) || !is_array($mapping) || !is_array($required) || !array_is_list($required) || !is_array($defaults)) {
+            templates_fail('Aliases, mappings, required columns, and defaults must have the expected object/list shapes.');
+        }
+        if (!$mapping) templates_fail('Add at least one worksheet field mapping.');
+        $minimumMappings = $destination === 'ranking_history' ? ['year', 'global_rank'] : ['import_key', 'period_key', 'main_value'];
+        foreach ($minimumMappings as $field) {
+            if (!isset($mapping[$field])) templates_fail('Required field mapping is missing: ' . $field);
+        }
+        foreach (array_unique(array_merge(array_keys($aliases), array_keys($mapping), $required, array_keys($defaults))) as $field) {
+            if (!in_array($field, $allowedFields, true)) templates_fail('Unsupported ' . $destination . ' import field: ' . (string)$field);
+        }
+        foreach ($mapping as $field => $header) {
+            if (!is_string($header) || trim($header) === '') templates_fail('Each mapping must name a worksheet header.');
+        }
+        foreach ($aliases as $field => $list) {
+            if (!is_array($list) || !array_is_list($list) || array_filter($list, static fn($item): bool => !is_string($item))) {
+                templates_fail('Each header alias must be a list of header names.');
+            }
+        }
+        foreach ($required as $field) if (!is_string($field)) templates_fail('Required column names must be strings.');
+        foreach ($defaults as $value) if (!is_scalar($value) && $value !== null) templates_fail('Default values must be strings or numbers.');
+        $templateQuery = $pdo->prepare('SELECT ranking_body_id FROM templates WHERE id = ?');
+        $templateQuery->execute([$templateId]);
+        $rankingBodyId = $templateQuery->fetchColumn();
+        if ($rankingBodyId === false) templates_fail('Template not found.', 404);
+        if ($destination === 'ranking_history' && !$rankingBodyId) templates_fail('Link this template to a ranking body before using it for Ranking History.');
+        $sheetSelector = $profileData['sheet_selector'] ?? '';
+        if (!is_string($sheetSelector) || strlen($sheetSelector) > 255) templates_fail('Worksheet selector must be a name under 256 characters.');
+        $sheetSelector = trim($sheetSelector);
+        $save = $pdo->prepare('INSERT INTO template_import_profiles (template_id, destination, sheet_selector, header_aliases, required_columns, mapping_rules, defaults_json, created_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?) ON DUPLICATE KEY UPDATE destination = VALUES(destination), sheet_selector = VALUES(sheet_selector), header_aliases = VALUES(header_aliases), required_columns = VALUES(required_columns), mapping_rules = VALUES(mapping_rules), defaults_json = VALUES(defaults_json), created_by = VALUES(created_by)');
+        $save->execute([$templateId, $destination, $sheetSelector !== '' ? $sheetSelector : null, json_encode($aliases), json_encode($required), json_encode($mapping), json_encode($defaults), (int)$_SESSION['user_id']]);
+        echo json_encode(['success' => true]);
+        exit;
+    }
     if ($action === 'save-ranking-body') {
         $bodyId = filter_var($_POST['ranking_body_id'] ?? null, FILTER_VALIDATE_INT) ?: null;
         $bodyName = trim((string)($_POST['body_name'] ?? ''));

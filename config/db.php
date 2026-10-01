@@ -1,6 +1,66 @@
 <?php
 const IRIS_DB_HOST='127.0.0.1'; const IRIS_DB_PORT='3306'; const IRIS_DB_NAME='iris_db'; const IRIS_DB_USER='root'; const IRIS_DB_PASS='';
 
+final class IRISChangeTracker
+{
+    private static bool $suspended = false;
+    private static bool $queued = false;
+
+    public static function suspend(bool $value): void { self::$suspended = $value; }
+
+    public static function record(string $sql): void
+    {
+        if (self::$suspended || self::$queued
+            || !in_array($_SERVER['REQUEST_METHOD'] ?? 'GET', ['POST', 'PUT', 'PATCH', 'DELETE'], true)
+            || empty($_SESSION['user_id'])
+            || !preg_match('/^\s*(INSERT|UPDATE|DELETE|REPLACE)\b/i', $sql)) return;
+        self::$queued = true;
+        register_shutdown_function([self::class, 'publish']);
+    }
+
+    public static function publish(): void
+    {
+        if (http_response_code() >= 400) return;
+        try {
+            $pdo = new PDO('mysql:host=' . IRIS_DB_HOST . ';port=' . IRIS_DB_PORT . ';dbname=' . IRIS_DB_NAME . ';charset=utf8mb4', IRIS_DB_USER, IRIS_DB_PASS, [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]);
+            $pdo->exec('UPDATE app_change_state SET version = version + 1, updated_at = CURRENT_TIMESTAMP WHERE id = 1');
+        } catch (Throwable $exception) {
+            error_log('IRIS change signal failed: ' . $exception->getMessage());
+        }
+    }
+}
+
+final class IRISChangeTrackedStatement extends PDOStatement
+{
+    protected function __construct() {}
+
+    public function execute(?array $params = null): bool
+    {
+        $executed = parent::execute($params);
+        if ($executed) IRISChangeTracker::record($this->queryString);
+        return $executed;
+    }
+}
+
+final class IRISChangeTrackedPDO extends PDO
+{
+    public function exec(string $statement): int|false
+    {
+        $result = parent::exec($statement);
+        if ($result !== false) IRISChangeTracker::record($statement);
+        return $result;
+    }
+
+    public function query(string $query, ?int $fetchMode = null, mixed ...$fetchModeArgs): PDOStatement|false
+    {
+        $statement = $fetchMode === null
+            ? parent::query($query)
+            : parent::query($query, $fetchMode, ...$fetchModeArgs);
+        if ($statement !== false) IRISChangeTracker::record($query);
+        return $statement;
+    }
+}
+
 function ensure_scanner_table_columns(PDO $pdo, string $table, array $columns): void {
     $existing = $pdo->query("SHOW COLUMNS FROM `$table`")->fetchAll(PDO::FETCH_COLUMN);
     foreach ($columns as $column => $definition) {
@@ -190,18 +250,6 @@ function ensure_scanner_tables(PDO $pdo): void {
             break;
         }
     }
-    $rankingIndexesForSeed = $pdo->query('SHOW INDEX FROM rankings')->fetchAll(PDO::FETCH_ASSOC);
-    $hasRankingSeedKey = false;
-    foreach ($rankingIndexesForSeed as $index) {
-        if (($index['Key_name'] ?? '') === 'uq_rankings_seed_key') {
-            $hasRankingSeedKey = true;
-            break;
-        }
-    }
-    if (!$hasRankingSeedKey) {
-        $pdo->exec('ALTER TABLE rankings ADD UNIQUE KEY uq_rankings_seed_key (ranking_body_id, scope_id, year, edition)');
-    }
-
     $rankingIndexes = $pdo->query('SHOW INDEX FROM rankings')->fetchAll(PDO::FETCH_ASSOC);
     $hasRankingScopeIndex = false;
     foreach ($rankingIndexes as $index) {
@@ -274,4 +322,22 @@ function ensure_scanner_tables(PDO $pdo): void {
     // Record approval and graph publication are separate workflows.
 }
 
-function db(): PDO { static $pdo; if($pdo instanceof PDO)return $pdo; $pdo=new PDO('mysql:host='.IRIS_DB_HOST.';port='.IRIS_DB_PORT.';dbname='.IRIS_DB_NAME.';charset=utf8mb4',IRIS_DB_USER,IRIS_DB_PASS,[PDO::ATTR_ERRMODE=>PDO::ERRMODE_EXCEPTION,PDO::ATTR_DEFAULT_FETCH_MODE=>PDO::FETCH_OBJ,PDO::ATTR_EMULATE_PREPARES=>false]); ensure_scanner_tables($pdo); return $pdo; }
+function db(): PDO {
+    static $pdo;
+    if ($pdo instanceof PDO) return $pdo;
+    $pdo = new IRISChangeTrackedPDO('mysql:host=' . IRIS_DB_HOST . ';port=' . IRIS_DB_PORT . ';dbname=' . IRIS_DB_NAME . ';charset=utf8mb4', IRIS_DB_USER, IRIS_DB_PASS, [
+        PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
+        PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_OBJ,
+        PDO::ATTR_EMULATE_PREPARES => false,
+        PDO::ATTR_STATEMENT_CLASS => [IRISChangeTrackedStatement::class, []]
+    ]);
+    IRISChangeTracker::suspend(true);
+    try {
+        ensure_scanner_tables($pdo);
+        $pdo->exec('CREATE TABLE IF NOT EXISTS app_change_state (id TINYINT UNSIGNED NOT NULL PRIMARY KEY, version BIGINT UNSIGNED NOT NULL DEFAULT 1, updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4');
+        $pdo->exec('INSERT IGNORE INTO app_change_state (id, version) VALUES (1, 1)');
+    } finally {
+        IRISChangeTracker::suspend(false);
+    }
+    return $pdo;
+}

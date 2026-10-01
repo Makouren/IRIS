@@ -405,7 +405,7 @@ try {
             $pdo->beginTransaction();
             try {
                 $categoryIds = resolve_summary_categories($pdo, $data);
-                $stmt = $pdo->prepare('INSERT INTO summary_cards (id, title, main_value, main_label, year_date, secondary_label, secondary_value, description, display_order, display_precision, is_published, category_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
+                $stmt = $pdo->prepare('INSERT INTO summary_cards (id, title, main_value, main_label, year_date, secondary_label, secondary_value, description, secondary_description, info_text, display_order, display_precision, is_published, category_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
                 $stmt->execute([
                     $id,
                     $title,
@@ -415,6 +415,8 @@ try {
                     (string)($data['secondary_label'] ?? ''),
                     (string)($data['secondary_value'] ?? ''),
                     (string)($data['description'] ?? ''),
+                    (string)($data['secondary_description'] ?? ''),
+                    (string)($data['info_text'] ?? ''),
                     isset($data['display_order']) ? (int)$data['display_order'] : 0,
                     $displayPrecision,
                     $published ? 1 : 0,
@@ -439,7 +441,7 @@ try {
             ensure_json_csrf();
             if ($id === null) bad('Summary card id is required');
             $data = json_input();
-            $allowed = ['title','main_value','main_label','year_date','secondary_label','secondary_value','description','display_order','display_precision','is_published'];
+            $allowed = ['title','main_value','main_label','year_date','secondary_label','secondary_value','description','secondary_description','info_text','display_order','display_precision','is_published'];
             $sets = [];
             $values = [];
             $hasCategoryUpdate = array_key_exists('category_ids', $data) || array_key_exists('category_names', $data) || array_key_exists('category_id', $data) || array_key_exists('category_name', $data);
@@ -538,7 +540,6 @@ try {
                 $officeMetadata = json_col($officeRow['metadata'] ?? null, []);
                 if (!is_array($oldMetadata)) $oldMetadata = [];
                 if (!is_array($officeMetadata)) $officeMetadata = [];
-                if (!empty($oldMetadata['merge']['trash_id'])) bad('Restore the previous file before staging another merge.', 409);
                 $graphQuery = $pdo->prepare('SELECT * FROM saved_graphs WHERE record_id=?');
                 $graphQuery->execute([$officeId]);
                 $oldStoredFile = (string)($oldMetadata['stored_file'] ?? '');

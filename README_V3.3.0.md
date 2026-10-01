@@ -1,5 +1,7 @@
 # IRIS V3.3.0 Change History
 
+This is the historical V3.3.0 record. Current release changes are documented in [README_V3.4.5.md](README_V3.4.5.md).
+
 ## Scope
 
 This document summarizes the IRIS phases beginning with account separation and office spreadsheet review, continuing through the ranked-chart correction, and including the latest chart, publication, and navigation work present on branch `V3.3.0`.

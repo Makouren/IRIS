@@ -1,4 +1,32 @@
 (() => {
+  const purposeSelect = document.getElementById('officeUploadPurpose');
+  const templateSelect = document.getElementById('officeTemplateSelect');
+  const templateControl = document.querySelector('[data-template-control]');
+  const templateHelp = document.querySelector('[data-template-filter-help]');
+  if (purposeSelect && templateSelect) {
+    const options = [...templateSelect.querySelectorAll('option[data-purpose]')];
+    const updateTemplateOptions = () => {
+      const purpose = purposeSelect.value;
+      const builtInSnapshot = purpose === 'summary_cards';
+      templateSelect.value = '';
+      options.forEach(option => { option.hidden = !purpose || option.dataset.purpose !== purpose; });
+      const available = options.some(option => option.dataset.purpose === purpose);
+      templateSelect.required = Boolean(purpose && !builtInSnapshot);
+      templateSelect.disabled = builtInSnapshot || !purpose || !available;
+      if (templateControl) templateControl.hidden = builtInSnapshot;
+      templateSelect.options[0].textContent = purpose
+        ? (available ? 'Choose a matching template' : 'No active templates for this purpose')
+        : 'Choose a purpose first';
+      if (templateHelp) templateHelp.textContent = builtInSnapshot
+        ? 'Uses the built-in Snapshot columns; no separate template is needed.'
+        : purpose
+        ? (available ? 'Only templates configured for this purpose are shown.' : 'Ask the Super Admin to activate a matching template.')
+        : 'Choose a purpose to see its upload requirements.';
+    };
+    purposeSelect.addEventListener('change', updateTemplateOptions);
+    updateTemplateOptions();
+  }
+
   const list = document.getElementById('activeTemplatesList');
   if (!list) return;
 

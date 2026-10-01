@@ -4,7 +4,7 @@ $pageTitle = 'Saved Dashboard Graphs - IRIS Admin';
 require_once __DIR__.'/includes/header.php';
 ?>
 
-<section id="adminSavedGraphsPanel" class="admin-tab-panel">
+<section id="adminSavedGraphsPanel" data-role="<?= e($_SESSION['role'] ?? '') ?>" class="admin-tab-panel">
     <div style="margin-bottom: 1.5rem; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem;">
         <div>
             <h2 style="font-size: 1.4rem; font-weight: 800; color: var(--clsu-green);">Saved Dashboard Graphs</h2>

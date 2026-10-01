@@ -64,6 +64,8 @@ require_once __DIR__.'/includes/header.php';
                         <div><label class="form-label" for="summaryCardEditorSecondaryLabel">Secondary Label</label><input type="text" id="summaryCardEditorSecondaryLabel" class="form-input"></div>
                         <div><label class="form-label" for="summaryCardEditorSecondaryValue">Secondary Value</label><input type="text" id="summaryCardEditorSecondaryValue" class="form-input"></div>
                         <div style="grid-column: 1 / -1;"><label class="form-label" for="summaryCardEditorDescription">Description</label><textarea id="summaryCardEditorDescription" class="form-input" rows="2"></textarea></div>
+                        <div style="grid-column: 1 / -1;"><label class="form-label" for="summaryCardEditorSecondaryDescription">Italic Supporting Text</label><textarea id="summaryCardEditorSecondaryDescription" class="form-input" rows="2"></textarea></div>
+                        <div style="grid-column: 1 / -1;"><label class="form-label" for="summaryCardEditorInfoText">ⓘ Information</label><textarea id="summaryCardEditorInfoText" class="form-input" rows="2"></textarea></div>
                         <div><label class="form-label" for="summaryCardEditorDisplayOrder">Display Order</label><input type="number" id="summaryCardEditorDisplayOrder" class="form-input" value="0" min="0"></div>
                         <div><label class="form-label" for="summaryCardEditorCategory">Categories</label><select id="summaryCardEditorCategory" class="form-input" multiple size="3" aria-describedby="summaryCardEditorCategoryHelp"></select><span id="summaryCardEditorCategoryHelp" class="text-xs" style="color:var(--text-muted);">Select one or more; leave empty for Uncategorized.</span><div style="display:flex; gap:0.5rem; margin-top:0.5rem;"><button type="button" id="summaryCardEditorAddCategory" class="btn-studio-action">+ New category</button><input type="text" id="summaryCardEditorNewCategory" class="form-input" maxlength="40" placeholder="Category name" style="display:none;"></div></div>
                         <div><label class="form-label" for="summaryCardEditorPrecision">Display Precision</label><select id="summaryCardEditorPrecision" class="form-input"><option value="0">No decimals</option><option value="1">1 decimal</option><option value="2" selected>2 decimals</option></select></div>
@@ -787,6 +789,8 @@ require_once __DIR__.'/includes/header.php';
                         document.getElementById('summaryCardEditorSecondaryLabel').value = card.secondary_label || '';
                         document.getElementById('summaryCardEditorSecondaryValue').value = card.secondary_value || '';
                         document.getElementById('summaryCardEditorDescription').value = card.description || '';
+                        document.getElementById('summaryCardEditorSecondaryDescription').value = card.secondary_description || '';
+                        document.getElementById('summaryCardEditorInfoText').value = card.info_text || '';
                         document.getElementById('summaryCardEditorDisplayOrder').value = card.display_order ?? 0;
                         const selectedIds = (card.category_ids || (card.category_id ? [card.category_id] : [])).map(String);
                         [...categorySelect.options].forEach(option => { option.selected = selectedIds.includes(option.value); });
@@ -853,6 +857,8 @@ require_once __DIR__.'/includes/header.php';
                     secondary_label: document.getElementById('summaryCardEditorSecondaryLabel').value.trim(),
                     secondary_value: document.getElementById('summaryCardEditorSecondaryValue').value.trim(),
                     description: document.getElementById('summaryCardEditorDescription').value.trim(),
+                    secondary_description: document.getElementById('summaryCardEditorSecondaryDescription').value.trim(),
+                    info_text: document.getElementById('summaryCardEditorInfoText').value.trim(),
                     display_order: Number(document.getElementById('summaryCardEditorDisplayOrder').value || 0),
                     display_precision: (() => {
                         const precisionValue = Number(document.getElementById('summaryCardEditorPrecision').value);

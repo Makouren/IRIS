@@ -24,6 +24,7 @@
         <?php require __DIR__ . '/template_manager_modal.php'; ?>
         <?php require __DIR__ . '/ranking_body_manager_modal.php'; ?>
         <?php require __DIR__ . '/ranking_review_modal.php'; ?>
+        <?php require __DIR__ . '/import_preview_modal.php'; ?>
     <?php endif; ?>
 
     <!-- Theme Toggle & Script Setup -->
@@ -105,6 +106,8 @@
         <script src="<?= e(base_url('admin/js/templateManager.js')) ?>?v=<?= (int) filemtime(__DIR__.'/../js/templateManager.js') ?>" defer></script>
         <script src="<?= e(base_url('admin/js/rankingBodyManager.js')) ?>?v=<?= (int) filemtime(__DIR__.'/../js/rankingBodyManager.js') ?>" defer></script>
         <script src="<?= e(base_url('admin/js/rankingReview.js')) ?>?v=<?= (int) filemtime(__DIR__.'/../js/rankingReview.js') ?>" defer></script>
+        <script type="module" src="<?= e(base_url('scanner/js/modules/import/importPreviewModal.js')) ?>?v=<?= (int) filemtime(__DIR__.'/../../scanner/js/modules/import/importPreviewModal.js') ?>"></script>
     <?php endif; ?>
+    <?php require __DIR__ . '/../../includes/change_refresh_script.php'; ?>
 </body>
 </html>

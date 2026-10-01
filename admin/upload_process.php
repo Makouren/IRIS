@@ -8,15 +8,41 @@ if ($currentRole === 'super_admin' && !ALLOW_SUPER_ADMIN_UPLOAD) {
 	requireRole(['super_admin', 'admin']);
 }
 verify_csrf();
-$templateId = filter_var($_POST['template_id'] ?? null, FILTER_VALIDATE_INT);
-if (!$templateId || $templateId < 1) {
-	flash_redirect('admin/office_upload.php', 'error', 'Choose a ranking body with an active linked template.');
+$uploadPurpose = trim((string)($_POST['upload_purpose'] ?? ''));
+if (!in_array($uploadPurpose, ['analytics', 'ranking_history', 'summary_cards'], true)) {
+	flash_redirect('admin/office_upload.php', 'error', 'Choose an upload purpose.');
+}
+$templateInput = trim((string)($_POST['template_id'] ?? ''));
+$templateId = null;
+if ($templateInput !== '') {
+	$parsedTemplateId = filter_var($templateInput, FILTER_VALIDATE_INT);
+	if (!$parsedTemplateId || $parsedTemplateId < 1) {
+		flash_redirect('admin/office_upload.php', 'error', 'Choose a valid active template.');
+	}
+	$templateId = (int)$parsedTemplateId;
+}
+if ($templateId === null && $uploadPurpose !== 'summary_cards') {
+	flash_redirect('admin/office_upload.php', 'error', 'Choose an active template for the selected upload purpose.');
 }
 $pdo = db();
-$templateQuery = $pdo->prepare('SELECT templates.id FROM templates INNER JOIN ranking_bodies bodies ON bodies.id = templates.ranking_body_id WHERE templates.id = ? AND templates.is_active = 1 LIMIT 1');
-$templateQuery->execute([$templateId]);
-if (!$templateQuery->fetchColumn()) {
-	flash_redirect('admin/office_upload.php', 'error', 'The selected ranking body template is no longer active. Choose another option.');
+$selectedTemplate = null;
+if ($templateId !== null) {
+	$templateQuery = $pdo->prepare('SELECT templates.id, templates.ranking_body_id, profiles.destination
+		FROM templates
+		LEFT JOIN template_import_profiles profiles ON profiles.template_id = templates.id
+		WHERE templates.id = ? AND templates.is_active = 1 LIMIT 1');
+	$templateQuery->execute([$templateId]);
+	$selectedTemplate = $templateQuery->fetch(PDO::FETCH_ASSOC);
+	if (!$selectedTemplate) {
+		flash_redirect('admin/office_upload.php', 'error', 'The selected template is no longer active. Choose another option.');
+	}
+	$templatePurpose = $selectedTemplate['destination'] ?: ($selectedTemplate['ranking_body_id'] ? 'ranking_history' : 'analytics');
+	if ($templatePurpose !== $uploadPurpose) {
+		flash_redirect('admin/office_upload.php', 'error', 'The selected template does not match the upload purpose. Choose a matching template.');
+	}
+}
+if ($uploadPurpose === 'ranking_history' && (!$selectedTemplate || empty($selectedTemplate['ranking_body_id']))) {
+	flash_redirect('admin/office_upload.php', 'error', 'The Ranking History upload needs an active template linked to a ranking body.');
 }
 
 $file = $_FILES['office_file'] ?? null;
@@ -107,7 +133,7 @@ try {
 	$originalName = basename((string)$file['name']);
 	$originalName = preg_replace('/[\x00-\x1F\x7F]/u', '', $originalName) ?: 'upload.' . $extension;
 	$recordId = 'rec_' . date('YmdHis') . '_' . bin2hex(random_bytes(6));
-	$metadata = json_encode(array_merge($parsed['metadata'], ['stored_file' => $storedName]), JSON_THROW_ON_ERROR);
+	$metadata = json_encode(array_merge($parsed['metadata'], ['stored_file' => $storedName, 'upload_purpose' => $uploadPurpose]), JSON_THROW_ON_ERROR);
 	$insert = $pdo->prepare("INSERT INTO records
 		(id, fileName, fileType, fileSize, scannedAt, status, uploaded_by, office_name, uploaded_at,
 		 template_id, docType, rawText, extractedData, graphDrafts, adminNotes, metadata, updatedAt)
@@ -119,7 +145,7 @@ try {
 		(int)$file['size'],
 		(int)$_SESSION['user_id'],
 		$officeName,
-		(int)$templateId,
+		$templateId,
 		'Office Upload',
 		(string)$parsed['rawText'],
 		json_encode($parsed['sheetsData'], JSON_THROW_ON_ERROR),

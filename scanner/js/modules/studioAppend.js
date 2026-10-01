@@ -373,10 +373,6 @@ export function initStudioAppend(ctx) {
       alert('Save or discard current edits first');
       return;
     }
-    if (record.metadata?.merge?.trash_id) {
-      alert('Restore the previous file before starting another merge.');
-      return;
-    }
     if (record.template_id === null || record.template_id === undefined || record.template_id === '') {
       alert('This record has no linked template. Assign a template in Diff & approve before merging an office upload.');
       return;

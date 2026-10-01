@@ -1,5 +1,7 @@
 # Database and Persistence
 
+V3.4.5 adds template import audit tables and a shared `app_change_state` version. The authenticated `api/change_signal.php` endpoint lets active pages detect successful writes; Super Admin pages synchronize promptly and other roles poll every five seconds.
+
 [`dbManager.js`](dbManager.js) is the Scanner's browser-side persistence adapter. It communicates with the PHP/PDO API in `api/iris.php`; there is no Express server.
 
 ## Storage

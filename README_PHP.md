@@ -17,6 +17,16 @@ The Scanner uses browser-side JavaScript for spreadsheet ingestion and charting.
 - `api/iris.php` handles authenticated record and saved-graph operations.
 - `api/dashboard_graphs.php` supplies only explicitly published (`saved_graphs.is_published = 1`) graphs to the public Observatory and sends no-cache headers.
 - `config/db.php` centralizes PDO setup and scanner table creation/compatibility migration.
+- `api/templates.php` and `api/imports/` provide Super Admin template-driven import profiles, previews, guarded applies, audit batches, and recovery.
+- `api/change_signal.php` exposes the authenticated shared write version used by active-page refresh polling.
+
+## Template-Driven Imports
+
+Office uploads are parsed server-side as CSV, TSV, or XLSX by the existing native reader. A Super Admin maps headers and defaults in an import profile, reviews the generated diff, acknowledges it, and approves. Summary cards use `import_key` as the Global Label; changed periods are archived and one chosen row per label updates the live card. Ranking rows use their complete identity and block ambiguous matches. Row versions reject stale previews, and import audit rows support recovery. No Composer dependency is required by the current reader.
+
+Apply `20261002_template_driven_imports.sql`, `20261002_allow_builtin_snapshot_imports.sql`, and `20261002_create_app_change_state.sql` after the earlier schema migrations. `config/db.php` also ensures the app change-state table exists on connection.
+
+The shared refresh client watches successful data changes on open pages. Super Admin tabs synchronize promptly; other roles poll every five seconds. A page with unsaved form or Studio edits defers the reload and displays a refresh prompt.
 
 ## Publish and Unpublish
 
