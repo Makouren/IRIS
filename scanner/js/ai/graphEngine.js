@@ -182,13 +182,6 @@ class GraphEngine {
       }];
       return option;
     }
-    if (type === 'polarArea') {
-      option.polar = {};
-      option.angleAxis = { type: 'category', data: labels, startAngle: 90 };
-      option.radiusAxis = { type: 'value' };
-      option.series = [{ name: seriesName, type: 'bar', coordinateSystem: 'polar', data: values, itemStyle: { color: palette.border } }];
-      return option;
-    }
     option.xAxis = { type: 'category', data: labels, axisLabel: { interval: 0 } };
     option.yAxis = { type: 'value', name: seriesName };
     option.series = [{

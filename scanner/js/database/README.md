@@ -1,5 +1,7 @@
 # Database and Persistence
 
+V3.4.5 adds template import audit tables and a shared `app_change_state` version. The authenticated `api/change_signal.php` endpoint lets active pages detect successful writes; Super Admin pages synchronize promptly and other roles poll every five seconds.
+
 [`dbManager.js`](dbManager.js) is the Scanner's browser-side persistence adapter. It communicates with the PHP/PDO API in `api/iris.php`; there is no Express server.
 
 ## Storage
@@ -13,7 +15,7 @@
 
 ## Saved Graph Data
 
-Saved graphs store chart type, labels, original values, rank metadata, axis metadata, publication state, and creation time. Studio and saved graphs support Bar, Line, Pie, Doughnut, Polar Area, and Ranked Bar. Publication is explicit and is not inferred from record status.
+Saved graphs store chart type, labels, real values, chart configuration, rank and axis metadata, colors, publication state, and creation time. Supported types are Bar, Line, Pie, Doughnut, Ranked Bar, and Nested Pie. Publication is explicit and is not inferred from record status.
 
 ## PHP API Routes
 

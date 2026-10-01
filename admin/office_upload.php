@@ -4,11 +4,29 @@ requireRole(['admin']);
 $accountQuery = db()->prepare('SELECT office_name FROM users WHERE id = ?');
 $accountQuery->execute([(int)$_SESSION['user_id']]);
 $officeName = (string)($accountQuery->fetchColumn() ?: '');
-$uploadsQuery = db()->prepare('SELECT fileName, fileType, fileSize, scannedAt, uploaded_at, status, adminNotes
-    FROM records WHERE uploaded_by = ? ORDER BY uploaded_at DESC, scannedAt DESC');
+$uploadsQuery = db()->prepare('SELECT records.fileName, records.fileType, records.fileSize, records.scannedAt, records.uploaded_at, records.status, records.adminNotes, records.metadata,
+    COALESCE(profiles.destination, IF(templates.ranking_body_id IS NOT NULL, "ranking_history", "analytics")) AS profile_purpose
+    FROM records
+    LEFT JOIN templates ON templates.id = records.template_id
+    LEFT JOIN template_import_profiles profiles ON profiles.template_id = records.template_id
+        WHERE records.uploaded_by = ? ORDER BY records.uploaded_at DESC, records.scannedAt DESC');
 $uploadsQuery->execute([(int)$_SESSION['user_id']]);
 $uploads = $uploadsQuery->fetchAll(PDO::FETCH_ASSOC);
-$templateQuery = db()->prepare('SELECT id, name, original_filename FROM templates WHERE is_active = 1 ORDER BY name ASC, id DESC');
+foreach ($uploads as &$upload) {
+    $metadata = json_decode((string)($upload['metadata'] ?? ''), true);
+    $upload['upload_purpose'] = is_array($metadata) && !empty($metadata['upload_purpose'])
+        ? $metadata['upload_purpose']
+        : $upload['profile_purpose'];
+}
+unset($upload);
+$templateQuery = db()->prepare('SELECT templates.id, templates.name, templates.original_filename,
+    COALESCE(profiles.destination, IF(templates.ranking_body_id IS NOT NULL, "ranking_history", "analytics")) AS upload_purpose,
+        bodies.name AS ranking_body_name, bodies.short_name
+    FROM templates
+    LEFT JOIN template_import_profiles profiles ON profiles.template_id = templates.id
+        LEFT JOIN ranking_bodies bodies ON bodies.id = templates.ranking_body_id
+    WHERE templates.is_active = 1
+    ORDER BY templates.name ASC, templates.id DESC');
 $templateQuery->execute();
 $templates = $templateQuery->fetchAll(PDO::FETCH_ASSOC);
 $success = flash('success');
@@ -45,6 +63,25 @@ $error = flash('error');
             <?php if ($error): ?><div class="mb-4 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-900 dark:border-red-900 dark:bg-red-950 dark:text-red-200" role="alert"><?= e($error) ?></div><?php endif; ?>
             <form method="POST" action="<?= e(base_url('admin/upload_process.php')) ?>" enctype="multipart/form-data" class="space-y-4">
                 <?= csrf_field() ?>
+                <label for="officeUploadPurpose" class="block text-sm font-semibold">Upload purpose</label>
+                <select id="officeUploadPurpose" name="upload_purpose" required class="block w-full rounded-lg border border-gray-300 bg-gray-50 px-3 py-3 text-sm dark:border-slate-700 dark:bg-slate-800">
+                    <option value="">Choose a destination</option>
+                    <option value="summary_cards">Latest Performance Snapshot</option>
+                    <option value="ranking_history">Ranking History</option>
+                    <option value="analytics">Analytics / general dataset</option>
+                </select>
+                <div data-template-control>
+                    <label for="officeTemplateSelect" class="block text-sm font-semibold">Template</label>
+                    <select id="officeTemplateSelect" name="template_id" required disabled class="block w-full rounded-lg border border-gray-300 bg-gray-50 px-3 py-3 text-sm disabled:opacity-50 dark:border-slate-700 dark:bg-slate-800">
+                        <option value="">Choose a purpose first</option>
+                        <?php foreach ($templates as $template): ?>
+                            <option value="<?= (int)$template['id'] ?>" data-purpose="<?= e($template['upload_purpose']) ?>">
+                                <?= e($template['name'] . ' — ' . $template['original_filename'] . ($template['ranking_body_name'] ? ' · ' . $template['ranking_body_name'] : '')) ?>
+                            </option>
+                        <?php endforeach; ?>
+                    </select>
+                </div>
+                <p data-template-filter-help class="text-xs text-gray-500 dark:text-slate-400">Choose a purpose to see its upload requirements.</p>
                 <label for="officeFile" class="block text-sm font-semibold">Select document</label>
                     <input id="officeFile" name="office_file" type="file" required accept=".xlsx,.csv,.tsv" class="block w-full cursor-pointer rounded-lg border border-gray-300 bg-gray-50 text-sm file:mr-4 file:border-0 file:bg-emerald-700 file:px-4 file:py-3 file:font-semibold file:text-white dark:border-slate-700 dark:bg-slate-800">
                     <p class="text-xs text-gray-500 dark:text-slate-400">XLSX, CSV, or TSV. Maximum 10 MB. Other file types cannot be read automatically yet.</p>
@@ -54,9 +91,9 @@ $error = flash('error');
         <section>
             <div class="mb-4 flex items-end justify-between gap-3"><div><h2 class="text-lg font-bold">Your uploads</h2><p class="text-sm text-gray-500 dark:text-slate-400">Only files submitted by this office are shown.</p></div><span class="rounded-full bg-gray-200 px-2.5 py-1 text-xs font-bold dark:bg-slate-800"><?= count($uploads) ?> total</span></div>
             <div class="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900">
-                <div class="overflow-x-auto"><table class="w-full text-left text-sm"><thead class="bg-gray-100 text-xs uppercase text-gray-600 dark:bg-slate-800 dark:text-slate-300"><tr><th class="px-4 py-3">File</th><th class="px-4 py-3">Date</th><th class="px-4 py-3">Status</th><th class="px-4 py-3">Verification notes</th></tr></thead><tbody class="divide-y divide-gray-200 dark:divide-slate-800">
-                <?php foreach ($uploads as $upload): ?><tr><td class="max-w-56 px-4 py-3 font-semibold"><span class="block truncate" title="<?= e($upload['fileName']) ?>"><?= e($upload['fileName']) ?></span><span class="text-xs font-normal text-gray-500 dark:text-slate-400"><?= e(strtoupper((string)$upload['fileType'])) ?> · <?= number_format((int)$upload['fileSize'] / 1048576, 2) ?> MB</span></td><td class="whitespace-nowrap px-4 py-3 text-gray-600 dark:text-slate-300"><?= e($upload['uploaded_at'] ?: $upload['scannedAt']) ?></td><td class="whitespace-nowrap px-4 py-3"><span class="rounded-full bg-amber-100 px-2 py-1 text-xs font-bold text-amber-900 dark:bg-amber-900/40 dark:text-amber-200"><?= e($upload['status'] ?: 'Pending Review') ?></span></td><td class="min-w-48 px-4 py-3 text-gray-600 dark:text-slate-300"><?= e($upload['adminNotes'] ?: 'No notes yet.') ?></td></tr><?php endforeach; ?>
-                <?php if (!$uploads): ?><tr><td colspan="4" class="px-4 py-10 text-center text-gray-500 dark:text-slate-400">No uploads yet.</td></tr><?php endif; ?>
+                <div class="overflow-x-auto"><table class="w-full text-left text-sm"><thead class="bg-gray-100 text-xs uppercase text-gray-600 dark:bg-slate-800 dark:text-slate-300"><tr><th class="px-4 py-3">File</th><th class="px-4 py-3">Purpose</th><th class="px-4 py-3">Date</th><th class="px-4 py-3">Status</th><th class="px-4 py-3">Verification notes</th></tr></thead><tbody class="divide-y divide-gray-200 dark:divide-slate-800">
+                <?php foreach ($uploads as $upload): ?><tr><td class="max-w-56 px-4 py-3 font-semibold"><span class="block truncate" title="<?= e($upload['fileName']) ?>"><?= e($upload['fileName']) ?></span><span class="text-xs font-normal text-gray-500 dark:text-slate-400"><?= e(strtoupper((string)$upload['fileType'])) ?> · <?= number_format((int)$upload['fileSize'] / 1048576, 2) ?> MB</span></td><td class="whitespace-nowrap px-4 py-3"><?= e(match ($upload['upload_purpose']) { 'summary_cards' => 'Latest Snapshot', 'ranking_history' => 'Ranking History', default => 'Analytics' }) ?></td><td class="whitespace-nowrap px-4 py-3 text-gray-600 dark:text-slate-300"><?= e($upload['uploaded_at'] ?: $upload['scannedAt']) ?></td><td class="whitespace-nowrap px-4 py-3"><span class="rounded-full bg-amber-100 px-2 py-1 text-xs font-bold text-amber-900 dark:bg-amber-900/40 dark:text-amber-200"><?= e($upload['status'] ?: 'Pending Review') ?></span></td><td class="min-w-48 px-4 py-3 text-gray-600 dark:text-slate-300"><?= e($upload['adminNotes'] ?: 'No notes yet.') ?></td></tr><?php endforeach; ?>
+                <?php if (!$uploads): ?><tr><td colspan="5" class="px-4 py-10 text-center text-gray-500 dark:text-slate-400">No uploads yet.</td></tr><?php endif; ?>
                 </tbody></table></div>
             </div>
         </section>
@@ -74,5 +111,6 @@ $error = flash('error');
         </section>
     </main>
     <script src="<?= e(base_url('admin/js/officeTemplates.js')) ?>?v=<?= (int) filemtime(__DIR__ . '/js/officeTemplates.js') ?>" defer></script>
+    <?php require __DIR__ . '/../includes/change_refresh_script.php'; ?>
 </body>
 </html>

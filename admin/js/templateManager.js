@@ -11,6 +11,9 @@
   const rankingBodySelect = document.getElementById('templateRankingBodySelect');
   let templates = [];
   let rankingBodies = [];
+  let summaryCards = [];
+  let rankingScopes = [];
+  let rankingLevels = [];
 
   function showNotice(message, isError = false) {
     notice.textContent = message;
@@ -70,7 +73,43 @@
       actions.append(button('Save link', 'set-ranking-body', template.id));
       actions.append(button(Number(template.is_active) ? 'Deactivate' : 'Reactivate', Number(template.is_active) ? 'deactivate' : 'activate', template.id));
       actions.append(button('Delete', 'delete', template.id, true));
-      row.append(title, detail, actions);
+      const profileSection = document.createElement('details');
+      profileSection.className = 'mt-3 border-t border-gray-200 pt-3 dark:border-slate-700';
+      const profileTitle = document.createElement('summary');
+      profileTitle.className = 'cursor-pointer text-sm font-bold';
+      profileTitle.textContent = template.import_destination ? `Import profile: ${template.import_destination.replace('_', ' ')}` : 'Configure import profile';
+      const profileDestination = document.createElement('select');
+      profileDestination.className = 'mt-2 w-full rounded-md border border-gray-300 bg-white px-2 py-1.5 text-xs dark:border-slate-700 dark:bg-slate-800';
+      profileDestination.dataset.profileDestination = String(template.id);
+      profileDestination.add(new Option('Choose destination', ''));
+      profileDestination.add(new Option('Ranking History', 'ranking_history'));
+      profileDestination.add(new Option('Summary Cards', 'summary_cards'));
+      profileDestination.value = template.import_destination || '';
+      const profileEditor = document.createElement('textarea');
+      profileEditor.className = 'mt-2 block w-full rounded-md border border-gray-300 bg-gray-50 p-2 font-mono text-xs dark:border-slate-700 dark:bg-slate-800';
+      profileEditor.rows = 8;
+      profileEditor.dataset.profileJson = String(template.id);
+      profileEditor.title = 'Map destination fields to exact worksheet headers using mapping_rules. Header aliases are used for matching. Defaults fill unmapped fields.';
+      const profile = template.import_destination ? {
+        sheet_selector: template.sheet_selector,
+        header_aliases: template.header_aliases,
+        required_columns: template.required_columns,
+        mapping_rules: template.mapping_rules,
+        defaults: template.defaults_json
+      } : {};
+      profileEditor.value = JSON.stringify(profile, null, 2);
+      profileEditor.placeholder = template.import_destination === 'ranking_history'
+        ? '{\n  "sheet_selector": "Rankings",\n  "header_aliases": {"year": ["Year"], "global_rank": ["Rank", "Overall Rank"]},\n  "required_columns": ["year", "global_rank"],\n  "mapping_rules": {"year": "Year", "global_rank": "Rank"},\n  "defaults": {"ranking_type": "QS Asia", "scope_id": 1, "level_id": 2, "edition": "Annual", "category": "Overall"}\n}'
+        : '{\n  "sheet_selector": null,\n  "header_aliases": {"import_key": ["Card Key"], "period_key": ["Period"], "main_value": ["Rank"], "secondary_description": ["Italic Description"], "info_text": ["Info"]},\n  "required_columns": ["import_key", "period_key", "main_value"],\n  "mapping_rules": {"import_key": "Card Key", "period_key": "Period", "main_value": "Rank", "year_date": "Year", "secondary_description": "Italic Description", "info_text": "Info"},\n  "defaults": {}\n}';
+      const keyGuide = document.createElement('p');
+      keyGuide.className = 'mt-1 text-xs text-gray-500 dark:text-slate-400';
+      keyGuide.textContent = template.import_destination === 'summary_cards'
+        ? `Card keys: ${summaryCards.map(card => `${card.import_key || card.id} = ${card.title}`).join(' · ') || 'No cards found'}`
+        : `Map destination fields to exact headers. Scope IDs: ${rankingScopes.map(scope => `${scope.id}=${scope.name}`).join(', ')}. Level IDs: ${rankingLevels.map(level => `${level.id}=${level.name}`).join(', ')}.`;
+      const profileSave = button('Save import profile', 'save-import-profile', template.id);
+      profileSave.classList.add('mt-2');
+      profileSection.append(profileTitle, profileDestination, profileEditor, keyGuide, profileSave);
+      row.append(title, detail, actions, profileSection);
       list.append(row);
     }
   }
@@ -92,11 +131,30 @@
     for (const body of rankingBodies) rankingBodySelect.add(new Option(`${body.name} (${body.short_name})`, String(body.id)));
   }
 
+  async function loadSummaryCards() {
+    const endpoint = api.replace(/templates\.php(?:\?.*)?$/, 'iris.php?resource=summary_cards');
+    const response = await fetch(endpoint, { headers: { Accept: 'application/json' }, cache: 'no-store' });
+    const result = await response.json();
+    if (!response.ok) throw new Error(result.error || 'Unable to load summary-card keys.');
+    summaryCards = result;
+  }
+
+  async function loadRankingTaxonomies() {
+    const endpoint = api.replace(/templates\.php(?:\?.*)?$/, 'admin_rankings.php');
+    const [scopeResponse, levelResponse] = await Promise.all([
+      fetch(`${endpoint}?resource=scopes`, { headers: { Accept: 'application/json' }, cache: 'no-store' }),
+      fetch(`${endpoint}?resource=levels`, { headers: { Accept: 'application/json' }, cache: 'no-store' })
+    ]);
+    if (!scopeResponse.ok || !levelResponse.ok) throw new Error('Unable to load ranking scope and level keys.');
+    rankingScopes = await scopeResponse.json();
+    rankingLevels = await levelResponse.json();
+  }
+
   function openModal() {
     modal.classList.remove('hidden');
     modal.classList.add('flex');
     modal.setAttribute('aria-hidden', 'false');
-    Promise.all([loadTemplates(), loadRankingBodies()]).then(renderTemplates).catch(error => showNotice(error.message, true));
+    Promise.all([loadTemplates(), loadRankingBodies(), loadSummaryCards(), loadRankingTaxonomies()]).then(renderTemplates).catch(error => showNotice(error.message, true));
   }
 
   function closeModal() {
@@ -142,12 +200,25 @@
     if (target.dataset.action === 'set-ranking-body') {
       data.set('ranking_body_id', list.querySelector(`[data-body-select="${CSS.escape(target.dataset.id)}"]`)?.value || '');
     }
+    if (target.dataset.action === 'save-import-profile') {
+      const destination = list.querySelector(`[data-profile-destination="${CSS.escape(target.dataset.id)}"]`)?.value || '';
+      const editor = list.querySelector(`[data-profile-json="${CSS.escape(target.dataset.id)}"]`);
+      data.set('destination', destination);
+      try {
+        const profile = JSON.parse(editor?.value || '{}');
+        if (!profile || typeof profile !== 'object' || Array.isArray(profile)) throw new Error('Profile must be a JSON object.');
+        data.set('profile', JSON.stringify(profile));
+      } catch (error) {
+        showNotice(`Invalid import profile JSON: ${error.message}`, true);
+        return;
+      }
+    }
     target.disabled = true;
     try {
       const response = await fetch(api, { method: 'POST', headers: { 'X-CSRF-Token': token, Accept: 'application/json' }, body: data });
       const result = await response.json();
       if (!response.ok) throw new Error(result.error || 'Unable to update template.');
-      showNotice(target.dataset.action === 'delete' ? 'Template deleted.' : target.dataset.action === 'set-ranking-body' ? 'Ranking body link saved.' : `Template ${target.dataset.action === 'activate' ? 'reactivated' : 'deactivated'}.`);
+      showNotice(target.dataset.action === 'delete' ? 'Template deleted.' : target.dataset.action === 'set-ranking-body' ? 'Ranking body link saved.' : target.dataset.action === 'save-import-profile' ? 'Import profile saved.' : `Template ${target.dataset.action === 'activate' ? 'reactivated' : 'deactivated'}.`);
       await loadTemplates();
     } catch (error) {
       showNotice(error.message, true);

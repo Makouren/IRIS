@@ -1,0 +1,29 @@
+<?php
+declare(strict_types=1);
+
+final class SheetValidationHelper
+{
+    public static function assertFile(string $path, string $extension): void
+    {
+        if (!in_array(strtolower($extension), ['xlsx', 'csv', 'tsv'], true)) {
+            throw new RuntimeException('Server-side imports support CSV, TSV, and XLSX files.');
+        }
+        if (!is_file($path) || !is_readable($path)) throw new RuntimeException('The uploaded spreadsheet file is unavailable.');
+        $size = filesize($path);
+        if ($size === false || $size < 1 || $size > 100 * 1024 * 1024) {
+            throw new RuntimeException('The uploaded file is empty or exceeds the 100 MB import limit.');
+        }
+    }
+
+    public static function assertHeaders(array $headers, callable $normalize): void
+    {
+        if (!$headers) throw new RuntimeException('The selected worksheet has no header row.');
+        $seen = [];
+        foreach ($headers as $header) {
+            $key = $normalize($header);
+            if ($key === '') throw new RuntimeException('The selected worksheet contains a blank column header.');
+            if (isset($seen[$key])) throw new RuntimeException('The selected worksheet contains duplicate column headers.');
+            $seen[$key] = true;
+        }
+    }
+}

@@ -4,6 +4,8 @@ export function createState() {
     activeScan: null,
     chartInstances: {},
     studioActiveRecord: null,
+    studioActiveGraphId: null,
+    studioActiveGraphPublished: false,
     studioChartInstance: null,
     studioFilterPreviousQuery: '',
     studioFilterPreviousResults: null,

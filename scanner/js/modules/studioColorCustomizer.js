@@ -31,6 +31,7 @@ export function initStudioColorCustomizer(ctx) {
   const saveFieldButton = document.getElementById('studioColorSaveField');
   let currentColors = [];
   let currentFields = [];
+  let currentFieldKeys = [];
   let currentType = 'bar';
   let selectedIndex = 0;
   let editingManagedField = null;
@@ -40,7 +41,7 @@ export function initStudioColorCustomizer(ctx) {
     globalThis.IRISFieldColors = Object.assign(Object.create(null), persistedFieldColors);
   };
 
-  const isPie = () => currentType === 'pie' || currentType === 'doughnut';
+  const isPie = () => ['pie', 'doughnut', 'nestedPie'].includes(currentType);
   const legacyColors = () => isPie()
     ? ['#009639', '#1E6031', '#E0A70D', '#3B82F6', '#8B5CF6', '#F59E0B', '#10B981', '#EF4444', '#38BDF8', '#F97316']
     : ['#009639'];
@@ -56,6 +57,11 @@ export function initStudioColorCustomizer(ctx) {
   };
 
   const applyColors = () => {
+    if (currentType === 'nestedPie') {
+      ctx.api.updateStudioChart();
+      window.IRIS_STUDIO_DIRTY = true;
+      return;
+    }
     const perCategory = isPie() || currentType === 'bar' || currentType === 'rankedBar';
     const chart = ctx.state.studioChartInstance;
     const currentSeries = chart?.getOption?.()?.series || [];
@@ -111,7 +117,7 @@ export function initStudioColorCustomizer(ctx) {
     const normalized = color.toUpperCase();
     if (editingManagedField) {
       editingManagedField.color = normalized;
-      const currentIndex = currentFields.findIndex(field => normalizeFieldKey(field) === editingManagedField.field_key);
+      const currentIndex = currentFieldKeys.findIndex(field => normalizeFieldKey(field) === editingManagedField.field_key);
       if (currentIndex >= 0) {
         currentColors[currentIndex] = normalized;
         renderSwatches();
@@ -124,10 +130,10 @@ export function initStudioColorCustomizer(ctx) {
     if (index < 0 || index >= currentColors.length) return;
     currentColors[index] = normalized;
     ctx.state.studioChartColors = [...currentColors];
-    const fieldKey = normalizeFieldKey(currentFields[index]);
+    const fieldKey = normalizeFieldKey(currentFieldKeys[index] || currentFields[index]);
     if (applyAllToggle.checked) {
       deletedFields.delete(fieldKey);
-      changedFields.set(fieldKey, { label: currentFields[index], color: normalized });
+      changedFields.set(fieldKey, { label: currentFieldKeys[index] || currentFields[index], color: normalized });
       globalThis.IRISFieldColors = Object.assign(Object.create(null), globalThis.IRISFieldColors || {}, { [fieldKey]: normalized });
       ctx.state.studioChartOverrides = null;
     } else {
@@ -152,10 +158,11 @@ export function initStudioColorCustomizer(ctx) {
     });
   };
 
-  ctx.api.renderStudioColorCustomizer = ({ chartType, labels, colors, overrides }) => {
+  ctx.api.renderStudioColorCustomizer = ({ chartType, labels, colorKeys = labels, colors, overrides }) => {
     currentType = chartType;
     currentFields = labels.map((label, index) => String(label || `Field ${index + 1}`));
-    currentColors = resolveFieldColors(currentFields, {
+    currentFieldKeys = colorKeys.map((key, index) => String(key || currentFields[index]));
+    currentColors = resolveFieldColors(currentFieldKeys, {
       chartColors: overrides,
       fieldColors: globalThis.IRISFieldColors || {},
       legacyColors: legacyColors(),
@@ -279,9 +286,10 @@ export function initStudioColorCustomizer(ctx) {
       deletedFields.clear();
       ctx.state.studioChartOverrides = null;
       currentFields.forEach((label, index) => {
-        const fieldKey = normalizeFieldKey(label);
+        const fieldLabel = currentFieldKeys[index] || label;
+        const fieldKey = normalizeFieldKey(fieldLabel);
         deletedFields.delete(fieldKey);
-        changedFields.set(fieldKey, { label, color: currentColors[index] });
+        changedFields.set(fieldKey, { label: fieldLabel, color: currentColors[index] });
         globalThis.IRISFieldColors = Object.assign(Object.create(null), globalThis.IRISFieldColors || {}, { [fieldKey]: currentColors[index] });
       });
     } else {

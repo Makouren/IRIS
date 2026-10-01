@@ -243,6 +243,7 @@ CREATE TABLE IF NOT EXISTS saved_graphs (
     rank_value_max DECIMAL(20,8) NULL,
     labels JSON,
     values_data JSON,
+    chart_data JSON NULL,
     colors JSON NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (record_id) REFERENCES records(id) ON DELETE CASCADE

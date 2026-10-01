@@ -1,6 +1,6 @@
 import { $, escapeHtml, parseEditableValue } from '../utils/helpers.js';
-import { renderStudioChart } from './chartEngine.js?v=data-preserving-colors-20260930';
-import { initStudioColorCustomizer } from './studioColorCustomizer.js';
+import { renderStudioChart } from './chartEngine.js?v=remove-rose-20261001';
+import { initStudioColorCustomizer } from './studioColorCustomizer.js?v=remove-rose-20261001';
 
 export function initStudioWorkbench(ctx) {
   initStudioColorCustomizer(ctx);
@@ -37,15 +37,25 @@ export function initStudioWorkbench(ctx) {
   ctx.api.updateFieldSelectOptions = sheet => {
     if (!sheet?.headers) return;
     const inferred = window.ChartMapping.inferColumns(sheet.headers, sheet.rows || []);
-    const circular = ['pie', 'doughnut', 'polarArea'].includes($('studioChartTypeSelect')?.value || 'bar');
-    const ranked = $('studioChartTypeSelect')?.value === 'rankedBar';
+    const chartType = $('studioChartTypeSelect')?.value || 'bar';
+    const circular = ['pie', 'doughnut', 'nestedPie'].includes(chartType);
+    const ranked = chartType === 'rankedBar';
+    const groupWrap = $('studioGroupFieldWrapper');
+    const groupSelect = $('studioGroupField');
     const yearWrap = $('studioRankedYearWrapper');
     const reverseWrap = $('studioRankedReverseOrderWrapper');
     if (yearWrap) yearWrap.style.display = ranked ? 'flex' : 'none';
     if (reverseWrap) reverseWrap.style.display = ranked ? 'flex' : 'none';
+    if (groupWrap) groupWrap.style.display = chartType === 'nestedPie' ? 'flex' : 'none';
     const category = $('studioCategoryCol'); const value = $('studioValueCol'); const previousCategory = category?.value; const previousValue = value?.value;
     if (category) { category.disabled = false; category.innerHTML = sheet.headers.map((header, index) => `<option value="${index}">${escapeHtml(header || `Column ${index + 1}`)}</option>`).join(''); category.value = previousCategory !== '' && sheet.headers[Number(previousCategory)] ? previousCategory : String(inferred.labelColumn); }
     if (value) { value.disabled = false; value.innerHTML = sheet.headers.map((header, index) => `<option value="${index}">${escapeHtml(header || `Column ${index + 1}`)}${inferred.columnTypes?.[index] === 'numeric' ? ' <i class="fa-solid fa-check" aria-hidden="true"></i>' : inferred.columnTypes?.[index] === 'text' ? ' (text)' : ''}</option>`).join(''); value.value = previousValue !== '' && sheet.headers[Number(previousValue)] ? previousValue : String(inferred.valueColumn); }
+    if (groupSelect) {
+      const previousGroup = ctx.state.studioChartConfig?.groupField ?? groupSelect.value;
+      groupSelect.innerHTML = `<option value="">Choose group field</option>${sheet.headers.map((header, index) => `<option value="${index}">${escapeHtml(header || `Column ${index + 1}`)}</option>`).join('')}`;
+      if (previousGroup !== '' && sheet.headers[Number(previousGroup)] !== undefined) groupSelect.value = String(previousGroup);
+      else groupSelect.value = '';
+    }
     if ($('studioCategoryLabel')) $('studioCategoryLabel').textContent = circular ? 'Labels:' : 'Category (X-axis):';
     if ($('studioValueLabel')) $('studioValueLabel').textContent = circular ? 'Value (single):' : 'Value (Y-axis):';
     const filter = $('studioFilterField'); const previousFilter = filter?.value;
@@ -65,6 +75,7 @@ export function initStudioWorkbench(ctx) {
       subtitle: $('studioChartSubtitleDisplay'),
       categorySelect: $('studioCategoryCol'),
       valueSelect: $('studioValueCol'),
+      groupFieldSelect: $('studioGroupField'),
       valuePrecision: $('studioValuePrecisionSelect'),
       rankedYearSelect: $('studioRankedYearSelect'),
       rankedReverseOrder: $('studioRankedReverseOrder'),
@@ -83,31 +94,99 @@ export function initStudioWorkbench(ctx) {
     const info = ctx.api.getStudioActiveSheet(record); const sheet = info?.data;
     document.querySelectorAll('.studio-cell-input').forEach(input => { const row = Number(input.dataset.row); const column = Number(input.dataset.col); if (sheet?.rows?.[row]) sheet.rows[row][column] = parseEditableValue(input.value); });
     let savedChart = null; const chart = ctx.state.studioChartInstance;
-    if (chart) { const options = chart.getOption(); const current = window.ChartData.serializeChartState(options, ctx.state.studioChartConfig || {}); const selectedType = $('studioChartTypeSelect')?.value || 'bar'; const sheet = ctx.api.getStudioActiveSheet(record)?.data; const yearColumn = selectedType === 'rankedBar' ? window.ChartMapping.detectYearColumn(sheet?.headers || [], sheet?.rows || []) : null; const categoryField = Number($('studioCategoryCol')?.value ?? -1); const valueField = Number($('studioValueCol')?.value ?? -1); savedChart = { record_id: record.id, title: $('studioChartTitleInput')?.value || 'Observatory Draft', chart_type: selectedType, colors: $('studioColorApplyAll')?.checked ? null : ctx.state.studioChartOverrides, orientation: ctx.state.studioChartConfig?.orientation || 'vertical', rankSemantic: ctx.state.studioChartConfig?.rankSemantic === true, rankValueMin: ctx.state.studioChartConfig?.rankValueMin, rankValueMax: ctx.state.studioChartConfig?.rankValueMax, valueAxisMin: ctx.state.studioChartConfig?.valueAxisMin, valueAxisMax: ctx.state.studioChartConfig?.valueAxisMax, labels: current.labels, values_data: current.values, chart_data: { ...options, rankedBar: { selectedYear: ctx.state.studioChartConfig?.selectedYear ?? ctx.state.studioChartConfig?.rankedYear ?? null, yearColumn, reverseOrder: Boolean(ctx.state.studioChartConfig?.reverseOrder), categoryField: Number.isInteger(categoryField) && categoryField >= 0 ? categoryField : null, valueField: Number.isInteger(valueField) && valueField >= 0 ? valueField : null, yearField: yearColumn, chartType: selectedType } } }; }
+    if (chart) {
+      const options = chart.getOption();
+      const config = ctx.state.studioChartConfig || {};
+      const current = window.ChartData.serializeChartState(options, config);
+      const selectedType = $('studioChartTypeSelect')?.value || 'bar';
+      const sheet = ctx.api.getStudioActiveSheet(record)?.data;
+      const yearColumn = selectedType === 'rankedBar' ? window.ChartMapping.detectYearColumn(sheet?.headers || [], sheet?.rows || []) : null;
+      const categoryField = Number($('studioCategoryCol')?.value ?? -1);
+      const valueField = Number($('studioValueCol')?.value ?? -1);
+      const groupField = Number($('studioGroupField')?.value ?? -1);
+      const irisConfig = {
+        ...config,
+        type: selectedType,
+        categoryField: Number.isInteger(categoryField) && categoryField >= 0 ? categoryField : null,
+        valueField: Number.isInteger(valueField) && valueField >= 0 ? valueField : null,
+        groupField: Number.isInteger(groupField) && groupField >= 0 ? groupField : null,
+        precision: Number($('studioValuePrecisionSelect')?.value ?? 2),
+        rawValues: current.values,
+        series: current.series,
+        rankSemantic: config.rankSemantic === true,
+        reverseOrder: Boolean(config.reverseOrder),
+        selectedYear: config.selectedYear ?? config.rankedYear ?? null
+      };
+      savedChart = {
+        record_id: record.id,
+        title: $('studioChartTitleInput')?.value || 'Observatory Draft',
+        chart_type: selectedType,
+        colors: $('studioColorApplyAll')?.checked ? null : ctx.state.studioChartOverrides,
+        orientation: config.orientation || 'vertical',
+        valueAxisReversed: Boolean(config.reverseOrder),
+        rankSemantic: config.rankSemantic === true,
+        rankValueMin: config.rankValueMin,
+        rankValueMax: config.rankValueMax,
+        valueAxisMin: config.valueAxisMin,
+        valueAxisMax: config.valueAxisMax,
+        labels: current.labels,
+        values_data: current.values,
+        chart_data: { ...options, irisConfig, rankedBar: { selectedYear: irisConfig.selectedYear, yearColumn, reverseOrder: irisConfig.reverseOrder, categoryField: irisConfig.categoryField, valueField: irisConfig.valueField, yearField: yearColumn, chartType: selectedType } }
+      };
+    }
+    let graphIdToUpdate = ctx.state.studioActiveGraphId;
+    let graphIsPublished = Boolean(ctx.state.studioActiveGraphPublished);
+    if (savedChart && !graphIdToUpdate) {
+      const existingGraphs = await ctx.dbManager.getGraphsByRecord(record.id);
+      const matchingGraph = existingGraphs.find(graph => String(graph.title || 'Saved Chart') === String(savedChart.title || 'Saved Chart'));
+      if (matchingGraph) {
+        graphIdToUpdate = matchingGraph.id;
+        graphIsPublished = Boolean(matchingGraph.is_published);
+      }
+    }
+    if (savedChart && graphIdToUpdate) {
+      try { graphIsPublished = Boolean((await ctx.dbManager.getGraphById(graphIdToUpdate)).is_published); } catch (error) {}
+    }
+    if (savedChart && graphIdToUpdate && graphIsPublished && !window.confirm('This graph is currently published. Saving will update the live dashboard immediately. Continue?')) return;
+
     await ctx.api.persistStudioFieldColors?.();
     const updated = await ctx.dbManager.updateRecord(record.id, { docType: $('studioDocTypeInput')?.value.trim() || record.docType, status: approve ? 'Approved' : ($('studioStatusSelect')?.value || record.status), adminNotes: $('studioNotesInput')?.value.trim() || record.adminNotes, extractedData: record.extractedData, graphDrafts: [] });
     if (savedChart) {
+      const savedMapping = savedChart.chart_data?.rankedBar || {};
+      const categorySelection = $('studioCategoryCol')?.value;
+      const valueSelection = $('studioValueCol')?.value;
+      const hasColumnIndex = value => value !== undefined && value !== null && value !== '' && Number.isInteger(Number(value)) && Number(value) >= 0;
       savedChart.chart_data = {
         ...(savedChart.chart_data || {}),
+        irisConfig: { ...(savedChart.chart_data?.irisConfig || {}), categoryField: hasColumnIndex(categorySelection) ? Number(categorySelection) : null, valueField: hasColumnIndex(valueSelection) ? Number(valueSelection) : null, groupField: hasColumnIndex($('studioGroupField')?.value) ? Number($('studioGroupField').value) : null },
         rankedBar: {
           selectedYear: ctx.state.studioChartConfig?.selectedYear ?? ctx.state.studioChartConfig?.rankedYear ?? null,
           yearColumn: ctx.state.studioChartConfig?.yearColumn ?? null,
           reverseOrder: Boolean(ctx.state.studioChartConfig?.reverseOrder),
-          chartType: 'rankedBar',
-          categoryField: ctx.state.studioChartConfig?.categoryField ?? null,
-          valueField: ctx.state.studioChartConfig?.valueField ?? null,
+          chartType: savedChart.chart_type || savedMapping.chartType || 'bar',
+          categoryField: hasColumnIndex(categorySelection) ? Number(categorySelection) : (savedMapping.categoryField ?? null),
+          valueField: hasColumnIndex(valueSelection) ? Number(valueSelection) : (savedMapping.valueField ?? null),
           yearField: ctx.state.studioChartConfig?.yearField ?? null
         }
       };
       savedChart.is_published = approve === true;
-      await ctx.dbManager.saveGraph(savedChart);
+      if (graphIdToUpdate) {
+        if (approve !== true) delete savedChart.is_published;
+        const updatedGraph = await ctx.dbManager.updateGraph(graphIdToUpdate, savedChart);
+        ctx.state.studioActiveGraphId = String(updatedGraph.id);
+        ctx.state.studioActiveGraphPublished = Boolean(updatedGraph.is_published);
+      } else {
+        const createdGraph = await ctx.dbManager.saveGraph(savedChart);
+        ctx.state.studioActiveGraphId = String(createdGraph.id);
+        ctx.state.studioActiveGraphPublished = Boolean(createdGraph.is_published);
+      }
     }
     ctx.state.studioActiveRecord = { ...record, ...updated };
     if (ctx.state.activeScan?.id === record.id) { ctx.state.activeScan = { ...ctx.state.activeScan, ...updated }; await ctx.api.renderOverviewTab(ctx.state.activeScan); ctx.api.renderViewerTab(ctx.state.activeScan); await ctx.api.renderGraphsTab(ctx.state.activeScan); }
     window.IRIS_STUDIO_DIRTY = false;
     await ctx.api.renderAdminPortal(); alert(`Dataset '${record.fileName}' successfully saved to database!${approve ? ' (Published)' : ''}`);
   };
-  ['studioChartTypeSelect', 'studioCategoryCol', 'studioValueCol', 'studioValuePrecisionSelect', 'studioRankedYearSelect', 'studioRankedReverseOrder', 'studioFilterField', 'studioFilterOperator', 'studioFilterValue', 'studioFilterUpperValue', 'studioSortOrder', 'studioRowLimit', 'studioGroupDuplicates'].forEach(id => $(id)?.addEventListener('change', () => { if (id === 'studioChartTypeSelect') { const sheet = ctx.api.getStudioActiveSheet(ctx.state.studioActiveRecord)?.data; if (sheet) ctx.api.updateFieldSelectOptions(sheet); } window.IRIS_STUDIO_DIRTY = true; ctx.api.updateStudioChart(); }));
+  ['studioChartTypeSelect', 'studioCategoryCol', 'studioValueCol', 'studioValuePrecisionSelect', 'studioGroupField', 'studioRankedYearSelect', 'studioRankedReverseOrder', 'studioFilterField', 'studioFilterOperator', 'studioFilterValue', 'studioFilterUpperValue', 'studioSortOrder', 'studioRowLimit', 'studioGroupDuplicates'].forEach(id => $(id)?.addEventListener('change', () => { if (id === 'studioChartTypeSelect') { const sheet = ctx.api.getStudioActiveSheet(ctx.state.studioActiveRecord)?.data; if (sheet) ctx.api.updateFieldSelectOptions(sheet); } window.IRIS_STUDIO_DIRTY = true; ctx.api.updateStudioChart(); }));
   $('studioFilterValue')?.addEventListener('input', () => { window.IRIS_STUDIO_DIRTY = true; ctx.api.updateStudioChart(); }); $('studioRowLimit')?.addEventListener('input', () => { window.IRIS_STUDIO_DIRTY = true; ctx.api.updateStudioChart(); }); $('studioChartTitleInput')?.addEventListener('input', event => { window.IRIS_STUDIO_DIRTY = true; event.target.setAttribute('data-customized', 'true'); });
   ['studioDocTypeInput', 'studioStatusSelect', 'studioNotesInput'].forEach(id => $(id)?.addEventListener('change', () => { window.IRIS_STUDIO_DIRTY = true; }));
   document.addEventListener('input', event => { if (event.target?.classList?.contains('studio-cell-input') || event.target?.classList?.contains('header-rename-input')) window.IRIS_STUDIO_DIRTY = true; });

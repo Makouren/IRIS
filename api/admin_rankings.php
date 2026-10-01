@@ -1,5 +1,6 @@
 <?php
 require_once __DIR__ . '/../includes/functions.php';
+require_once __DIR__ . '/../includes/helpers/RankBoundsParser.php';
 requireRole(['super_admin'], true);
 
 header('Content-Type: application/json; charset=utf-8');
@@ -24,31 +25,11 @@ function admin_rankings_verify_csrf(): void {
 }
 
 function admin_rankings_bounds(string $display, $lowValue, $highValue): array {
-    $low = $lowValue !== null && $lowValue !== '' ? filter_var($lowValue, FILTER_VALIDATE_INT) : null;
-    $high = $highValue !== null && $highValue !== '' ? filter_var($highValue, FILTER_VALIDATE_INT) : null;
-    if (($lowValue !== null && $lowValue !== '' && $low === false) || ($highValue !== null && $highValue !== '' && $high === false)) {
-        admin_rankings_bad('Rank bounds must be whole numbers.');
+    try {
+        return RankBoundsParser::parse($display, $lowValue, $highValue);
+    } catch (InvalidArgumentException $exception) {
+        admin_rankings_bad($exception->getMessage());
     }
-    if ($low === null && $high === null && $display !== '') {
-        $clean = str_replace(',', '', trim($display));
-        if (preg_match('/^=?\s*(\d+)\s*[-–—]\s*(\d+)$/', $clean, $match)) {
-            $low = (int)$match[1];
-            $high = (int)$match[2];
-        } elseif (preg_match('/^=?\s*(\d+)\+$/', $clean, $match)) {
-            $low = (int)$match[1];
-        } elseif (preg_match('/^top\s*(\d+)$/i', $clean, $match)) {
-            $low = 1;
-            $high = (int)$match[1];
-        } elseif (preg_match('/^=?\s*(\d+)$/', $clean, $match)) {
-            $low = (int)$match[1];
-            $high = (int)$match[1];
-        }
-    }
-    if ($low !== null && $low < 0) admin_rankings_bad('Rank lower bound cannot be negative.');
-    if ($high !== null && $high < 0) admin_rankings_bad('Rank upper bound cannot be negative.');
-    if ($low !== null && $high !== null && $high < $low) admin_rankings_bad('Rank upper bound must be greater than or equal to the lower bound.');
-    $value = $low === null ? null : ($high === null ? (float)$low : ($low + $high) / 2);
-    return [$low, $high, $value];
 }
 
 function admin_rankings_payload(array $data, PDO $pdo, int $currentId = 0): array {

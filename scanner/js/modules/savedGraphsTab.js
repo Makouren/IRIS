@@ -1,5 +1,5 @@
 import { $, escapeHtml } from '../utils/helpers.js';
-import { createChart } from './chartEngine.js?v=data-preserving-colors-20260930';
+import { createChart, buildSavedGraphOption } from './chartEngine.js?v=remove-rose-20261001';
 
 function getRecordName(graph, records) {
   const record = records.find(item => item.id === graph.record_id);
@@ -84,19 +84,24 @@ export function buildTextExport(graphs) {
   return graphs.map(graph => {
     const labels = Array.isArray(graph.labels) ? graph.labels : [];
     const values = Array.isArray(graph.values_data) ? graph.values_data : [];
+    const nestedGroups = graph.chart_data?.irisConfig?.nestedGroups || [];
     const name = tableName(graph.title);
-    const rows = labels.map((label, index) => `  (${sqlValue(label)}, ${sqlValue(values[index])})`).join(',\n');
+    const nestedRows = nestedGroups.flatMap(group => group.children.map(child => [group.label, child.label, child.rawValue ?? child.value]));
+    const rows = (graph.chart_type === 'nestedPie' && nestedRows.length
+      ? nestedRows.map(row => `  (${row.map(sqlValue).join(', ')})`)
+      : labels.map((label, index) => `  (${sqlValue(label)}, ${sqlValue(values[index])})`)).join(',\n');
+    const nested = graph.chart_type === 'nestedPie' && nestedRows.length > 0;
     const statements = [
       `-- Title: ${graph.title || 'Saved Chart'}`,
       `-- Source: ${graph.source_file_name || graph.record_id || 'Unknown file'}`,
       `-- Chart Type: ${(graph.chart_type || 'bar').toUpperCase()}`,
       '',
       `CREATE TABLE IF NOT EXISTS \`${name}\` (`,
-      '  `category` VARCHAR(255),',
+      ...(nested ? ['  `group_name` VARCHAR(255),', '  `category` VARCHAR(255),'] : ['  `category` VARCHAR(255),']),
         '  `value` DECIMAL(10,2)',
       ');',
       '',
-      rows ? `INSERT INTO \`${name}\` (\`category\`, \`value\`) VALUES\n${rows};` : ''
+      rows ? `INSERT INTO \`${name}\` (${nested ? '\`group_name\`, ' : ''}\`category\`, \`value\`) VALUES\n${rows};` : ''
     ].filter(Boolean);
     return statements.join('\n');
   }).join('\n\n');
@@ -174,16 +179,40 @@ export function initSavedGraphsTab(ctx) {
     const card = document.createElement('div');
     card.className = 'graph-card';
     const sourceName = getRecordName(graph, records);
-    const savedType = graph.chart_type || 'bar';
-    const chartType = ['bar', 'line', 'pie', 'doughnut', 'polarArea', 'rankedBar'].includes(savedType) ? savedType : 'bar';
+    const savedType = String(graph.chart_type || 'bar');
+    const chartType = /^(?:polararea|polar-area|rose|nightingale)$/i.test(savedType) ? 'bar' : (['bar', 'line', 'pie', 'doughnut', 'nestedPie', 'rankedBar'].includes(savedType) ? savedType : 'bar');
     card.innerHTML = `<div class="graph-card-header"><div style="display:flex;gap:.6rem;align-items:flex-start;"><input class="saved-graph-checkbox" type="checkbox" data-graph-id="${escapeHtml(graph.id)}" ${state.savedGraphIds.has(graph.id) ? 'checked' : ''} aria-label="Select ${escapeHtml(graph.title || 'saved graph')}" /><div><div class="graph-card-title">${escapeHtml(graph.title || 'Saved Dashboard Chart')}</div><div style="font-size:.78rem;color:var(--text-muted);margin-top:.25rem;">Version ${version}</div><div style="font-size:.75rem;color:var(--text-muted);">Source: ${escapeHtml(sourceName)}</div></div></div><div class="graph-card-actions"><span class="badge badge-low">SAVED</span><button class="graph-action-button graph-action-publish" type="button" title="Publish this saved graph to the Observatory"><svg aria-hidden="true" viewBox="0 0 24 24"><path d="M12 2l7 7-1.4 1.4L13 5.8V18h-2V5.8L6.4 10.4 5 9l7-7zM5 20h14v2H5z"/></svg><span>Publish</span></button><button class="graph-action-button export-saved-mysql" type="button" title="Reflect graph data in the database"><svg aria-hidden="true" viewBox="0 0 24 24"><path d="M4 5h16v14H4zM8 9h8M8 13h5M8 17h3"/></svg><span>Reflect DB</span></button><button class="graph-action-button export-saved-print" type="button" title="Print this graph"><svg aria-hidden="true" viewBox="0 0 24 24"><path d="M6 9V4h12v5M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2M6 14h12v6H6z"/></svg><span>Print Sheet</span></button><button class="graph-action-button graph-action-delete btn-table-delete delete-saved-graph" type="button" data-graph-id="${escapeHtml(graph.id)}" title="Delete saved graph" aria-label="Delete saved graph"><svg aria-hidden="true" viewBox="0 0 24 24"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/></svg></button></div></div><div style="font-size:.82rem;color:var(--accent-cyan);margin-bottom:1rem;">Chart type: <strong>${escapeHtml(chartType.toUpperCase())}</strong></div><div class="graph-canvas-container" style="height:260px;position:relative;"><div id="${canvasId}" style="height:100%;width:100%"></div></div>`;
+
+    const typeLabel = chartType.replace(/([a-z])([A-Z])/g, '$1 $2').toUpperCase();
+    card.querySelector('.graph-card-header')?.nextElementSibling?.querySelector('strong')?.replaceChildren(document.createTextNode(typeLabel));
 
     const render = () => {
       const chartHost = $(canvasId);
       if (!chartHost) return;
+      if ($('adminSavedGraphsPanel')?.dataset.role === 'super_admin' && !card.querySelector('.graph-action-edit')) {
+        const editButton = document.createElement('button');
+        editButton.type = 'button';
+        editButton.className = 'graph-action-button graph-action-edit';
+        editButton.title = 'Edit this graph using its current source data';
+        editButton.textContent = 'Edit';
+        editButton.addEventListener('click', () => {
+          const sourceRecord = records.find(item => String(item.id) === String(graph.record_id));
+          const status = String(sourceRecord?.status || '').trim().toLowerCase();
+          if (!sourceRecord || status.includes('supersed')) {
+            window.alert('The source file for this graph is no longer available.');
+            return;
+          }
+          const url = new URL('review_editor.php', window.location.href);
+          url.searchParams.set('record_id', graph.record_id);
+          url.searchParams.set('graph_id', graph.id);
+          window.location.assign(url.href);
+        });
+        card.querySelector('.graph-card-actions')?.append(editButton);
+      }
       card._savedChartResizeObserver?.disconnect?.();
       card._savedChart?.dispose?.();
-      card._savedChart = createChart(chartHost, chartType, { ...(graph.chart_data && typeof graph.chart_data === 'object' ? graph.chart_data : {}), orientation: graph.orientation, rankSemantic: graph.rank_semantic === 1 || graph.rank_semantic === true, rankValueMin: graph.rank_value_min, rankValueMax: graph.rank_value_max, valueAxisReversed: graph.value_axis_reversed === 1 || graph.value_axis_reversed === true, valueAxisMin: graph.value_axis_min, valueAxisMax: graph.value_axis_max, labels: graph.labels || [], datasets: [{ label: graph.title || 'Saved Series', data: graph.values_data || [] }] }, { colors: graph.colors });
+      card._savedGraph = { ...graph, chart_type: chartType };
+      card._savedChart = createChart(chartHost, chartType, card._savedGraph);
       if (typeof ResizeObserver !== 'undefined') {
         card._savedChartResizeObserver = new ResizeObserver(() => card._savedChart?.resize?.());
         card._savedChartResizeObserver.observe(chartHost);
@@ -268,7 +297,8 @@ export function initSavedGraphsTab(ctx) {
   $('savedGraphsRecordSelect')?.addEventListener('change', async () => { if (state.savedGraphsViewAll) { state.savedGraphsViewAll = false; const viewAllButton = $('savedGraphsViewAllBtn'); if (viewAllButton) viewAllButton.textContent = 'View All'; } await ctx.api.renderSavedGraphsTab(); });
   $('savedGraphsSelectAll')?.addEventListener('change', event => {
     (ctx.api.savedGraphsVisible || []).forEach(graph => event.target.checked ? state.savedGraphIds.add(graph.id) : state.savedGraphIds.delete(graph.id));
-    ctx.api.renderSavedGraphsTab();
+    document.querySelectorAll('.saved-graph-checkbox').forEach(checkbox => { checkbox.checked = event.target.checked; });
+    refreshSelectionUi(ctx.api.savedGraphsVisible || []);
   });
   $('savedGraphsExportSelected')?.addEventListener('click', () => {
     const ids = [...state.savedGraphIds];
@@ -294,7 +324,10 @@ export function initSavedGraphsTab(ctx) {
     }
   });
   new MutationObserver(() => {
-    if ($('savedDashboardGraphsContainer')) ctx.api.renderSavedGraphsTab();
+    document.querySelectorAll('.graph-card').forEach(card => {
+      const host = card.querySelector('[id^="saved_graph_canvas_"]');
+      if (host && card._savedGraph && card._savedChart) card._savedChart.setOption(buildSavedGraphOption(card._savedGraph, { width: host.clientWidth, theme: { dark: document.documentElement.classList.contains('dark') } }), true);
+    });
   }).observe(document.documentElement, { attributes: true, attributeFilter: ['class'] });
 }
 

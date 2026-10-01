@@ -1,5 +1,7 @@
 # Browser Parsers and Viewers
 
+V3.4.5 office template imports are a separate server-side flow: PHP reads supported office-upload files for preview and approval. The browser parsers documented here continue to power Scanner ingestion and viewing.
+
 Parser modules convert browser-selected files into scan data used by the Scanner UI and PHP-backed record persistence. Libraries are loaded by the scanner page; this directory does not contain a separate parser service.
 
 Parsing and upload handoff do not publish data. Parsed files enter the Scanner review workflow; record status and saved-graph publication are controlled separately by authenticated admin workflows.

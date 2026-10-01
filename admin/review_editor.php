@@ -64,6 +64,8 @@ require_once __DIR__.'/includes/header.php';
                         <div><label class="form-label" for="summaryCardEditorSecondaryLabel">Secondary Label</label><input type="text" id="summaryCardEditorSecondaryLabel" class="form-input"></div>
                         <div><label class="form-label" for="summaryCardEditorSecondaryValue">Secondary Value</label><input type="text" id="summaryCardEditorSecondaryValue" class="form-input"></div>
                         <div style="grid-column: 1 / -1;"><label class="form-label" for="summaryCardEditorDescription">Description</label><textarea id="summaryCardEditorDescription" class="form-input" rows="2"></textarea></div>
+                        <div style="grid-column: 1 / -1;"><label class="form-label" for="summaryCardEditorSecondaryDescription">Italic Supporting Text</label><textarea id="summaryCardEditorSecondaryDescription" class="form-input" rows="2"></textarea></div>
+                        <div style="grid-column: 1 / -1;"><label class="form-label" for="summaryCardEditorInfoText">ⓘ Information</label><textarea id="summaryCardEditorInfoText" class="form-input" rows="2"></textarea></div>
                         <div><label class="form-label" for="summaryCardEditorDisplayOrder">Display Order</label><input type="number" id="summaryCardEditorDisplayOrder" class="form-input" value="0" min="0"></div>
                         <div><label class="form-label" for="summaryCardEditorCategory">Categories</label><select id="summaryCardEditorCategory" class="form-input" multiple size="3" aria-describedby="summaryCardEditorCategoryHelp"></select><span id="summaryCardEditorCategoryHelp" class="text-xs" style="color:var(--text-muted);">Select one or more; leave empty for Uncategorized.</span><div style="display:flex; gap:0.5rem; margin-top:0.5rem;"><button type="button" id="summaryCardEditorAddCategory" class="btn-studio-action">+ New category</button><input type="text" id="summaryCardEditorNewCategory" class="form-input" maxlength="40" placeholder="Category name" style="display:none;"></div></div>
                         <div><label class="form-label" for="summaryCardEditorPrecision">Display Precision</label><select id="summaryCardEditorPrecision" class="form-input"><option value="0">No decimals</option><option value="1">1 decimal</option><option value="2" selected>2 decimals</option></select></div>
@@ -364,8 +366,8 @@ require_once __DIR__.'/includes/header.php';
                                 <option value="line">Line Chart</option>
                                 <option value="pie">Pie Chart</option>
                                 <option value="doughnut">Doughnut Chart</option>
-                                <option value="polarArea">Polar Area</option>
-                                <!-- Temporarily disabled: <option value="rankedBar">Ranked Bar Chart</option> -->
+                                <option value="rankedBar">Ranked Bar Chart</option>
+                                <option value="nestedPie">Nested Pie</option>
                             </select>
                         </div>
                     </div>
@@ -379,6 +381,10 @@ require_once __DIR__.'/includes/header.php';
                         <div style="display: flex; align-items: center; gap: 0.35rem;">
                             <label style="font-size: 0.75rem; font-weight: 700; color: var(--text-muted); white-space: nowrap;" id="studioValueLabel">Value (Y-axis):</label>
                             <select id="studioValueCol" class="form-input" style="width: auto; padding: 0.3rem 0.55rem; font-size: 0.78rem;" aria-label="Value column"></select>
+                        </div>
+                        <div id="studioGroupFieldWrapper" style="display: none; align-items: center; gap: 0.35rem;">
+                            <label for="studioGroupField" style="font-size: 0.75rem; font-weight: 700; color: var(--text-muted); white-space: nowrap;">Group (inner ring):</label>
+                            <select id="studioGroupField" class="form-input" style="width: auto; padding: 0.3rem 0.55rem; font-size: 0.78rem;"></select>
                         </div>
                         <div style="display: flex; align-items: center; gap: 0.35rem;">
                             <label style="font-size: 0.75rem; font-weight: 700; color: var(--text-muted); white-space: nowrap;" id="studioValuePrecisionLabel">Display Precision:</label>
@@ -489,6 +495,11 @@ require_once __DIR__.'/includes/header.php';
                             <button id="studioBtnAddRow" type="button" class="btn-studio-action" style="background: rgba(16,185,129,0.12); border: 1.5px solid rgba(16,185,129,0.7); color: var(--text-main);">
                                 <i class="fa-solid fa-plus" aria-hidden="true"></i> Add Row
                             </button>
+                            <?php if (($_SESSION['role'] ?? '') === 'super_admin'): ?>
+                                <button id="studioBtnMergeUpload" data-role="<?= e($_SESSION['role'] ?? '') ?>" type="button" class="btn-studio-action" style="background: var(--bg-highlight); border: 1.5px solid var(--border-light); color: var(--text-main);">
+                                    <i class="fa-solid fa-code-merge" aria-hidden="true"></i> Merge from office upload
+                                </button>
+                            <?php endif; ?>
                         </div>
                     </div>
 
@@ -778,6 +789,8 @@ require_once __DIR__.'/includes/header.php';
                         document.getElementById('summaryCardEditorSecondaryLabel').value = card.secondary_label || '';
                         document.getElementById('summaryCardEditorSecondaryValue').value = card.secondary_value || '';
                         document.getElementById('summaryCardEditorDescription').value = card.description || '';
+                        document.getElementById('summaryCardEditorSecondaryDescription').value = card.secondary_description || '';
+                        document.getElementById('summaryCardEditorInfoText').value = card.info_text || '';
                         document.getElementById('summaryCardEditorDisplayOrder').value = card.display_order ?? 0;
                         const selectedIds = (card.category_ids || (card.category_id ? [card.category_id] : [])).map(String);
                         [...categorySelect.options].forEach(option => { option.selected = selectedIds.includes(option.value); });
@@ -844,6 +857,8 @@ require_once __DIR__.'/includes/header.php';
                     secondary_label: document.getElementById('summaryCardEditorSecondaryLabel').value.trim(),
                     secondary_value: document.getElementById('summaryCardEditorSecondaryValue').value.trim(),
                     description: document.getElementById('summaryCardEditorDescription').value.trim(),
+                    secondary_description: document.getElementById('summaryCardEditorSecondaryDescription').value.trim(),
+                    info_text: document.getElementById('summaryCardEditorInfoText').value.trim(),
                     display_order: Number(document.getElementById('summaryCardEditorDisplayOrder').value || 0),
                     display_precision: (() => {
                         const precisionValue = Number(document.getElementById('summaryCardEditorPrecision').value);

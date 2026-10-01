@@ -8,11 +8,12 @@ header('Pragma: no-cache');
 
 try {
     $pdo = db();
-    $sql = "SELECT sg.id, sg.record_id, sg.title, sg.chart_type, sg.orientation, sg.colors,
+    $sql = "SELECT sg.id, sg.record_id, sg.title, sg.chart_type, sg.orientation, sg.colors, sg.chart_data,
                    sg.value_axis_reversed, sg.value_axis_min, sg.value_axis_max,
                    sg.rank_semantic, sg.rank_value_min, sg.rank_value_max,
                    sg.labels, sg.values_data, sg.is_published, sg.created_at,
-                   r.fileName AS source_file_name, r.status AS source_status
+                   (SELECT COUNT(*) FROM saved_graphs versioned WHERE versioned.record_id = sg.record_id AND versioned.created_at <= sg.created_at) AS version,
+                   r.fileName AS source_file_name, r.fileType AS source_file_type, r.status AS source_status
             FROM saved_graphs sg
             INNER JOIN records r ON r.id = sg.record_id
                         WHERE sg.is_published = 1
@@ -20,6 +21,12 @@ try {
     $rows = $pdo->query($sql)->fetchAll(PDO::FETCH_ASSOC);
 
     foreach ($rows as &$row) {
+        $row['chart_data'] = json_decode((string)($row['chart_data'] ?? ''), true) ?: [];
+        if (in_array(strtolower((string)$row['chart_type']), ['polararea', 'polar-area', 'rose', 'nightingale'], true)) {
+            $row['chart_type'] = 'bar';
+            $row['chart_data']['irisConfig'] = array_merge($row['chart_data']['irisConfig'] ?? [], ['type' => 'bar']);
+            unset($row['chart_data']['irisConfig']['roseMode']);
+        }
         $row['labels'] = json_decode((string)$row['labels'], true) ?: [];
         $row['values_data'] = json_decode((string)$row['values_data'], true) ?: [];
         $colors = $row['colors'] !== null ? json_decode((string)$row['colors'], true) : null;

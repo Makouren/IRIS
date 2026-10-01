@@ -16,9 +16,10 @@ IRIS is a plain-PHP application. Apache serves PHP pages and PDO-backed APIs; br
 ## Roles and Access
 
 - **User:** registers with a CLSU email address, signs in, and reads the Observatory.
-- **Admin:** has all user access plus the File Ingestion dashboard, Review Editor, Smart Upload, and Saved Graphs management tools.
+- **Admin:** has all user access plus office uploads and the File Ingestion dashboard.
+- **Super Admin:** manages accounts, templates, ranking bodies, review workflows, ranking history, summary cards, and saved graphs.
 
-Registration creates a `user` role. An administrator must promote an account explicitly. PHP session authentication protects the Observatory and authenticated APIs. Admin pages and API mutations require the `admin` role; form workflows use CSRF tokens. Do not expose the local default database credentials in a deployed environment.
+Registration creates a `user` role. An administrator must promote accounts explicitly. PHP session authentication protects the Observatory and APIs; mutations use role checks and CSRF tokens. Do not expose local database credentials in a deployed environment.
 
 ## Main Areas
 
@@ -28,6 +29,7 @@ Registration creates a `user` role. An administrator must promote an account exp
 | Observatory | `user/dashboard.php` | Displays institutional analytics, published snapshot cards, and Scanner-published graphs. Admins also see editing and unpublish controls. |
 | File Ingestion | `admin/dashboard.php` | Accepts Scanner spreadsheet uploads and shows parsed records for review. |
 | Review Editor | `admin/review_editor.php` | Reviews records, edits extracted cells and chart mappings, saves records, and publishes the active Studio chart. |
+| Template Imports | Review Editor import controls | Previews office spreadsheets, maps fields through Super Admin profiles, and requires an explicit diff review before writes. |
 | Smart Upload | `admin/smart_upload.php` | Maps supported structured CSV headers into staging rows for the institutional tables. |
 | Extraction Review | `admin/review_extraction.php` | Lets an admin inspect, edit, and select mapped rows before the Smart Upload database transaction. |
 | Saved Graphs | `admin/saved_graphs.php` | Lists saved chart versions and supports per-graph or selected-graph publishing, export, printing, and deletion. |
@@ -62,6 +64,12 @@ Parser and viewer modules for PDF, DOCX, and image OCR are present in the codeba
 ### Performance Snapshot Cards
 
 Snapshot cards are maintained separately from Scanner graphs. Their title, values, labels, year, description, display order, precision, and publication state are stored in `summary_cards`. Publishing or unpublishing a card does not change records or saved graphs.
+
+Template-driven Snapshot imports use a Global Label (`summary_cards.import_key`) to update an existing card without duplicating it. Changed periods are archived in `summary_card_snapshots`; one row per label is selected for the live card, defaulting to the newest period. Re-importing unchanged data produces no writes.
+
+Ranking History imports match the full ranking identity, display a side-by-side preview, and reject ambiguous matches. The Super Admin must acknowledge the diff before applying selected rows. Optimistic row versions prevent applying stale previews.
+
+After successful database writes, open IRIS pages refresh automatically. Super Admin tabs synchronize promptly; other roles poll every five seconds. Pages with unsaved edits defer refresh and offer a manual refresh action.
 
 ## Important Publication Rules
 
@@ -130,6 +138,10 @@ For Scanner publication, a record is linked to its charts by `saved_graphs.recor
 | `records` | Scanner file metadata, extracted data, review status, notes, and draft metadata. |
 | `saved_graphs` | Saved ECharts configuration/data linked to a record; `is_published` is the public visibility flag. |
 | `summary_cards` | Independently managed Observatory snapshot cards and publication settings. |
+| `template_import_profiles` | Super Admin mappings, required fields, and defaults for office spreadsheet imports. |
+| `summary_card_snapshots` | Historical values for imported summary-card periods. |
+| `import_batches`, `import_batch_rows` | Import audit records used to revert an applied batch. |
+| `app_change_state` | Shared write version polled by active pages for refresh synchronization. |
 
 `database.sql` creates the core institutional schema and Scanner `records`/`saved_graphs` tables. On database connection, `config/db.php` ensures the Scanner tables and compatibility columns exist and creates `summary_cards` when absent. The PHP database account therefore needs the required table/column creation privileges during setup or migration.
 
@@ -158,6 +170,11 @@ For Scanner publication, a record is linked to its charts by `saved_graphs.recor
 | `POST/PUT/DELETE /api/iris.php?resource=summary_cards[&id={cardId}]` | Create, update, or delete snapshot cards. |
 | `GET /api/dashboard_graphs.php` | Read-only Observatory feed containing explicitly published graphs and cards; response is non-cacheable. |
 | `GET /api/summary.php` | Return an authenticated narrative summary based on stored institutional data. |
+| `GET /api/change_signal.php` | Return the authenticated app data version used by active-page refresh polling. |
+| `GET/POST /api/templates.php` | Read templates and manage Super Admin import profiles. |
+| `POST /api/imports/summary_card_import.php` | Preview or apply template-driven summary-card imports. |
+| `POST /api/imports/ranking_history_import.php` | Preview or apply template-driven ranking history imports. |
+| `POST /api/imports/import_recovery.php` | Revert an audited import batch when its rows are unchanged since application. |
 
 Graph publish/unpublish requests send JSON such as `{ "published": true }` or `{ "published": false }`. The API responds with the graph ID and the resulting publication state. Browser persistence is managed by `scanner/js/database/dbManager.js`; MySQL is canonical when the PHP API is available.
 
@@ -166,15 +183,16 @@ Graph publish/unpublish requests send JSON such as `{ "published": true }` or `{
 1. Place or clone the repository under `C:/xampp/htdocs/iris` (or another Apache document-root subdirectory).
 2. Start Apache and MySQL from the XAMPP Control Panel.
 3. Import [`database.sql`](database.sql) once into MySQL using phpMyAdmin or the MySQL client. The script creates/selects `iris_db` and seeds the ranking body catalog.
-4. Set `IRIS_DB_HOST`, `IRIS_DB_PORT`, `IRIS_DB_NAME`, `IRIS_DB_USER`, and `IRIS_DB_PASS` in [`config/db.php`](config/db.php) for the environment. The current defaults are intended for local XAMPP development, not production.
-5. Open `http://localhost/iris/`, register a CLSU account, and sign in. Registration requires an email ending in `@clsu2.edu.ph` and a password of at least eight characters.
-6. Registration assigns the `user` role. To grant administrator access, run the following as a database administrator, substituting the account name:
+4. Apply the required migrations in [`migrations/`](migrations/), including the template-driven imports and app change-state migrations for V3.4.5.
+5. Set `IRIS_DB_HOST`, `IRIS_DB_PORT`, `IRIS_DB_NAME`, `IRIS_DB_USER`, and `IRIS_DB_PASS` in [`config/db.php`](config/db.php) for the environment. The current defaults are intended for local XAMPP development, not production.
+6. Open `http://localhost/iris/`, register a CLSU account, and sign in. Registration requires an email ending in `@clsu2.edu.ph` and a password of at least eight characters.
+7. Registration assigns the `user` role. To grant administrator access, run the following as a database administrator, substituting the account name:
 
    ```sql
    UPDATE users SET role = 'admin' WHERE username = 'YOUR_USERNAME';
    ```
 
-7. Sign out and back in so the new role is present in the PHP session. The application root redirects signed-in users according to their role.
+8. Sign out and back in so the new role is present in the PHP session. The application root redirects signed-in users according to their role.
 
 For production, configure a least-privilege MySQL account, a non-default password, HTTPS, and a schema migration process appropriate to the deployment. Because the database bootstrap may create or add Scanner schema objects, ensure its database account has the necessary setup privileges.
 
@@ -207,6 +225,7 @@ The suite covers graph/chart mapping, table filtering, document pagination, grap
 ## Related Documentation
 
 - [`README_PHP.md`](README_PHP.md): PHP deployment notes.
+- [`README_V3.4.5.md`](README_V3.4.5.md): V3.4.5 release changes and manual verification checklist.
 - [`scanner/js/ai/README.md`](scanner/js/ai/README.md): chart suggestions and shared chart utilities.
 - [`scanner/js/database/README.md`](scanner/js/database/README.md): persistence and API routes.
 - [`scanner/js/modules/README.md`](scanner/js/modules/README.md): browser module responsibilities.

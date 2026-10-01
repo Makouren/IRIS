@@ -12,10 +12,91 @@ export function initAdminPortal(ctx) {
     document.body.appendChild(toast);
     setTimeout(() => toast.remove(), 3000);
   };
+  const setGraphEditMessage = (message, published = false) => {
+    if (message.startsWith('Editing saved graph:')) return;
+    showToast(message);
+  };
+  const clearGraphEditState = (removeGraphParam = false) => {
+    ctx.state.studioActiveGraphId = null;
+    ctx.state.studioActiveGraphPublished = false;
+    if (removeGraphParam) {
+      const url = new URL(window.location.href);
+      url.searchParams.delete('graph_id');
+      window.history.replaceState(null, '', url);
+    }
+  };
+  const restoreSavedGraph = async (graphId, record, records, requestedRecordId) => {
+    if (!graphId) return;
+    let graph;
+    try {
+      graph = await ctx.dbManager.getGraphById(graphId);
+    } catch (error) {
+      const requestedSourceExists = records.some(item => String(item.id) === String(requestedRecordId));
+      clearGraphEditState(true);
+      setGraphEditMessage(requestedSourceExists
+        ? 'This saved graph is no longer available. The source file was loaded normally.'
+        : 'The source file for this graph is no longer available.');
+      return;
+    }
+
+    const sourceRecord = records.find(item => String(item.id) === String(graph.record_id));
+    const sourceStatus = String(sourceRecord?.status || '').trim().toLowerCase();
+    if (!sourceRecord || sourceStatus.includes('supersed')) {
+      clearGraphEditState(true);
+      setGraphEditMessage('The source file for this graph is no longer available.');
+      return;
+    }
+    if (!record || String(graph.record_id) !== String(record.id)) {
+      clearGraphEditState(true);
+      setGraphEditMessage('This graph does not belong to the selected source file. The graph was not loaded.');
+      return;
+    }
+
+    ctx.state.studioActiveGraphId = String(graph.id);
+    ctx.state.studioActiveGraphPublished = Boolean(graph.is_published);
+    const titleInput = $('studioChartTitleInput');
+    if (titleInput) {
+      titleInput.value = graph.title || 'Saved Chart';
+      titleInput.setAttribute('data-customized', 'true');
+    }
+    const typeSelect = $('studioChartTypeSelect');
+    const savedType = String(graph.chart_type || 'bar');
+    const chartType = /^(?:polararea|polar-area|rose|nightingale)$/i.test(savedType) ? 'bar' : savedType;
+    const irisConfig = graph.chart_data?.irisConfig || {};
+    if (typeSelect && [...typeSelect.options].some(option => option.value === chartType)) typeSelect.value = chartType;
+    ctx.state.studioChartConfig = { ...(ctx.state.studioChartConfig || {}), ...irisConfig, orientation: graph.orientation || irisConfig.orientation || 'vertical' };
+    ctx.state.studioChartOverrides = Array.isArray(graph.colors) ? [...graph.colors] : null;
+
+    const sheet = ctx.api.getStudioActiveSheet(record)?.data;
+    const mapping = graph.chart_data?.rankedBar || {};
+    if (sheet) {
+      ctx.api.updateFieldSelectOptions(sheet);
+      const category = $('studioCategoryCol');
+      const value = $('studioValueCol');
+      const hasSavedIndex = index => index !== null && index !== undefined && index !== '' && Number.isInteger(Number(index)) && Number(index) >= 0 && Number(index) < sheet.headers.length;
+      const categoryField = irisConfig.categoryField ?? mapping.categoryField;
+      const valueField = irisConfig.valueField ?? mapping.valueField;
+      const groupField = irisConfig.groupField;
+      if (hasSavedIndex(categoryField) && category) category.value = String(categoryField);
+      if (hasSavedIndex(valueField) && value) value.value = String(valueField);
+      const group = $('studioGroupField');
+      if (hasSavedIndex(groupField) && group) group.value = String(groupField);
+      const precision = $('studioValuePrecisionSelect');
+      if (precision && irisConfig.precision !== undefined) precision.value = String(irisConfig.precision);
+      const reverse = $('studioRankedReverseOrder');
+      if (reverse) reverse.checked = Boolean(irisConfig.reverseOrder ?? mapping.reverseOrder);
+      ctx.api.renderStudioTableGrid(record);
+      ctx.api.renderStudioChart(record);
+    }
+    window.IRIS_STUDIO_DIRTY = false;
+    setGraphEditMessage(`Editing saved graph: ${graph.title || 'Saved Chart'}`, ctx.state.studioActiveGraphPublished);
+  };
   const setEditorRecordUrl = recordId => {
+    clearGraphEditState();
     const url = new URL(window.location.href);
     if (recordId) url.searchParams.set('record_id', recordId);
     else url.searchParams.delete('record_id');
+    url.searchParams.delete('graph_id');
     window.history.replaceState(null, '', url);
   };
   const manualDatasetModal = $('manualDatasetModal');
@@ -60,6 +141,7 @@ export function initAdminPortal(ctx) {
         metadata: { creationMethod: 'manual' }
       });
       selectedRecordIds.clear();
+      clearGraphEditState(true);
       ctx.state.docWindowActiveSheetKey = 'Manual_Data';
       ctx.state.studioChartConfig = {};
       ctx.state.studioChartInstance?.dispose?.();
@@ -138,10 +220,15 @@ export function initAdminPortal(ctx) {
       const uploader = officeName || (record.uploaded_by ? 'Office' : 'Legacy / Super Admin');
       const templateLabel = record.template_name ? ` · via ${record.template_name}` : '';
       const isNew = Boolean(record.uploaded_at && !record.opened_at);
+        const merge = record.metadata?.merge;
+        const recentMerge = window.SheetMerge?.isRecentMerge(record.metadata, new Date()) === true;
+        const mergeBadgeTitle = recentMerge
+          ? `Merged ${new Date(merge.merged_at).toLocaleString()} from ${merge.source_office || 'office'}, replaced ${merge.replaced_file || 'previous file'}`
+          : '';
       return `<tr>
         <td><input class="admin-record-checkbox" type="checkbox" data-id="${escape(record.id)}" aria-label="Select record ${escape(record.id)}"></td>
         <td>${escape(record.id)}</td>
-        <td>${escape(record.fileName || 'Untitled')}</td>
+          <td>${escape(record.fileName || 'Untitled')}${recentMerge ? ` <span class="badge badge-low" title="${escape(mergeBadgeTitle)}">NEW</span>` : ''}</td>
         <td>${escape(uploader)}${escape(templateLabel)}${isNew ? ' <span class="badge badge-low" aria-label="New, not yet opened">New</span>' : ''}</td>
         <td>${escape((record.fileType || 'UNKNOWN').toUpperCase())}</td>
         <td><span class="badge">${escape(displayStatus)}</span></td>
@@ -149,7 +236,7 @@ export function initAdminPortal(ctx) {
         <td><div class="admin-record-actions">
           <button class="archive-load-button btn-table-load-studio" data-id="${escape(record.id)}"><i class="fa-solid fa-palette" aria-hidden="true"></i> Review</button>
           ${record.metadata?.stored_file ? `<a class="archive-load-button" href="${escape(projectBase)}/admin/upload_source.php?id=${encodeURIComponent(record.id)}" target="_blank" rel="noopener"><i class="fa-solid fa-file-arrow-up" aria-hidden="true"></i> Source</a>` : ''}
-          ${record.metadata?.stored_file && status !== 'Approved' ? `<button class="archive-load-button" type="button" data-template-review-record="${escape(record.id)}"><i class="fa-solid fa-code-compare" aria-hidden="true"></i> Diff &amp; approve</button>` : ''}
+          ${record.metadata?.stored_file && status !== 'Approved' && (!record.template_id || !['xlsx', 'csv', 'tsv'].includes(String(record.fileType || '').toLowerCase())) ? `<button class="archive-load-button" type="button" data-template-review-record="${escape(record.id)}"><i class="fa-solid fa-code-compare" aria-hidden="true"></i> Diff &amp; approve</button>` : ''}
           ${approved ? `<button class="archive-load-button btn-table-unpublish" data-id="${escape(record.id)}" title="Unpublish this record and its saved charts"><i class="fa-solid fa-eye-slash" aria-hidden="true"></i> Unpublish</button>` : `<button class="archive-load-button btn-table-approve" data-id="${escape(record.id)}"><i class="fa-solid fa-circle-check" aria-hidden="true"></i> Publish</button>`}
           <button class="archive-delete-button btn-table-delete" data-id="${escape(record.id)}" title="Delete record"><i class="fa-solid fa-trash" aria-hidden="true"></i> Delete</button>
         </div></td>
@@ -175,6 +262,7 @@ export function initAdminPortal(ctx) {
     all('.btn-table-approve').forEach(button => button.onclick = () => {
       const record = filtered.find(item => String(item.id) === String(button.dataset.id));
       if (!record) return;
+      clearGraphEditState(true);
       ctx.state.studioActiveRecord = record;
       ctx.api.renderStudioWorkbench(record);
       $('studioChartCanvas')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -262,6 +350,10 @@ export function initAdminPortal(ctx) {
 
   ctx.api.renderAdminPortal = async (preferredRecordId = null) => {
     const select = $('studioRecordSelect');
+    const urlParams = new URLSearchParams(window.location.search);
+    const graphId = urlParams.get('graph_id');
+    const urlRecordId = urlParams.get('record_id');
+    if (!graphId) clearGraphEditState();
     try {
       try {
         globalThis.IRISFieldColors = await ctx.dbManager.getFieldColors();
@@ -298,8 +390,6 @@ export function initAdminPortal(ctx) {
             ctx.api.renderStudioWorkbench(ctx.state.studioActiveRecord);
           };
         }
-        const urlParams = new URLSearchParams(window.location.search);
-        const urlRecordId = urlParams.get('record_id');
         const preferredRecord = preferredRecordId ? records.find(r => String(r.id) === String(preferredRecordId)) : null;
         const matchedRecord = urlRecordId ? records.find(r => String(r.id) === String(urlRecordId)) : null;
         ctx.state.studioActiveRecord = preferredRecord || matchedRecord || records.find(r => String(r.id) === String(ctx.state.studioActiveRecord?.id)) || records[0];
@@ -317,6 +407,8 @@ export function initAdminPortal(ctx) {
           select.innerHTML = '<option value="">Please upload files</option>';
         }
       }
+
+      if (graphId) await restoreSavedGraph(graphId, ctx.state.studioActiveRecord, records, urlRecordId);
 
       const term = (($('adminSearchInput')?.value || '')).toLowerCase();
       const status = $('adminStatusFilter')?.value || 'all';
