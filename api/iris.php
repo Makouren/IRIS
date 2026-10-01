@@ -1,5 +1,7 @@
 <?php
 require_once __DIR__ . '/../includes/functions.php';
+require_once __DIR__ . '/../includes/helpers/LatestYearResolver.php';
+require_once __DIR__ . '/../includes/helpers/SummaryCardHistory.php';
 requireRole(['super_admin', 'admin', 'user'], true);
 header('Content-Type: application/json; charset=utf-8');
 
@@ -21,7 +23,7 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') !== 'GET') {
     ensure_json_csrf();
 }
 if (($_SESSION['role'] ?? '') !== 'super_admin'
-    && !in_array($resource, ['summary_cards', 'summary_card_categories', 'field_colors'], true)) {
+    && !in_array($resource, ['summary_cards', 'summary_card_history', 'summary_card_categories', 'field_colors'], true)) {
     http_response_code(403);
     echo json_encode(['error' => 'Forbidden']);
     exit;
@@ -180,6 +182,52 @@ function ensure_json_csrf(): void {
     if ($expected === '' || $provided === '' || !hash_equals($expected, $provided)) {
         bad('Invalid CSRF token.', 419);
     }
+}
+function summary_card_period_identity(string $cardId, string $display): array {
+    try {
+        return LatestYearResolver::normalize($display);
+    } catch (RuntimeException) {
+        return [
+            'period_key' => 'L:' . substr(hash('sha256', $cardId . "\0" . $display), 0, 16),
+            'period_sort' => 0,
+            'period_precision' => 0,
+            'period_label' => $display !== '' ? $display : 'Legacy current period'
+        ];
+    }
+}
+function summary_card_import_key(mixed $value): string {
+    $key = (string)$value;
+    if ($key === '' || $key !== trim($key) || strlen($key) > 100 || preg_match('/[\x00-\x1F\x7F]/', $key)) {
+        bad('Global Label must contain 1 to 100 characters, have no surrounding whitespace, and contain no control characters.');
+    }
+    return $key;
+}
+function summary_card_manual_snapshot(PDO $pdo, array $card, bool $published): array {
+    $period = summary_card_period_identity((string)$card['id'], (string)($card['year_date'] ?? ''));
+    $existing = $pdo->prepare('SELECT * FROM summary_card_snapshots WHERE card_id = ? AND period_key = ? FOR UPDATE');
+    $existing->execute([$card['id'], $period['period_key']]);
+    $snapshot = $existing->fetch(PDO::FETCH_ASSOC);
+    if ($snapshot) return $snapshot;
+    $insert = $pdo->prepare('INSERT INTO summary_card_snapshots (card_id, title, period_key, period_label, period_sort, period_precision, is_published, main_value, main_label, secondary_label, secondary_value, year_date, description, secondary_description, info_text, source_info, source_record_id, batch_id, last_source_record_id, last_batch_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, NULL, NULL, NULL)');
+    $insert->execute([
+        $card['id'], $card['title'], $period['period_key'], $period['period_label'], $period['period_sort'], $period['period_precision'], $published ? 1 : 0,
+        $card['main_value'], $card['main_label'], $card['secondary_label'], $card['secondary_value'], $card['year_date'], $card['description'],
+        $card['secondary_description'], $card['info_text'], 'Manual entry'
+    ]);
+    $existing->execute([$card['id'], $period['period_key']]);
+    $saved = $existing->fetch(PDO::FETCH_ASSOC);
+    $pdo->prepare('INSERT INTO summary_card_period_changes (card_id, period_key, action, before_state, after_state, changed_by) VALUES (?, ?, "create", NULL, ?, ?)')->execute([
+        $card['id'], $period['period_key'], json_encode($saved, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES), (int)($_SESSION['user_id'] ?? 0)
+    ]);
+    return $saved;
+}
+function summary_card_manual_audit(PDO $pdo, string $cardId, string $periodKey, string $action, array $before, array $after): void {
+    $pdo->prepare('INSERT INTO summary_card_period_changes (card_id, period_key, action, before_state, after_state, changed_by) VALUES (?, ?, ?, ?, ?, ?)')->execute([
+        $cardId, $periodKey, $action,
+        json_encode($before, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
+        json_encode($after, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
+        (int)($_SESSION['user_id'] ?? 0)
+    ]);
 }
 function summary_category_slug(string $name): string {
     $name = trim($name);
@@ -375,11 +423,121 @@ try {
         }
     }
 
+    if ($resource === 'summary_card_history') {
+        if ($id === null || trim((string)$id) === '') bad('Summary Card id is required.');
+        $cardQuery = $pdo->prepare('SELECT * FROM summary_cards WHERE id = ?');
+        $cardQuery->execute([(string)$id]);
+        $card = $cardQuery->fetch(PDO::FETCH_ASSOC);
+        if (!$card) bad('Summary Card not found.', 404);
+        $isSuperAdmin = (($_SESSION['role'] ?? '') === 'super_admin');
+        if ($_SERVER['REQUEST_METHOD'] === 'GET') {
+            $allPeriods = SummaryCardHistory::periods($pdo, (string)$id);
+            $showAdminHistory = $isSuperAdmin && (($_GET['view'] ?? '') === 'admin');
+            $current = SummaryCardHistory::latest($allPeriods, true);
+            $latestImported = SummaryCardHistory::latest($allPeriods);
+            $historyVersion = SummaryCardHistory::version($card, $allPeriods);
+            $changeRows = $pdo->prepare('SELECT period_key, action, changed_by, created_at FROM summary_card_period_changes WHERE card_id = ? ORDER BY created_at DESC, id DESC');
+            $changeRows->execute([(string)$id]);
+            $changesByPeriod = [];
+            foreach ($changeRows->fetchAll(PDO::FETCH_ASSOC) as $change) $changesByPeriod[$change['period_key']][] = $change;
+            $periods = $showAdminHistory ? $allPeriods : array_values(array_filter($allPeriods, static fn(array $period): bool => !empty($period['is_published'])));
+            foreach ($periods as &$period) {
+                $period['is_current_public'] = $current && $current['period_key'] === $period['period_key'];
+                $period['row_version'] = $historyVersion;
+                $period['changes'] = $changesByPeriod[$period['period_key']] ?? [];
+            }
+            unset($period);
+            $selectedPeriod = trim((string)($_GET['period'] ?? ''));
+            if ($selectedPeriod !== '') {
+                if (!preg_match('/^[YQMDL]:/', $selectedPeriod)) {
+                    try { $selectedPeriod = LatestYearResolver::normalize($selectedPeriod)['period_key']; }
+                    catch (RuntimeException $exception) { bad($exception->getMessage()); }
+                }
+                $periods = array_values(array_filter($periods, static fn(array $period): bool => $period['period_key'] === $selectedPeriod));
+                if (!$periods) bad('Summary Card period not found.', 404);
+            }
+            echo json_encode([
+                'card' => ['id' => $card['id'], 'title' => $card['title']],
+                'current_public_period' => $current['period_label'] ?? null,
+                'latest_imported_period' => $latestImported['period_label'] ?? null,
+                'periods' => $periods
+            ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT);
+            exit;
+        }
+        if ($_SERVER['REQUEST_METHOD'] !== 'POST') bad('Method not allowed.', 405);
+        ensure_admin_for_mutation();
+        $data = json_input();
+        $action = (string)($data['action'] ?? '');
+        if (!in_array($action, ['correct', 'publish', 'unpublish'], true)) bad('Unknown Summary Card history action.');
+        $periodInput = trim((string)($data['period_key'] ?? ''));
+        if ($periodInput === '') bad('Period key is required.');
+        try { $periodKey = preg_match('/^[YQMDL]:/', $periodInput) ? $periodInput : LatestYearResolver::normalize($periodInput)['period_key']; }
+        catch (RuntimeException $exception) { bad($exception->getMessage()); }
+        $expectedVersion = (string)($data['row_version'] ?? '');
+        if ($expectedVersion === '') bad('Refresh the history before changing a period.');
+        $pdo->beginTransaction();
+        try {
+            $lockedCardQuery = $pdo->prepare('SELECT * FROM summary_cards WHERE id = ? FOR UPDATE');
+            $lockedCardQuery->execute([(string)$id]);
+            $lockedCard = $lockedCardQuery->fetch(PDO::FETCH_ASSOC);
+            $allPeriods = SummaryCardHistory::periods($pdo, (string)$id, true);
+            if (!$lockedCard || !hash_equals($expectedVersion, SummaryCardHistory::version($lockedCard, $allPeriods))) {
+                throw new RuntimeException('Summary Card history changed. Refresh before applying this action.', 409);
+            }
+            $before = null;
+            foreach ($allPeriods as $period) if ($period['period_key'] === $periodKey) { $before = $period; break; }
+            if (!$before) throw new RuntimeException('Summary Card period not found.', 404);
+            if ($action === 'correct') {
+                $allowed = ['title', 'main_value', 'main_label', 'year_date', 'secondary_label', 'secondary_value', 'description', 'secondary_description', 'info_text', 'source_info'];
+                $sets = [];
+                $values = [];
+                foreach ($allowed as $field) {
+                    if (!array_key_exists($field, $data)) continue;
+                    $value = trim((string)$data[$field]);
+                    if (strlen($value) > (in_array($field, ['description', 'secondary_description', 'info_text', 'source_info'], true) ? 65535 : 255)) {
+                        throw new InvalidArgumentException($field . ' exceeds its storage limit.');
+                    }
+                    $sets[] = '`' . $field . '` = ?';
+                    $values[] = $value;
+                }
+                if (!$sets) throw new InvalidArgumentException('Provide at least one period field to correct.');
+                if (array_key_exists('main_value', $data) && trim((string)$data['main_value']) === '') throw new InvalidArgumentException('main_value cannot be blank.');
+                $pdo->prepare('UPDATE summary_card_snapshots SET ' . implode(', ', $sets) . ' WHERE id = ?')->execute([...$values, $before['id']]);
+            } else {
+                $pdo->prepare('UPDATE summary_card_snapshots SET is_published = ? WHERE id = ?')->execute([$action === 'publish' ? 1 : 0, $before['id']]);
+            }
+            $changedQuery = $pdo->prepare('SELECT * FROM summary_card_snapshots WHERE id = ?');
+            $changedQuery->execute([$before['id']]);
+            $after = $changedQuery->fetch(PDO::FETCH_ASSOC);
+            SummaryCardHistory::syncLive($pdo, (string)$id);
+            $pdo->prepare('INSERT INTO summary_card_period_changes (card_id, period_key, action, before_state, after_state, changed_by) VALUES (?, ?, ?, ?, ?, ?)')->execute([
+                (string)$id, $periodKey, $action,
+                json_encode($before, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
+                json_encode($after, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
+                (int)$_SESSION['user_id']
+            ]);
+            $pdo->commit();
+            echo json_encode(['success' => true, 'period' => $after], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT);
+        } catch (Throwable $exception) {
+            if ($pdo->inTransaction()) $pdo->rollBack();
+            $status = in_array($exception->getCode(), [400, 404, 409], true) ? (int)$exception->getCode() : 422;
+            http_response_code($status);
+            echo json_encode(['error' => $exception->getMessage()]);
+        }
+        exit;
+    }
+
     if ($resource === 'summary_cards') {
         if ($_SERVER['REQUEST_METHOD'] === 'GET') {
             $rows = ($_SESSION['role'] ?? '') === 'super_admin'
-                ? $pdo->query('SELECT * FROM summary_cards ORDER BY display_order ASC, created_at DESC')->fetchAll(PDO::FETCH_ASSOC)
-                : $pdo->query('SELECT * FROM summary_cards WHERE is_published = 1 ORDER BY display_order ASC, created_at DESC')->fetchAll(PDO::FETCH_ASSOC);
+                ? $pdo->query("SELECT cards.*,
+                    (SELECT period_label FROM summary_card_snapshots p WHERE p.card_id = cards.id ORDER BY p.period_sort DESC, p.period_precision DESC, p.period_key ASC LIMIT 1) AS latest_imported_period,
+                    (SELECT period_key FROM summary_card_snapshots p WHERE p.card_id = cards.id ORDER BY p.period_sort DESC, p.period_precision DESC, p.period_key ASC LIMIT 1) AS latest_imported_period_key,
+                    (SELECT period_label FROM summary_card_snapshots p WHERE p.card_id = cards.id AND p.is_published = 1 ORDER BY p.period_sort DESC, p.period_precision DESC, p.period_key ASC LIMIT 1) AS current_public_period,
+                    (SELECT period_key FROM summary_card_snapshots p WHERE p.card_id = cards.id AND p.is_published = 1 ORDER BY p.period_sort DESC, p.period_precision DESC, p.period_key ASC LIMIT 1) AS current_public_period_key,
+                    (SELECT COUNT(*) FROM summary_card_snapshots p WHERE p.card_id = cards.id) AS history_count
+                    FROM summary_cards cards ORDER BY cards.display_order ASC, cards.created_at DESC")->fetchAll(PDO::FETCH_ASSOC)
+                : SummaryCardHistory::publishedCards($pdo);
             $rows = attach_summary_card_categories($pdo, $rows);
             echo json_encode(array_map(static function (array $card): array {
                 $card['display_precision'] = (int)($card['display_precision'] ?? 2);
@@ -395,6 +553,7 @@ try {
             ensure_json_csrf();
             $data = json_input();
             $id = $data['id'] ?? ('summary_card_' . date('YmdHis') . '_' . bin2hex(random_bytes(4)));
+            $importKey = summary_card_import_key($data['import_key'] ?? $id);
             $title = trim((string)($data['title'] ?? ''));
             if ($title === '') bad('title is required');
 
@@ -405,9 +564,13 @@ try {
             $pdo->beginTransaction();
             try {
                 $categoryIds = resolve_summary_categories($pdo, $data);
-                $stmt = $pdo->prepare('INSERT INTO summary_cards (id, title, main_value, main_label, year_date, secondary_label, secondary_value, description, secondary_description, info_text, display_order, display_precision, is_published, category_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
+                $collision = $pdo->prepare('SELECT id FROM summary_cards WHERE import_key = ? FOR UPDATE');
+                $collision->execute([$importKey]);
+                if ($collision->fetchColumn()) throw new RuntimeException('Another Summary Card already uses this Global Label.', 409);
+                $stmt = $pdo->prepare('INSERT INTO summary_cards (id, import_key, title, main_value, main_label, year_date, secondary_label, secondary_value, description, secondary_description, info_text, display_order, display_precision, is_published, category_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
                 $stmt->execute([
                     $id,
+                    $importKey,
                     $title,
                     (string)($data['main_value'] ?? ''),
                     (string)($data['main_label'] ?? ''),
@@ -423,9 +586,16 @@ try {
                     $categoryIds[0] ?? null
                 ]);
                 save_summary_card_categories($pdo, (string)$id, $categoryIds);
+                $createdQuery = $pdo->prepare('SELECT * FROM summary_cards WHERE id = ? FOR UPDATE');
+                $createdQuery->execute([$id]);
+                $createdCard = $createdQuery->fetch(PDO::FETCH_ASSOC);
+                summary_card_manual_snapshot($pdo, $createdCard, $published);
+                SummaryCardHistory::syncLive($pdo, (string)$id);
                 $pdo->commit();
             } catch (Throwable $exception) {
                 if ($pdo->inTransaction()) $pdo->rollBack();
+                if ($exception instanceof RuntimeException && $exception->getCode() === 409) bad($exception->getMessage(), 409);
+                if ($exception instanceof PDOException && (string)($exception->errorInfo[0] ?? '') === '23000') bad('Another Summary Card already uses this Global Label.', 409);
                 throw $exception;
             }
 
@@ -441,45 +611,88 @@ try {
             ensure_json_csrf();
             if ($id === null) bad('Summary card id is required');
             $data = json_input();
-            $allowed = ['title','main_value','main_label','year_date','secondary_label','secondary_value','description','secondary_description','info_text','display_order','display_precision','is_published'];
-            $sets = [];
-            $values = [];
+            $contentFields = ['title','main_value','main_label','year_date','secondary_label','secondary_value','description','secondary_description','info_text'];
+            $configFields = ['display_order', 'display_precision'];
+            $hasIdentityUpdate = array_key_exists('import_key', $data);
+            $importKey = $hasIdentityUpdate ? summary_card_import_key($data['import_key']) : null;
+            $hasContentUpdate = (bool)array_intersect($contentFields, array_keys($data));
+            $hasConfigUpdate = (bool)array_intersect($configFields, array_keys($data));
+            $hasPublicationUpdate = array_key_exists('is_published', $data);
             $hasCategoryUpdate = array_key_exists('category_ids', $data) || array_key_exists('category_names', $data) || array_key_exists('category_id', $data) || array_key_exists('category_name', $data);
             $categoryIds = $hasCategoryUpdate ? resolve_summary_categories($pdo, $data) : [];
-            if ($hasCategoryUpdate) {
-                $sets[] = 'category_id = ?';
-                $values[] = $categoryIds[0] ?? null;
-            }
-            foreach ($allowed as $field) {
-                if (!array_key_exists($field, $data)) continue;
-                if ($field === 'display_order') {
-                    $sets[] = 'display_order = ?';
-                    $values[] = (int)$data[$field];
-                    continue;
-                }
-                if ($field === 'display_precision') {
-                    $precision = max(0, min(2, (int)$data[$field]));
-                    $sets[] = 'display_precision = ?';
-                    $values[] = $precision;
-                    continue;
-                }
-                if ($field === 'is_published') {
-                    $sets[] = 'is_published = ?';
-                    $values[] = !empty($data[$field]) ? 1 : 0;
-                    continue;
-                }
-                $sets[] = $field . ' = ?';
-                $values[] = (string)$data[$field];
-            }
-            if (!$sets) bad('No fields to update');
-            $values[] = $id;
+            if (!$hasIdentityUpdate && !$hasContentUpdate && !$hasConfigUpdate && !$hasPublicationUpdate && !$hasCategoryUpdate) bad('No fields to update');
+            if (array_key_exists('main_value', $data) && trim((string)$data['main_value']) === '') bad('main_value cannot be blank');
             $pdo->beginTransaction();
             try {
-                $pdo->prepare('UPDATE summary_cards SET ' . implode(', ', $sets) . ' WHERE id = ?')->execute($values);
+                $locked = $pdo->prepare('SELECT * FROM summary_cards WHERE id = ? FOR UPDATE');
+                $locked->execute([(string)$id]);
+                $card = $locked->fetch(PDO::FETCH_ASSOC);
+                if (!$card) throw new RuntimeException('Summary Card not found.', 404);
+                $periods = SummaryCardHistory::periods($pdo, (string)$id, true);
+                $beforeIdentity = $card;
+                if ($hasIdentityUpdate && $importKey !== (string)$card['import_key']) {
+                    $collision = $pdo->prepare('SELECT id FROM summary_cards WHERE import_key = ? AND id <> ? FOR UPDATE');
+                    $collision->execute([$importKey, $id]);
+                    if ($collision->fetchColumn()) throw new RuntimeException('Another Summary Card already uses this Global Label.', 409);
+                }
+                if (!$periods) {
+                    summary_card_manual_snapshot($pdo, $card, (bool)$card['is_published']);
+                    $periods = SummaryCardHistory::periods($pdo, (string)$id, true);
+                }
+                if ($hasContentUpdate) {
+                    $target = SummaryCardHistory::latest($periods, true) ?? SummaryCardHistory::latest($periods);
+                    $sets = [];
+                    $values = [];
+                    foreach ($contentFields as $field) {
+                        if (!array_key_exists($field, $data)) continue;
+                        $value = trim((string)$data[$field]);
+                        if (strlen($value) > (in_array($field, ['description', 'secondary_description', 'info_text'], true) ? 65535 : 255)) {
+                            throw new InvalidArgumentException($field . ' exceeds its storage limit.');
+                        }
+                        $sets[] = '`' . $field . '` = ?';
+                        $values[] = $value;
+                    }
+                    $before = $target;
+                    $pdo->prepare('UPDATE summary_card_snapshots SET ' . implode(', ', $sets) . ' WHERE id = ?')->execute([...$values, $target['id']]);
+                    $snapshotQuery = $pdo->prepare('SELECT * FROM summary_card_snapshots WHERE id = ?');
+                    $snapshotQuery->execute([$target['id']]);
+                    $after = $snapshotQuery->fetch(PDO::FETCH_ASSOC);
+                    summary_card_manual_audit($pdo, (string)$id, (string)$target['period_key'], 'correct', $before, $after);
+                    $periods = SummaryCardHistory::periods($pdo, (string)$id, true);
+                }
+                if ($hasPublicationUpdate && !empty($data['is_published']) !== !empty($card['is_published'])) {
+                    $target = !empty($data['is_published'])
+                        ? SummaryCardHistory::latest($periods)
+                        : SummaryCardHistory::latest($periods, true);
+                    if ($target) {
+                        $pdo->prepare('UPDATE summary_card_snapshots SET is_published = ? WHERE id = ?')->execute([!empty($data['is_published']) ? 1 : 0, $target['id']]);
+                        $snapshotQuery = $pdo->prepare('SELECT * FROM summary_card_snapshots WHERE id = ?');
+                        $snapshotQuery->execute([$target['id']]);
+                        $after = $snapshotQuery->fetch(PDO::FETCH_ASSOC);
+                        summary_card_manual_audit($pdo, (string)$id, (string)$target['period_key'], !empty($data['is_published']) ? 'publish' : 'unpublish', $target, $after);
+                    }
+                }
+                $cardSets = [];
+                $cardValues = [];
+                if ($hasIdentityUpdate) { $cardSets[] = 'import_key = ?'; $cardValues[] = $importKey; }
+                if (array_key_exists('display_order', $data)) { $cardSets[] = 'display_order = ?'; $cardValues[] = (int)$data['display_order']; }
+                if (array_key_exists('display_precision', $data)) { $cardSets[] = 'display_precision = ?'; $cardValues[] = max(0, min(2, (int)$data['display_precision'])); }
+                if ($cardSets) $pdo->prepare('UPDATE summary_cards SET ' . implode(', ', $cardSets) . ' WHERE id = ?')->execute([...$cardValues, $id]);
                 if ($hasCategoryUpdate) save_summary_card_categories($pdo, (string)$id, $categoryIds);
+                SummaryCardHistory::syncLive($pdo, (string)$id);
+                if ($hasIdentityUpdate && $importKey !== (string)$beforeIdentity['import_key']) {
+                    $period = SummaryCardHistory::latest($periods);
+                    if ($period) {
+                        $updatedCardQuery = $pdo->prepare('SELECT * FROM summary_cards WHERE id = ?');
+                        $updatedCardQuery->execute([(string)$id]);
+                        summary_card_manual_audit($pdo, (string)$id, (string)$period['period_key'], 'identity', $beforeIdentity, $updatedCardQuery->fetch(PDO::FETCH_ASSOC));
+                    }
+                }
                 $pdo->commit();
             } catch (Throwable $exception) {
                 if ($pdo->inTransaction()) $pdo->rollBack();
+                if ($exception instanceof RuntimeException && in_array($exception->getCode(), [404, 409], true)) bad($exception->getMessage(), (int)$exception->getCode());
+                if ($exception instanceof PDOException && (string)($exception->errorInfo[0] ?? '') === '23000') bad('Another Summary Card already uses this Global Label.', 409);
                 throw $exception;
             }
             $q = $pdo->prepare('SELECT * FROM summary_cards WHERE id=?');

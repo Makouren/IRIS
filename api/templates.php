@@ -1,5 +1,6 @@
 <?php
 require_once __DIR__ . '/../includes/functions.php';
+require_once __DIR__ . '/../includes/helpers/SummaryCardImportProfiles.php';
 header('Content-Type: application/json; charset=utf-8');
 header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
 
@@ -25,17 +26,64 @@ function templates_csv_has_null_byte(string $path): bool {
 try {
     $method = $_SERVER['REQUEST_METHOD'] ?? 'GET';
     if ($method === 'GET') {
+        if (($_GET['resource'] ?? '') === 'summary_card_profiles') {
+            requireRole(['super_admin'], true);
+            echo json_encode(['active_profile_id' => SummaryCardImportProfiles::activeId(db()), 'profiles' => SummaryCardImportProfiles::available(db())], JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT);
+            exit;
+        }
+        if (($_GET['resource'] ?? '') === 'summary_card_profile') {
+            requireRole(['super_admin'], true);
+            $profileId = filter_var($_GET['profile_id'] ?? null, FILTER_VALIDATE_INT);
+            if (!$profileId || $profileId < 1) templates_fail('Choose a valid Summary Card profile.');
+            $profile = SummaryCardImportProfiles::get(db(), (int)$profileId);
+            echo json_encode([
+                'id' => (int)$profile['id'],
+                'profile_name' => $profile['profile_name'],
+                'sheet_selector' => $profile['sheet_selector'],
+                'identity_fields' => $profile['identity_fields'],
+                'header_aliases' => $profile['header_aliases'],
+                'required_columns' => $profile['required_columns'],
+                'mapping_rules' => $profile['mapping_rules'],
+                'defaults' => $profile['defaults_json']
+            ], JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT);
+            exit;
+        }
+        if (($_GET['resource'] ?? '') === 'active_summary_card_profile') {
+            requireRole(['super_admin', 'admin'], true);
+            $profile = SummaryCardImportProfiles::active(db());
+            echo json_encode([
+                'id' => (int)$profile['id'],
+                'profile_name' => $profile['profile_name'],
+                'template_id' => $profile['template_id'] === null ? null : (int)$profile['template_id'],
+                'template_name' => $profile['template_name'] ?: $profile['profile_name'],
+                'original_filename' => $profile['original_filename'] ?? null
+            ], JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT);
+            exit;
+        }
         if (($_GET['resource'] ?? '') === 'import_records') {
             requireRole(['super_admin'], true);
             $destination = (string)($_GET['destination'] ?? '');
             if (!in_array($destination, ['ranking_history', 'summary_cards'], true)) templates_fail('Choose a valid import destination.');
-            $query = db()->prepare('SELECT records.id, records.fileName, records.fileType, records.status, records.office_name, records.uploaded_at, records.metadata, templates.name AS template_name, profiles.destination AS profile_destination FROM records LEFT JOIN templates ON templates.id = records.template_id LEFT JOIN template_import_profiles profiles ON profiles.template_id = templates.id WHERE (profiles.destination = ? OR JSON_UNQUOTE(JSON_EXTRACT(records.metadata, "$.upload_purpose")) = ?) AND LOWER(records.fileType) IN ("xlsx", "csv", "tsv") ORDER BY records.uploaded_at DESC, records.scannedAt DESC LIMIT 100');
-            $query->execute([$destination, $destination]);
+            $query = db()->prepare('SELECT records.id, records.fileName, records.fileType, records.status, records.office_name, records.uploaded_at, records.metadata,
+                    COALESCE(upload_profiles.profile_name, profiles.profile_name, templates.name) AS template_name,
+                    COALESCE(upload_profiles.destination, profiles.destination) AS profile_destination
+                FROM records
+                LEFT JOIN templates ON templates.id = records.template_id
+                LEFT JOIN template_import_profiles profiles ON profiles.template_id = templates.id
+                LEFT JOIN template_import_profiles upload_profiles ON upload_profiles.id = records.import_profile_id
+                WHERE (upload_profiles.destination = ? OR profiles.destination = ? OR JSON_UNQUOTE(JSON_EXTRACT(records.metadata, "$.upload_purpose")) = ?)
+                    AND LOWER(records.fileType) IN ("xlsx", "csv", "tsv")
+                ORDER BY records.uploaded_at DESC, records.scannedAt DESC LIMIT 100');
+            $query->execute([$destination, $destination, $destination]);
             $records = [];
+            $storagePath = getenv('IRIS_UPLOAD_DIR') ?: dirname(__DIR__, 4) . DIRECTORY_SEPARATOR . 'iris-private-uploads';
+            $storageRoot = realpath($storagePath);
             foreach ($query->fetchAll(PDO::FETCH_ASSOC) as $record) {
                 $metadata = json_decode((string)($record['metadata'] ?? ''), true);
                 $storedFile = is_array($metadata) ? (string)($metadata['stored_file'] ?? '') : '';
                 if (!preg_match('/^[a-f0-9]{48}\.(xlsx|csv|tsv)$/', $storedFile)) continue;
+                $storedPath = $storageRoot ? realpath($storageRoot . DIRECTORY_SEPARATOR . $storedFile) : false;
+                if (!$storageRoot || !$storedPath || dirname($storedPath) !== $storageRoot || !is_file($storedPath)) continue;
                 $recordedPurpose = is_array($metadata) ? (string)($metadata['upload_purpose'] ?? '') : '';
                 if ($recordedPurpose !== '' ? $recordedPurpose !== $destination : $record['profile_destination'] !== $destination) continue;
                 if ($record['profile_destination'] !== null && $record['profile_destination'] !== $destination) continue;
@@ -46,7 +94,7 @@ try {
                     'status' => $record['status'],
                     'office_name' => $record['office_name'],
                     'uploaded_at' => $record['uploaded_at'],
-                    'template_name' => $record['template_name'] ?: 'Built-in Snapshot mapping'
+                    'template_name' => $record['template_name'] ?: 'Unified Summary Cards'
                 ];
             }
             echo json_encode($records, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT);
@@ -56,7 +104,14 @@ try {
             requireRole(['super_admin'], true);
             $recordId = trim((string)($_GET['record_id'] ?? ''));
             if ($recordId === '') templates_fail('Record id is required.');
-            $profile = db()->prepare('SELECT records.template_id, records.metadata, templates.name AS template_name, profiles.destination FROM records LEFT JOIN templates ON templates.id = records.template_id LEFT JOIN template_import_profiles profiles ON profiles.template_id = templates.id WHERE records.id = ? LIMIT 1');
+            $profile = db()->prepare('SELECT records.template_id, records.import_profile_id, records.metadata,
+                    COALESCE(upload_profiles.profile_name, profiles.profile_name, templates.name) AS template_name,
+                    COALESCE(upload_profiles.destination, profiles.destination) AS destination
+                FROM records
+                LEFT JOIN templates ON templates.id = records.template_id
+                LEFT JOIN template_import_profiles profiles ON profiles.template_id = templates.id
+                LEFT JOIN template_import_profiles upload_profiles ON upload_profiles.id = records.import_profile_id
+                WHERE records.id = ? LIMIT 1');
             $profile->execute([$recordId]);
             $row = $profile->fetch(PDO::FETCH_ASSOC);
             if (!$row) templates_fail('This upload has no linked template.', 409);
@@ -66,7 +121,7 @@ try {
             if (!$row['destination']) templates_fail('Configure an import profile for this template first.', 409);
             if ($recordedPurpose !== '' && $recordedPurpose !== $row['destination']) templates_fail('This upload was submitted for a different destination than the template is currently configured for.', 409);
             if (empty($row['template_id']) && $row['destination'] !== 'summary_cards') templates_fail('This destination requires a configured template.', 409);
-            $row['template_name'] = $row['template_name'] ?: 'Built-in Snapshot mapping';
+            $row['template_name'] = $row['template_name'] ?: 'Unified Summary Cards';
             unset($row['metadata']);
             echo json_encode($row, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT);
             exit;
@@ -85,14 +140,15 @@ try {
         requireRole(['super_admin', 'admin'], true);
         $pdo = db();
         $query = $pdo->prepare(($_SESSION['role'] ?? '') === 'super_admin'
-            ? 'SELECT templates.id, templates.name, templates.original_filename, templates.ranking_body_id, bodies.name AS ranking_body_name, templates.is_active, templates.created_at, profiles.destination AS import_destination, profiles.sheet_selector, profiles.header_aliases, profiles.required_columns, profiles.mapping_rules, profiles.defaults_json FROM templates LEFT JOIN ranking_bodies bodies ON bodies.id = templates.ranking_body_id LEFT JOIN template_import_profiles profiles ON profiles.template_id = templates.id ORDER BY templates.created_at DESC, templates.id DESC'
-            : 'SELECT templates.id, templates.name, templates.original_filename, templates.ranking_body_id, bodies.name AS ranking_body_name, templates.is_active, templates.created_at, profiles.destination AS import_destination, profiles.sheet_selector, profiles.header_aliases, profiles.required_columns, profiles.mapping_rules, profiles.defaults_json FROM templates LEFT JOIN ranking_bodies bodies ON bodies.id = templates.ranking_body_id LEFT JOIN template_import_profiles profiles ON profiles.template_id = templates.id WHERE templates.is_active = 1 ORDER BY templates.name ASC, templates.id DESC');
+            ? 'SELECT templates.id, templates.name, templates.original_filename, templates.ranking_body_id, bodies.name AS ranking_body_name, templates.is_active, templates.created_at, profiles.destination AS import_destination, profiles.sheet_selector, profiles.header_aliases, profiles.required_columns, profiles.identity_fields, profiles.mapping_rules, profiles.defaults_json FROM templates LEFT JOIN ranking_bodies bodies ON bodies.id = templates.ranking_body_id LEFT JOIN template_import_profiles profiles ON profiles.template_id = templates.id ORDER BY templates.created_at DESC, templates.id DESC'
+            : 'SELECT templates.id, templates.name, templates.original_filename, templates.ranking_body_id, bodies.name AS ranking_body_name, templates.is_active, templates.created_at, profiles.destination AS import_destination, profiles.sheet_selector, profiles.header_aliases, profiles.required_columns, profiles.identity_fields, profiles.mapping_rules, profiles.defaults_json FROM templates LEFT JOIN ranking_bodies bodies ON bodies.id = templates.ranking_body_id LEFT JOIN template_import_profiles profiles ON profiles.template_id = templates.id WHERE templates.is_active = 1 ORDER BY templates.name ASC, templates.id DESC');
         $query->execute();
         $templates = $query->fetchAll(PDO::FETCH_ASSOC);
         foreach ($templates as &$template) {
-            foreach (['header_aliases', 'required_columns', 'mapping_rules', 'defaults_json'] as $field) {
+            foreach (['header_aliases', 'required_columns', 'identity_fields', 'mapping_rules', 'defaults_json'] as $field) {
                 $template[$field] = json_decode((string)($template[$field] ?? ''), true) ?: [];
             }
+            if (!$template['identity_fields'] && $template['import_destination'] === 'summary_cards') $template['identity_fields'] = ['import_key'];
         }
         unset($template);
         echo json_encode($templates, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT);
@@ -107,6 +163,125 @@ try {
 
     $action = (string)($_POST['action'] ?? 'upload');
     $pdo = db();
+    if ($action === 'delete-summary-card-upload') {
+        $recordId = trim((string)($_POST['record_id'] ?? ''));
+        if ($recordId === '') templates_fail('Choose a Summary Card upload to delete.');
+        $record = null;
+        $storedFile = '';
+        $preservedRecord = false;
+        $pdo->beginTransaction();
+        try {
+            $query = $pdo->prepare('SELECT id, fileName, template_id, import_profile_id, metadata FROM records WHERE id = ? FOR UPDATE');
+            $query->execute([$recordId]);
+            $record = $query->fetch(PDO::FETCH_ASSOC);
+            if (!$record) throw new RuntimeException('The selected upload no longer exists.', 404);
+            $metadata = json_decode((string)($record['metadata'] ?? ''), true);
+            $purpose = is_array($metadata) ? (string)($metadata['upload_purpose'] ?? '') : '';
+            $profileId = (int)($record['import_profile_id'] ?? 0);
+            if (!$profileId && !empty($record['template_id'])) {
+                $profileQuery = $pdo->prepare('SELECT id FROM template_import_profiles WHERE template_id = ? AND destination = \'summary_cards\' LIMIT 1');
+                $profileQuery->execute([(int)$record['template_id']]);
+                $profileId = (int)$profileQuery->fetchColumn();
+            }
+            $isSummaryUpload = $purpose === 'summary_cards';
+            if (!$isSummaryUpload && $profileId) {
+                $purposeQuery = $pdo->prepare('SELECT destination FROM template_import_profiles WHERE id = ?');
+                $purposeQuery->execute([$profileId]);
+                $isSummaryUpload = $purposeQuery->fetchColumn() === 'summary_cards';
+            }
+            if (!$isSummaryUpload) throw new RuntimeException('Only Summary Card uploads can be deleted here.', 409);
+            $applied = $pdo->prepare("SELECT COUNT(*) FROM import_batches WHERE BINARY source_record_id = BINARY ? AND destination = 'summary_cards' AND status = 'applied'");
+            $applied->execute([$recordId]);
+            $hasAppliedBatch = (int)$applied->fetchColumn() > 0;
+            $historyReferences = $pdo->prepare('SELECT COUNT(*) FROM summary_card_snapshots WHERE BINARY source_record_id = BINARY ? OR BINARY last_source_record_id = BINARY ?');
+            $historyReferences->execute([$recordId, $recordId]);
+            $hasHistoryReferences = (int)$historyReferences->fetchColumn() > 0;
+            $preservedRecord = $hasAppliedBatch || $hasHistoryReferences;
+            $storedFile = is_array($metadata) ? (string)($metadata['stored_file'] ?? '') : '';
+            if (!preg_match('/^[a-f0-9]{48}\.(xlsx|csv|tsv)$/', $storedFile)) {
+                throw new RuntimeException('The selected upload has no supported private file to delete.', 409);
+            }
+            if (!$preservedRecord) {
+                $pdo->prepare('DELETE FROM saved_graphs WHERE record_id = ?')->execute([$recordId]);
+                $delete = $pdo->prepare('DELETE FROM records WHERE id = ?');
+                $delete->execute([$recordId]);
+                if ($delete->rowCount() !== 1) throw new RuntimeException('The selected upload could not be deleted.', 409);
+            }
+            $pdo->commit();
+        } catch (Throwable $exception) {
+            if ($pdo->inTransaction()) $pdo->rollBack();
+            $status = in_array($exception->getCode(), [404, 409], true) ? (int)$exception->getCode() : 500;
+            templates_fail($status === 500 ? 'Unable to delete this Summary Card upload.' : $exception->getMessage(), $status);
+        }
+
+        $referenced = false;
+        $references = $pdo->prepare('SELECT metadata FROM records WHERE metadata LIKE ?');
+        $references->execute(['%' . $storedFile . '%']);
+        foreach ($references->fetchAll(PDO::FETCH_COLUMN) as $otherMetadata) {
+            $other = json_decode((string)$otherMetadata, true);
+            if (is_array($other) && ($other['stored_file'] ?? null) === $storedFile) { $referenced = true; break; }
+        }
+        $storagePath = getenv('IRIS_UPLOAD_DIR') ?: dirname(__DIR__, 4) . DIRECTORY_SEPARATOR . 'iris-private-uploads';
+        $root = realpath($storagePath);
+        $path = $root ? realpath($root . DIRECTORY_SEPARATOR . $storedFile) : false;
+        $documentRoot = realpath((string)($_SERVER['DOCUMENT_ROOT'] ?? ''));
+        $outsideWebRoot = !$documentRoot || (strcasecmp($root ?: '', $documentRoot) !== 0 && strncasecmp($root ?: '', $documentRoot . DIRECTORY_SEPARATOR, strlen($documentRoot) + 1) !== 0);
+        if (!$referenced && $root && $path && dirname($path) === $root && $outsideWebRoot && is_file($path) && !@unlink($path)) {
+            error_log('IRIS could not remove deleted Summary Card upload file: ' . $storedFile);
+        }
+        echo json_encode(['success' => true, 'deleted_record_id' => $recordId, 'deleted_file_name' => (string)($record['fileName'] ?? ''), 'preserved_record' => $preservedRecord]);
+        exit;
+    }
+    if ($action === 'activate-summary-card-profile') {
+        $profileId = filter_var($_POST['profile_id'] ?? null, FILTER_VALIDATE_INT);
+        if (!$profileId || $profileId < 1) templates_fail('Choose a valid Summary Card profile.');
+        $profile = SummaryCardImportProfiles::activate($pdo, (int)$profileId, (int)$_SESSION['user_id']);
+        echo json_encode(['success' => true, 'active_profile_id' => (int)$profile['id'], 'profile_name' => $profile['profile_name']]);
+        exit;
+    }
+    if ($action === 'save-summary-card-profile') {
+        $profileId = filter_var($_POST['profile_id'] ?? null, FILTER_VALIDATE_INT);
+        $profileName = trim((string)($_POST['profile_name'] ?? ''));
+        $rawProfile = (string)($_POST['profile'] ?? '');
+        if (!$profileId || $profileId < 1) templates_fail('Choose a valid Summary Card profile.');
+        if ($profileName === '' || strlen($profileName) > 150) templates_fail('Profile name is required and must not exceed 150 characters.');
+        if (strlen($rawProfile) > 65535) templates_fail('Import profile must not exceed 64 KB.');
+        $profileData = json_decode($rawProfile, true);
+        if (!is_array($profileData)) templates_fail('Summary Card profile must be valid JSON.');
+        $aliases = $profileData['header_aliases'] ?? [];
+        $mapping = $profileData['mapping_rules'] ?? [];
+        $required = $profileData['required_columns'] ?? [];
+        $identityFields = $profileData['identity_fields'] ?? ['import_key'];
+        $defaults = $profileData['defaults'] ?? [];
+        $sheetSelector = $profileData['sheet_selector'] ?? '';
+        if (!is_array($aliases) || !is_array($mapping) || !is_array($required) || !array_is_list($required) || !is_array($identityFields) || !array_is_list($identityFields) || !is_array($defaults)) {
+            templates_fail('Summary Card aliases, mappings, required columns, identities, and defaults have invalid shapes.');
+        }
+        if (!$identityFields || !in_array('import_key', $identityFields, true) || in_array('period_key', $identityFields, true)) {
+            templates_fail('Summary Card identity fields must include import_key and exclude period_key.');
+        }
+        foreach (array_unique(array_merge(array_keys($aliases), array_keys($mapping), $required, array_keys($defaults), $identityFields)) as $field) {
+            if (!is_string($field) || !preg_match('/^[a-z][a-z0-9_]{0,63}$/', $field)) templates_fail('Summary Card canonical field names are invalid.');
+        }
+        foreach ($identityFields as $field) if (!is_string($field)) templates_fail('Summary Card identity fields must be canonical names.');
+        foreach ($mapping as $header) if (!is_string($header) || trim($header) === '') templates_fail('Each Summary Card mapping must name a worksheet header.');
+        foreach ($aliases as $list) if (!is_array($list) || !array_is_list($list) || array_filter($list, static fn($item): bool => !is_string($item))) templates_fail('Each Summary Card header alias must be a list of strings.');
+        foreach ($required as $field) if (!is_string($field)) templates_fail('Summary Card required fields must be strings.');
+        foreach ($defaults as $value) if (!is_scalar($value) && $value !== null) templates_fail('Summary Card defaults must be strings or numbers.');
+        if (!is_string($sheetSelector) || strlen($sheetSelector) > 255) templates_fail('Worksheet selector must be under 256 characters.');
+        $required = array_values(array_unique(array_merge($required, $identityFields)));
+        foreach (['import_key', 'period_key', 'main_value', 'main_label'] as $field) if (!isset($mapping[$field])) templates_fail('Required Summary Card mapping is missing: ' . $field);
+        SummaryCardImportProfiles::get($pdo, (int)$profileId, true);
+        $save = $pdo->prepare('UPDATE template_import_profiles SET profile_name = ?, sheet_selector = ?, header_aliases = ?, required_columns = ?, identity_fields = ?, mapping_rules = ?, defaults_json = ? WHERE id = ? AND destination = \'summary_cards\'');
+        $save->execute([$profileName, trim($sheetSelector) !== '' ? trim($sheetSelector) : null, json_encode($aliases), json_encode($required), json_encode($identityFields), json_encode($mapping), json_encode($defaults), (int)$profileId]);
+        if (!$save->rowCount()) {
+            $exists = $pdo->prepare('SELECT id FROM template_import_profiles WHERE id = ? AND destination = \'summary_cards\'');
+            $exists->execute([(int)$profileId]);
+            if (!$exists->fetchColumn()) templates_fail('The Summary Card profile is unavailable or its template is inactive.', 409);
+        }
+        echo json_encode(['success' => true, 'profile_name' => $profileName]);
+        exit;
+    }
     if ($action === 'save-import-profile') {
         $templateId = filter_var($_POST['id'] ?? null, FILTER_VALIDATE_INT);
         $destination = (string)($_POST['destination'] ?? '');
@@ -117,13 +292,29 @@ try {
         if (!is_array($profileData)) templates_fail('Import profile must be valid JSON.');
         $allowedFields = $destination === 'ranking_history'
             ? ['year', 'category', 'global_rank', 'ranking_type', 'scope', 'scope_id', 'level', 'level_id', 'edition', 'ph_rank', 'note', 'source', 'verification_status']
-            : ['import_key', 'main_value', 'secondary_value', 'year_date', 'main_label', 'secondary_label', 'description', 'secondary_description', 'info_text', 'period_key'];
+            : ['import_key', 'card_title', 'main_value', 'secondary_value', 'year_date', 'main_label', 'secondary_label', 'description', 'secondary_description', 'info_text', 'source_info', 'period_key'];
         $aliases = $profileData['header_aliases'] ?? [];
         $mapping = $profileData['mapping_rules'] ?? [];
         $required = $profileData['required_columns'] ?? [];
+        $identityFields = $profileData['identity_fields'] ?? ($destination === 'summary_cards' ? ['import_key'] : []);
         $defaults = $profileData['defaults'] ?? [];
         if (!is_array($aliases) || !is_array($mapping) || !is_array($required) || !array_is_list($required) || !is_array($defaults)) {
             templates_fail('Aliases, mappings, required columns, and defaults must have the expected object/list shapes.');
+        }
+        if (!is_array($identityFields) || !array_is_list($identityFields) || array_filter($identityFields, static fn($field): bool => !is_string($field))) {
+            templates_fail('Identity fields must be a list of canonical field names.');
+        }
+        if ($destination === 'summary_cards') {
+            if (!$identityFields || !in_array('import_key', $identityFields, true) || in_array('period_key', $identityFields, true)) {
+                templates_fail('Summary Card identity fields must include import_key and exclude period_key.');
+            }
+            foreach ($identityFields as $field) {
+                if (!preg_match('/^[a-z][a-z0-9_]{0,63}$/', $field)) templates_fail('Identity fields must use canonical field names.');
+            }
+            $required = array_values(array_unique(array_merge($required, $identityFields)));
+            $allowedFields = array_values(array_unique(array_merge($allowedFields, $identityFields)));
+        } elseif ($identityFields) {
+            templates_fail('Identity fields are only supported for Summary Card imports.');
         }
         if (!$mapping) templates_fail('Add at least one worksheet field mapping.');
         $minimumMappings = $destination === 'ranking_history' ? ['year', 'global_rank'] : ['import_key', 'period_key', 'main_value'];
@@ -151,8 +342,8 @@ try {
         $sheetSelector = $profileData['sheet_selector'] ?? '';
         if (!is_string($sheetSelector) || strlen($sheetSelector) > 255) templates_fail('Worksheet selector must be a name under 256 characters.');
         $sheetSelector = trim($sheetSelector);
-        $save = $pdo->prepare('INSERT INTO template_import_profiles (template_id, destination, sheet_selector, header_aliases, required_columns, mapping_rules, defaults_json, created_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?) ON DUPLICATE KEY UPDATE destination = VALUES(destination), sheet_selector = VALUES(sheet_selector), header_aliases = VALUES(header_aliases), required_columns = VALUES(required_columns), mapping_rules = VALUES(mapping_rules), defaults_json = VALUES(defaults_json), created_by = VALUES(created_by)');
-        $save->execute([$templateId, $destination, $sheetSelector !== '' ? $sheetSelector : null, json_encode($aliases), json_encode($required), json_encode($mapping), json_encode($defaults), (int)$_SESSION['user_id']]);
+        $save = $pdo->prepare('INSERT INTO template_import_profiles (template_id, destination, sheet_selector, header_aliases, required_columns, identity_fields, mapping_rules, defaults_json, created_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?) ON DUPLICATE KEY UPDATE destination = VALUES(destination), sheet_selector = VALUES(sheet_selector), header_aliases = VALUES(header_aliases), required_columns = VALUES(required_columns), identity_fields = VALUES(identity_fields), mapping_rules = VALUES(mapping_rules), defaults_json = VALUES(defaults_json), created_by = VALUES(created_by)');
+        $save->execute([$templateId, $destination, $sheetSelector !== '' ? $sheetSelector : null, json_encode($aliases), json_encode($required), json_encode($identityFields), json_encode($mapping), json_encode($defaults), (int)$_SESSION['user_id']]);
         echo json_encode(['success' => true]);
         exit;
     }

@@ -14,6 +14,6 @@ export async function postJson(url, token, payload) {
 
 async function readJson(response) {
   const result = await response.json().catch(() => ({}));
-  if (!response.ok) throw new Error(result.error || `Request failed (${response.status}).`);
+  if (!response.ok) throw Object.assign(new Error(result.error || `Request failed (${response.status}).`), result);
   return result;
 }

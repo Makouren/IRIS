@@ -7,8 +7,20 @@
         <div data-import-notice class="mb-4 rounded-lg p-3 text-sm" role="status" aria-live="polite">Choose an upload to preview changes.</div>
         <div data-import-source-picker class="mb-4 hidden flex-wrap items-end gap-3">
             <label class="min-w-64 flex-1 text-sm font-semibold">Office upload<select data-import-source class="mt-1 block w-full rounded-lg border border-gray-300 bg-gray-50 p-2.5 dark:border-slate-700 dark:bg-slate-800"><option value="">Choose an upload</option></select></label>
+            <div class="flex gap-2">
+                <button type="button" data-import-load-source class="hidden rounded-lg bg-emerald-700 px-4 py-2.5 text-sm font-bold text-white disabled:cursor-not-allowed disabled:opacity-50" disabled><i class="fa-solid fa-eye mr-1" aria-hidden="true"></i>Preview selected</button>
+                <button type="button" data-import-delete-upload class="hidden rounded-lg border border-red-300 px-3 py-2.5 text-sm font-bold text-red-700 hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-red-800 dark:text-red-200 dark:hover:bg-red-950" disabled title="Delete an unapplied Summary Card upload"><i class="fa-solid fa-trash" aria-hidden="true"></i><span class="sr-only">Delete selected Summary Card upload</span></button>
+            </div>
+        </div>
+        <div data-import-sheet-picker class="mb-4 hidden flex-wrap items-end gap-3">
+            <label class="min-w-64 flex-1 text-sm font-semibold">Worksheet<select data-import-sheet-select class="mt-1 block w-full rounded-lg border border-gray-300 bg-gray-50 p-2.5 dark:border-slate-700 dark:bg-slate-800"><option value="">Choose a worksheet</option></select></label>
+            <button type="button" data-import-sheet-choose class="rounded-lg bg-emerald-700 px-4 py-2.5 text-sm font-bold text-white">Load worksheet</button>
         </div>
         <div data-import-sheet class="mb-2 text-xs font-semibold text-gray-500 dark:text-slate-400"></div>
+        <div data-import-summary-selection class="mb-2 hidden items-center gap-2 text-sm font-semibold">
+            <label class="inline-flex items-center gap-2"><input type="checkbox" data-import-select-all> Select all available rows</label>
+            <span data-import-selection-count class="text-xs font-normal text-gray-500 dark:text-slate-400"></span>
+        </div>
         <div data-import-review-surface class="hidden overflow-x-auto rounded-lg border border-gray-200 dark:border-slate-700">
             <table class="w-full min-w-[760px] text-left text-sm">
                 <thead class="bg-gray-100 text-xs font-bold uppercase text-gray-600 dark:bg-slate-800 dark:text-slate-300"><tr><th class="p-2">Source</th><th class="p-2" data-import-identity-heading>Action / identity</th><th class="p-2" data-import-existing-heading>Existing values</th><th class="p-2" data-import-incoming-heading>Incoming values</th><th class="p-2" data-import-apply-heading>Apply row</th></tr></thead>

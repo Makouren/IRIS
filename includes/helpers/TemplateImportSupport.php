@@ -2,12 +2,13 @@
 declare(strict_types=1);
 
 require_once __DIR__ . '/ImportSheetReader.php';
+require_once __DIR__ . '/SummaryCardImportProfiles.php';
 
 final class TemplateImportSupport
 {
     public static function record(PDO $pdo, string $recordId): array
     {
-        $query = $pdo->prepare('SELECT id, fileName, fileType, template_id, metadata FROM records WHERE id = ? LIMIT 1');
+        $query = $pdo->prepare('SELECT id, fileName, fileType, template_id, import_profile_id, metadata FROM records WHERE id = ? LIMIT 1');
         $query->execute([$recordId]);
         $record = $query->fetch(PDO::FETCH_ASSOC);
         if (!$record) throw new RuntimeException('Upload record not found.');
@@ -40,6 +41,12 @@ final class TemplateImportSupport
             if (!is_array($value)) throw new RuntimeException('The template import profile contains invalid configuration.');
             $profile[$field] = $value;
         }
+        $identityFields = json_decode((string)($profile['identity_fields'] ?? ''), true);
+        if ($identityFields === null) $identityFields = $destination === 'summary_cards' ? ['import_key'] : [];
+        if (!is_array($identityFields) || !array_is_list($identityFields) || array_filter($identityFields, static fn($field): bool => !is_string($field))) {
+            throw new RuntimeException('The template import profile contains invalid identity fields.');
+        }
+        $profile['identity_fields'] = $identityFields;
         return $profile;
     }
 
@@ -48,18 +55,24 @@ final class TemplateImportSupport
         return [
             'sheet_selector' => null,
             'header_aliases' => [
-                'period_key' => ['Period', 'Year', 'Year / Date'],
-                'main_value' => ['Rank / Rank Bracket', 'Rank', 'Value', 'Main Value', 'Global Rank'],
-                'main_label' => ['Main Descriptive Text', 'Main Label'],
-                'year_date' => ['Year', 'Year / Date', 'Date'],
-                'secondary_label' => ['Secondary Label'],
-                'secondary_value' => ['Secondary Value'],
-                'description' => ['Description', 'Main Description'],
-                'secondary_description' => ['Second Description', 'Italic Description', 'Secondary Description'],
-                'info_text' => ['Information Text (ⓘ)', 'Information Text (i)', 'Info', 'Information', 'Info Text']
+                'import_key' => ['Main Descriptive Text', 'Global Label', 'Card Key', 'Import Key', 'Identifier'],
+                'card_title' => ['Card Title', 'Metric Title', 'Summary Card Title'],
+                'period_key' => ['Year', 'Period', 'Reporting Year', 'Year / Date'],
+                'main_value' => ['Rank / Rank Bracket', 'Rank', 'Value', 'Main Value', 'Global Rank', 'Overall Rank'],
+                'main_label' => ['Main Descriptive Text', 'Main Label', 'Headline', 'Label'],
+                'year_date' => ['Year', 'Year / Date', 'Date', 'Reporting Year'],
+                'secondary_label' => ['Secondary Label', 'Secondary Title'],
+                'secondary_value' => ['Secondary Value', 'Secondary Metric'],
+                'description' => ['Description', 'Main Description', 'Summary Description'],
+                'secondary_description' => ['Second Description', 'Secondary Description', 'Italic Description', 'Supplementary Description'],
+                'info_text' => ['Information Text', 'Information Text (ⓘ)', 'Information Text (i)', 'Info', 'Information', 'Info Text'],
+                'source_info' => ['Source Information', 'Source', 'Source Info', 'Source Details']
             ],
-            'required_columns' => ['period_key', 'main_value', 'main_label'],
+            'required_columns' => ['import_key', 'period_key', 'main_value', 'main_label'],
+            'identity_fields' => ['import_key'],
             'mapping_rules' => [
+                'import_key' => 'Main Descriptive Text',
+                'card_title' => 'Card Title',
                 'period_key' => 'Year',
                 'main_value' => 'Rank / Rank Bracket',
                 'main_label' => 'Main Descriptive Text',
@@ -68,79 +81,181 @@ final class TemplateImportSupport
                 'secondary_value' => 'Secondary Value',
                 'description' => 'Description',
                 'secondary_description' => 'Second Description',
-                'info_text' => 'Information Text (ⓘ)'
+                'info_text' => 'Information Text',
+                'source_info' => 'Source Information'
             ],
             'defaults_json' => []
         ];
     }
 
-    private static function builtInSummaryKey(string $mainLabel): string
+    private static function builtInSummaryLegacyKey(string $mainLabel): string
     {
         $ascii = iconv('UTF-8', 'ASCII//TRANSLIT//IGNORE', $mainLabel);
         $normalized = strtolower(trim($ascii === false ? $mainLabel : $ascii));
-        $slug = preg_replace('/[^a-z0-9]+/', '-', $normalized) ?? '';
-        $slug = trim($slug, '-');
+        $slug = trim(preg_replace('/[^a-z0-9]+/', '-', $normalized) ?? '', '-');
         return 'snapshot-' . substr($slug !== '' ? $slug : hash('sha256', $mainLabel), 0, 88);
     }
 
-    public static function parse(PDO $pdo, string $recordId, string $destination): array
+    public static function resolveFieldIndexes(array $sheetHeaders, array $profile, array $requiredFields): array
+    {
+        $headerIndexes = [];
+        foreach ($sheetHeaders as $index => $header) {
+            $headerIndexes[ImportSheetReader::normalizeHeader((string)$header)] = $index;
+        }
+        $resolved = [];
+        foreach ($requiredFields as $field) {
+            $candidates = [];
+            if (isset($profile['mapping_rules'][$field]) && is_string($profile['mapping_rules'][$field])) {
+                $candidates[] = $profile['mapping_rules'][$field];
+            }
+            $aliases = $profile['header_aliases'][$field] ?? [];
+            if (is_array($aliases)) {
+                foreach ($aliases as $alias) {
+                    if (is_string($alias) && trim($alias) !== '') $candidates[] = $alias;
+                }
+            }
+            $candidates[] = $field;
+            $candidates = array_values(array_unique(array_filter(array_map(static fn($value): ?string => is_string($value) && trim($value) !== '' ? trim($value) : null, $candidates), static fn($value): bool => $value !== null)));
+            $matchedIndex = null;
+            foreach ($candidates as $candidate) {
+                $normalized = ImportSheetReader::normalizeHeader($candidate);
+                if (isset($headerIndexes[$normalized])) {
+                    $matchedIndex = $headerIndexes[$normalized];
+                    break;
+                }
+            }
+            if ($matchedIndex === null) {
+                throw new InvalidArgumentException("Required template field '{$field}' is not mapped to a worksheet column. Add a mapping in the import profile, for example 'Global Label -> import_key'.");
+            }
+            $resolved[$field] = $matchedIndex;
+        }
+        return $resolved;
+    }
+
+    private static function resolveProfileFieldIndexes(array $headers, array $profile, array $requiredFields, bool $includeOptional): array
+    {
+        $resolved = self::resolveFieldIndexes($headers, $profile, $requiredFields);
+        if (!$includeOptional) return $resolved;
+        $optional = array_values(array_unique(array_merge(array_keys($profile['mapping_rules'] ?? []), array_keys($profile['header_aliases'] ?? []))));
+        foreach ($optional as $field) {
+            if (isset($resolved[$field])) continue;
+            try {
+                $resolved += self::resolveFieldIndexes($headers, $profile, [$field]);
+            } catch (InvalidArgumentException $exception) {
+                continue;
+            }
+        }
+        return $resolved;
+    }
+
+    public static function canonicalImportKey(array $values, array $identityFields, string $sheet, int $rowNumber): string
+    {
+        if (!$identityFields || !in_array('import_key', $identityFields, true)) {
+            throw new InvalidArgumentException('Summary Card identity fields must include import_key.');
+        }
+        $identity = [];
+        foreach ($identityFields as $field) {
+            $value = trim((string)($values[$field] ?? ''));
+            if ($value === '') throw new RuntimeException("Sheet {$sheet}, row {$rowNumber}: identity field '{$field}' is required.");
+            $identity[$field] = $value;
+        }
+        if (count($identity) === 1 && isset($identity['import_key'])) return $identity['import_key'];
+        ksort($identity, SORT_STRING);
+        return 'identity-' . hash('sha256', json_encode($identity, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR));
+    }
+
+    public static function identityPeriodKey(array $values, array $identityFields, string $periodKey, string $sheet, int $rowNumber): string
+    {
+        return hash('sha256', self::canonicalImportKey($values, $identityFields, $sheet, $rowNumber) . "\0" . $periodKey);
+    }
+
+    public static function validateUniqueIdentityPeriod(array &$seen, array $values, array $identityFields, string $periodKey, string $sheet, int $rowNumber): string
+    {
+        $key = self::identityPeriodKey($values, $identityFields, $periodKey, $sheet, $rowNumber);
+        if (isset($seen[$key])) throw new RuntimeException("Sheet {$sheet}, row {$rowNumber}: duplicate configured Summary Card identity and period in the uploaded file.");
+        $seen[$key] = true;
+        return $key;
+    }
+
+    public static function parse(PDO $pdo, string $recordId, string $destination, ?string $selectedSheet = null): array
     {
         $record = self::record($pdo, $recordId);
         $recordedPurpose = (string)($record['metadata']['upload_purpose'] ?? '');
         $builtInSummary = false;
-        if (empty($record['template_id'])) {
-            if ($destination !== 'summary_cards' || $recordedPurpose !== 'summary_cards') {
-                throw new RuntimeException('This destination requires an assigned import template.');
-            }
-            $profile = self::builtInSummaryProfile();
-            $builtInSummary = true;
-        } else {
+        if (!empty($record['import_profile_id'])) {
+            $profile = SummaryCardImportProfiles::get($pdo, (int)$record['import_profile_id']);
+            if ($profile['destination'] !== $destination) throw new RuntimeException('This upload was submitted for a different destination than its import profile.');
+        } elseif (!empty($record['template_id'])) {
             $profile = self::profile($pdo, (int)$record['template_id'], $destination);
+        } elseif ($destination === 'summary_cards' && $recordedPurpose === 'summary_cards') {
+            $profile = SummaryCardImportProfiles::active($pdo);
+        } else {
+            throw new RuntimeException('This destination requires an assigned import template.');
         }
         if ($recordedPurpose !== '' && $recordedPurpose !== $destination) {
             throw new RuntimeException('This upload was submitted for a different destination than the template is currently configured for.');
         }
         $sheets = ImportSheetReader::read($record['path'], (string)$record['fileType']);
         if (in_array(strtolower((string)$record['fileType']), ['csv', 'tsv'], true)) $sheets[0]['name'] = (string)$record['fileName'];
-        $required = array_values(array_unique($profile['required_columns']));
+        $identityFields = $profile['identity_fields'] ?? ['import_key'];
+        $required = array_values(array_unique(array_merge($profile['required_columns'], $identityFields)));
         $requiredAliases = [];
         foreach ($required as $field) {
             $aliases = $profile['header_aliases'][$field] ?? [];
             $rule = $profile['mapping_rules'][$field] ?? null;
             $requiredAliases[] = array_values(array_unique(array_merge(is_string($rule) ? [$rule] : [], is_array($aliases) ? $aliases : [$field])));
         }
-        $sheet = ImportSheetReader::selectSheet($sheets, $profile['sheet_selector'] ?: null, $requiredAliases);
-        $headerIndexes = [];
-        foreach ($sheet['headers'] as $index => $header) {
-            $headerIndexes[ImportSheetReader::normalizeHeader($header)] = $index;
+        $profileSheet = trim((string)($profile['sheet_selector'] ?? ''));
+        $sheetSelector = $profileSheet !== '' ? $profileSheet : (trim((string)$selectedSheet) ?: null);
+        $candidateSheets = [];
+        foreach ($sheets as $candidate) {
+            try {
+                $candidateIndexMap = self::resolveProfileFieldIndexes($candidate['headers'], $profile, $required, $destination === 'summary_cards');
+                $candidateSheets[] = ['sheet' => $candidate, 'fieldIndexes' => $candidateIndexMap];
+            } catch (InvalidArgumentException $exception) {
+                continue;
+            }
         }
-        $fieldIndexes = [];
-        foreach ($profile['mapping_rules'] as $field => $rule) {
-            $candidateHeaders = is_string($rule) ? [$rule] : [];
-            $candidateHeaders = array_merge($candidateHeaders, is_array($profile['header_aliases'][$field] ?? null) ? $profile['header_aliases'][$field] : [$field]);
-            foreach ($candidateHeaders as $candidate) {
-                $key = ImportSheetReader::normalizeHeader($candidate);
-                if (isset($headerIndexes[$key])) {
-                    $fieldIndexes[$field] = $headerIndexes[$key];
+        if ($sheetSelector !== null && $sheetSelector !== '') {
+            $sheet = null;
+            foreach ($sheets as $candidate) {
+                if ($candidate['name'] === $sheetSelector) {
+                    $sheet = $candidate;
                     break;
                 }
             }
-        }
-        foreach ($profile['required_columns'] as $field) {
-            if (!array_key_exists($field, $fieldIndexes)) throw new RuntimeException('Required template column is missing: ' . $field);
+            if ($sheet === null) throw new RuntimeException('The configured worksheet was not found in the uploaded file.');
+            try {
+                $fieldIndexes = self::resolveProfileFieldIndexes($sheet['headers'], $profile, $required, $destination === 'summary_cards');
+            } catch (InvalidArgumentException $exception) {
+                throw $exception;
+            }
+        } else {
+            if (count($candidateSheets) === 1) {
+                $sheet = $candidateSheets[0]['sheet'];
+                $fieldIndexes = $candidateSheets[0]['fieldIndexes'];
+            } elseif (count($candidateSheets) > 1) {
+                throw new ImportSheetSelectionRequired(array_values(array_map(static fn(array $item): string => (string)$item['sheet']['name'], $candidateSheets)));
+            } else {
+                throw new InvalidArgumentException('No worksheet matches the configured import mappings. Add the required canonical field mappings in the import profile.');
+            }
         }
         $rows = [];
         foreach ($sheet['rows'] as $row) {
             $mapped = [];
-            foreach ($fieldIndexes as $field => $index) $mapped[$field] = trim((string)($row['values'][$index] ?? ''));
-            if ($builtInSummary && empty($mapped['import_key']) && !empty($mapped['main_label'])) {
-                $mapped['import_key'] = self::builtInSummaryKey($mapped['main_label']);
+            $legacyImportKey = null;
+            foreach ($fieldIndexes as $field => $index) {
+                $rawValue = (string)($row['values'][$index] ?? '');
+                $mapped[$field] = $field === 'import_key' ? $rawValue : trim($rawValue);
+            }
+            if ($builtInSummary && !empty($mapped['import_key']) && !empty($mapped['main_label'])) {
+                $legacyImportKey = self::builtInSummaryLegacyKey($mapped['main_label']);
             }
             if (!array_filter($mapped, static fn($value): bool => $value !== '')) continue;
-            $rows[] = ['values' => array_replace($profile['defaults_json'], $mapped), 'sheet_name' => $sheet['name'], 'row_number' => (int)$row['row_number']];
+            $rows[] = ['values' => array_replace($profile['defaults_json'], $mapped), 'legacy_import_key' => $legacyImportKey, 'sheet_name' => $sheet['name'], 'row_number' => (int)$row['row_number']];
         }
         if (!$rows) throw new RuntimeException('No non-empty import rows were found in the selected worksheet.');
-        return ['record' => $record, 'profile' => $profile, 'sheet' => $sheet, 'rows' => $rows, 'built_in' => $builtInSummary];
+        return ['record' => $record, 'profile' => $profile, 'sheet' => $sheet, 'field_indexes' => $fieldIndexes, 'rows' => $rows, 'built_in' => $builtInSummary];
     }
 
     public static function response(callable $callback): never
@@ -149,6 +264,10 @@ final class TemplateImportSupport
             $result = $callback();
             header('Content-Type: application/json; charset=utf-8');
             echo json_encode($result, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT);
+        } catch (ImportSheetSelectionRequired $exception) {
+            http_response_code(409);
+            header('Content-Type: application/json; charset=utf-8');
+            echo json_encode(['requires_sheet_selection' => true, 'candidate_sheets' => $exception->candidates, 'selected_sheet' => $exception->selectedSheet, 'error' => $exception->getMessage()]);
         } catch (InvalidArgumentException $exception) {
             http_response_code(400);
             header('Content-Type: application/json; charset=utf-8');

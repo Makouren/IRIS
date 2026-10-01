@@ -15,12 +15,20 @@ if (modal) {
   const revertButton = modal.querySelector('[data-import-revert]');
   const sourcePicker = modal.querySelector('[data-import-source-picker]');
   const sourceSelect = modal.querySelector('[data-import-source]');
+  const loadSourceButton = modal.querySelector('[data-import-load-source]');
+  const deleteUploadButton = modal.querySelector('[data-import-delete-upload]');
+  const sheetPicker = modal.querySelector('[data-import-sheet-picker]');
+  const sheetSelect = modal.querySelector('[data-import-sheet-select]');
+  const sheetChooseButton = modal.querySelector('[data-import-sheet-choose]');
   const reviewSurface = modal.querySelector('[data-import-review-surface]');
   const pagination = modal.querySelector('[data-import-pagination]');
   const identityHeading = modal.querySelector('[data-import-identity-heading]');
   const existingHeading = modal.querySelector('[data-import-existing-heading]');
   const incomingHeading = modal.querySelector('[data-import-incoming-heading]');
   const applyHeading = modal.querySelector('[data-import-apply-heading]');
+  const summarySelection = modal.querySelector('[data-import-summary-selection]');
+  const selectAllSummary = modal.querySelector('[data-import-select-all]');
+  const selectionCount = modal.querySelector('[data-import-selection-count]');
   const pageSize = 200;
   let state = null;
 
@@ -45,6 +53,21 @@ if (modal) {
     notice.className = `mb-4 rounded-lg p-3 text-sm ${error ? 'bg-red-50 text-red-800 dark:bg-red-950 dark:text-red-200' : 'bg-emerald-50 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-200'}`;
   }
 
+  function showSheetChoices(error) {
+    summarySelection.classList.add('hidden');
+    summarySelection.classList.remove('flex');
+    sheetSelect.replaceChildren(new Option('Choose a worksheet', ''));
+    for (const name of error.candidate_sheets || []) sheetSelect.add(new Option(name, name));
+    if (error.selected_sheet && (error.candidate_sheets || []).includes(error.selected_sheet)) sheetSelect.value = error.selected_sheet;
+    sourcePicker.classList.add('hidden');
+    sourcePicker.classList.remove('flex');
+    reviewSurface.classList.add('hidden');
+    pagination.classList.add('hidden');
+    sheetPicker.classList.remove('hidden');
+    sheetPicker.classList.add('flex');
+    setNotice(error.message || 'Choose the worksheet to preview.', true);
+  }
+
   function show() {
     modal.classList.remove('hidden');
     modal.classList.add('flex');
@@ -66,27 +89,28 @@ if (modal) {
 
   function syncApplyButton() {
     const isSummary = state?.destination === 'summary_cards';
-    const labels = isSummary ? new Set(state.rows.map(row => row.import_key)) : new Set();
-    const summaryReady = !isSummary || [...labels].every(label => state.currentKeys?.[label]);
-    const summaryChanges = isSummary && (state.rows.some(row => ['insert', 'replace'].includes(row.kind))
-      || Object.values(state.currentKeys || {}).some(key => {
-        const row = state.rows.find(candidate => candidate.key === key);
-        return row && (row.current_changed || row.new_card);
-      }));
+    const selectedSummaryChange = isSummary && state.rows.some(row => state.selected.has(row.key) && ['new_period', 'updated_period'].includes(row.kind));
     const selectedRankingRows = state?.destination !== 'summary_cards' && state?.selected.size;
-    applyButton.disabled = !reviewedCheckbox.checked || !summaryReady || (!selectedRankingRows && !summaryChanges);
+    if (isSummary) {
+      const actionable = state.rows.filter(row => ['new_period', 'updated_period'].includes(row.kind));
+      const selectedCount = actionable.filter(row => state.selected.has(row.key)).length;
+      selectAllSummary.checked = actionable.length > 0 && selectedCount === actionable.length;
+      selectAllSummary.indeterminate = selectedCount > 0 && selectedCount < actionable.length;
+      selectionCount.textContent = `${selectedCount} of ${actionable.length} available row(s) selected`;
+    }
+    applyButton.disabled = !reviewedCheckbox.checked || (isSummary ? !selectedSummaryChange : !selectedRankingRows);
   }
 
   function valuesFor(row, side) {
     if (state.destination === 'summary_cards') {
       if (side === 'existing') {
-        const existing = row.snapshot_before || row.current;
+        const existing = row.snapshot_before;
         if (!existing) return {};
-        return Object.fromEntries(['main_value', 'secondary_value', 'year_date', 'main_label', 'secondary_label', 'description', 'secondary_description', 'info_text', 'updated_at']
+        return Object.fromEntries(['title', 'main_value', 'secondary_value', 'year_date', 'main_label', 'secondary_label', 'description', 'secondary_description', 'info_text', 'source_info', 'updated_at']
           .filter(field => existing[field] !== null && existing[field] !== undefined && existing[field] !== '')
           .map(field => [field, existing[field]]));
       }
-      const { import_key, period_key, ...sourceValues } = row.incoming || {};
+      const { period_key, period_label, period_sort, period_precision, ...sourceValues } = row.snapshot_after || {};
       return sourceValues;
     }
     return side === 'existing'
@@ -97,12 +121,14 @@ if (modal) {
   function renderRows() {
     const rows = state?.rows || [];
     const isSummary = state?.destination === 'summary_cards';
+    summarySelection.classList.toggle('hidden', !isSummary);
+    summarySelection.classList.toggle('flex', isSummary);
     identityHeading.textContent = isSummary ? 'Card description / year' : 'Action / identity';
     existingHeading.hidden = false;
     existingHeading.textContent = isSummary ? 'Existing snapshot / card' : 'Existing values';
     incomingHeading.textContent = isSummary ? 'Values from file' : 'Incoming values';
-    applyHeading.hidden = false;
-    applyHeading.textContent = isSummary ? 'Apply' : 'Apply row';
+    applyHeading.hidden = isSummary;
+    applyHeading.textContent = 'Apply row';
     const start = state.page * pageSize;
     const visible = rows.slice(start, start + pageSize);
     rowHost.replaceChildren();
@@ -119,19 +145,7 @@ if (modal) {
       const row = document.createElement('tr');
       const selectCell = document.createElement('td');
       selectCell.className = 'p-2 text-center align-top';
-      if (isSummary) {
-        const select = document.createElement('input');
-        select.type = 'radio';
-        select.name = `summary-apply-${item.import_key}`;
-        select.value = item.key;
-        select.checked = state.currentKeys[item.import_key] === item.key;
-        select.setAttribute('aria-label', `Apply ${item.period_key} for ${item.import_key}`);
-        select.addEventListener('change', () => {
-          state.currentKeys[item.import_key] = item.key;
-          syncApplyButton();
-        });
-        selectCell.append(select);
-      } else {
+      if (!isSummary) {
         const select = document.createElement('input');
         select.type = 'checkbox';
         select.dataset.importKey = item.key;
@@ -145,11 +159,31 @@ if (modal) {
         });
         selectCell.append(select);
       }
-      addCell(row, `${item.sheet_name} · row ${item.row_number}`);
-      const updateTime = item.current?.updated_at ? ` · Card updated ${item.current.updated_at}` : '';
+      if (isSummary) {
+        const sourceCell = document.createElement('td');
+        sourceCell.className = 'p-2 align-top text-xs';
+        const choice = document.createElement('label');
+        choice.className = 'inline-flex items-start gap-2';
+        const checkbox = document.createElement('input');
+        checkbox.type = 'checkbox';
+        checkbox.checked = state.selected.has(item.key);
+        checkbox.disabled = !['new_period', 'updated_period'].includes(item.kind);
+        checkbox.setAttribute('aria-label', `Select ${item.period_label} from ${item.sheet_name}, row ${item.row_number}`);
+        checkbox.addEventListener('change', () => {
+          if (checkbox.checked) state.selected.add(item.key);
+          else state.selected.delete(item.key);
+          reviewedCheckbox.checked = false;
+          syncApplyButton();
+        });
+        choice.append(checkbox, document.createTextNode(`${item.sheet_name} · row ${item.row_number}`));
+        sourceCell.append(choice);
+        row.append(sourceCell);
+      } else {
+        addCell(row, `${item.sheet_name} · row ${item.row_number}`);
+      }
       const snapshotTime = item.snapshot_before?.updated_at ? ` · Snapshot updated ${item.snapshot_before.updated_at}` : '';
       addCell(row, isSummary
-        ? `${item.kind === 'replace' ? 'REPLACE EXISTING' : item.kind === 'unchanged' ? 'UNCHANGED' : item.new_card ? 'NEW CARD' : 'NEW PERIOD'} · ${item.incoming?.main_label || item.import_key} · ${item.period_key}${updateTime}${snapshotTime}`
+        ? `${item.preview_status || item.kind} · ${item.snapshot_after?.main_label || item.import_key} · ${item.period_label}${snapshotTime}`
         : `${item.kind === 'legacy' ? 'ADOPT LEGACY' : item.kind.toUpperCase()} · ${identityLabel(item, state.destination)}${item.error ? `\n${item.error}` : ''}`,
       item.kind === 'blocked' ? 'text-red-700' : '');
       const existingCell = document.createElement('td');
@@ -158,7 +192,7 @@ if (modal) {
       existingCell.hidden = false;
       row.append(existingCell);
       addCell(row, displayValues(valuesFor(item, 'incoming')));
-      row.append(selectCell);
+      if (!isSummary) row.append(selectCell);
       rowHost.append(row);
     }
     const totalPages = Math.max(1, Math.ceil(rows.length / pageSize));
@@ -168,12 +202,16 @@ if (modal) {
     syncApplyButton();
   }
 
-  async function previewRecord(recordId, destination) {
-    state = { recordId, page: 0, rows: [], selected: new Set(), currentKeys: Object.create(null), destination, rowVersions: {} };
+  async function previewRecord(recordId, destination, sheetName = null) {
+    state = { recordId, page: 0, rows: [], selected: new Set(), destination, rowVersions: {}, sheetName };
+    summarySelection.classList.add('hidden');
+    summarySelection.classList.remove('flex');
     reviewedCheckbox.checked = false;
     rowHost.replaceChildren();
     sourcePicker.classList.add('hidden');
     sourcePicker.classList.remove('flex');
+    sheetPicker.classList.add('hidden');
+    sheetPicker.classList.remove('flex');
     reviewSurface.classList.remove('hidden');
     pagination.classList.remove('hidden');
     pagination.classList.add('flex');
@@ -190,32 +228,55 @@ if (modal) {
       const endpoint = profile.destination === 'ranking_history' ? modal.dataset.rankingApi : modal.dataset.summaryApi;
       state.endpoint = endpoint;
       fileLabel.textContent = `${profile.template_name} · ${profile.destination === 'ranking_history' ? 'Ranking History' : 'Summary Cards'}`;
-      const result = await postJson(endpoint, modal.dataset.csrf, { action: 'preview', record_id: recordId });
+      const payload = { action: 'preview', record_id: recordId };
+      if (sheetName) payload.sheet_name = sheetName;
+      const result = await postJson(endpoint, modal.dataset.csrf, payload);
+      state.sheetName = result.sheet_name || sheetName || null;
       state.rows = result.rows || [];
       state.rowVersions = Object.fromEntries(state.rows.map(row => [row.key, row.row_version]));
-      if (destination === 'summary_cards') state.rows.filter(row => row.suggested).forEach(row => { state.currentKeys[row.import_key] = row.key; });
       reviewedCheckbox.checked = false;
       sheetLabel.textContent = `Worksheet: ${result.sheet_name || 'selected sheet'}`;
       renderRows();
-      const actionable = state.rows.filter(row => ['insert', 'replace', 'update', 'legacy'].includes(row.kind)).length;
-      const liveUpdates = state.rows.filter(row => row.suggested && (row.current_changed || row.new_card)).length;
-      setNotice(actionable || liveUpdates
+      const actionable = state.rows.filter(row => ['new_period', 'updated_period', 'update', 'legacy'].includes(row.kind)).length;
+      setNotice(actionable
         ? destination === 'summary_cards'
-          ? `${actionable} period(s) will be archived automatically. One row per Global Label is selected for the live card.`
+            ? `${actionable} period(s) are available. Select any rows to apply. Blank cells preserve prior values; use __CLEAR__ to clear a field.`
           : `${actionable} row(s) can be applied. Select the rows you approve.`
         : 'No changes detected.');
     } catch (error) {
+      if (error.requires_sheet_selection) {
+        showSheetChoices(error);
+        return;
+      }
       rowHost.replaceChildren();
+      summarySelection.classList.add('hidden');
+      summarySelection.classList.remove('flex');
       reviewSurface.classList.add('hidden');
       pagination.classList.add('hidden');
       sourcePicker.classList.remove('hidden');
       sourcePicker.classList.add('flex');
+      sheetPicker.classList.add('hidden');
+      sheetPicker.classList.remove('flex');
       setNotice(error.message || 'Unable to preview this import.', true);
     }
   }
 
+  function renderImportRecords(records, selectedId = '') {
+    sourceSelect.replaceChildren(new Option('Choose an upload', ''));
+    for (const record of records) {
+      const details = [record.template_name, record.office_name || 'Office', record.uploaded_at || record.status].filter(Boolean).join(' · ');
+      sourceSelect.add(new Option(`${record.file_name} · ${details}`, String(record.id)));
+    }
+    if (selectedId) sourceSelect.value = selectedId;
+    const hasSelection = Boolean(sourceSelect.value);
+    loadSourceButton.disabled = !hasSelection;
+    deleteUploadButton.disabled = !hasSelection;
+  }
+
   async function openImportPicker(destination) {
-    state = { page: 0, rows: [], selected: new Set(), currentKeys: Object.create(null), destination, rowVersions: {} };
+    state = { page: 0, rows: [], selected: new Set(), destination, rowVersions: {} };
+    summarySelection.classList.add('hidden');
+    summarySelection.classList.remove('flex');
     fileLabel.textContent = destination === 'summary_cards' ? 'Latest Performance Snapshot' : 'Ranking History';
     sheetLabel.textContent = '';
     rowHost.replaceChildren();
@@ -223,7 +284,14 @@ if (modal) {
     pagination.classList.add('hidden');
     sourcePicker.classList.remove('hidden');
     sourcePicker.classList.add('flex');
+    sheetPicker.classList.add('hidden');
+    sheetPicker.classList.remove('flex');
     sourceSelect.replaceChildren(new Option('Choose an upload', ''));
+    const summaryImport = destination === 'summary_cards';
+    loadSourceButton.classList.toggle('hidden', !summaryImport);
+    deleteUploadButton.classList.toggle('hidden', !summaryImport);
+    loadSourceButton.disabled = true;
+    deleteUploadButton.disabled = true;
     applyButton.disabled = true;
     reviewedCheckbox.checked = false;
     revertButton.classList.add('hidden');
@@ -231,11 +299,7 @@ if (modal) {
     setNotice('Loading uploads assigned to a matching import profile...');
     try {
       const records = await getJson(`${modal.dataset.profileApi}?resource=import_records&destination=${encodeURIComponent(destination)}`);
-      sourceSelect.replaceChildren(new Option('Choose an upload', ''));
-      for (const record of records) {
-        const details = [record.template_name, record.office_name || 'Office', record.uploaded_at || record.status].filter(Boolean).join(' · ');
-        sourceSelect.add(new Option(`${record.file_name} · ${details}`, String(record.id)));
-      }
+      renderImportRecords(records);
       setNotice(records.length ? 'Choose an upload to load its preview.' : 'No supported uploads have a matching template profile.', records.length === 0);
     } catch (error) {
       setNotice(error.message || 'Unable to load matching uploads.', true);
@@ -252,25 +316,81 @@ if (modal) {
   previousButton.addEventListener('click', () => { if (state?.page > 0) { state.page--; renderRows(); } });
   nextButton.addEventListener('click', () => { if (state && (state.page + 1) * pageSize < state.rows.length) { state.page++; renderRows(); } });
   reviewedCheckbox.addEventListener('change', syncApplyButton);
+  selectAllSummary.addEventListener('change', () => {
+    if (state?.destination !== 'summary_cards') return;
+    for (const row of state.rows) {
+      if (!['new_period', 'updated_period'].includes(row.kind)) continue;
+      if (selectAllSummary.checked) state.selected.add(row.key);
+      else state.selected.delete(row.key);
+    }
+    reviewedCheckbox.checked = false;
+    renderRows();
+  });
   sourceSelect.addEventListener('change', () => {
-    if (state?.destination && sourceSelect.value) previewRecord(sourceSelect.value, state.destination);
+    const summaryImport = state?.destination === 'summary_cards';
+    loadSourceButton.disabled = !sourceSelect.value;
+    deleteUploadButton.disabled = !summaryImport || !sourceSelect.value;
+    if (!summaryImport && state?.destination && sourceSelect.value) previewRecord(sourceSelect.value, state.destination);
+  });
+  loadSourceButton.addEventListener('click', () => {
+    if (state?.destination === 'summary_cards' && sourceSelect.value) previewRecord(sourceSelect.value, state.destination);
+  });
+  deleteUploadButton.addEventListener('click', async () => {
+    if (state?.destination !== 'summary_cards' || !sourceSelect.value) return;
+    const selectedRecordId = sourceSelect.value;
+    const selectedLabel = sourceSelect.selectedOptions[0]?.textContent || 'this upload';
+    if (!window.confirm(`Remove ${selectedLabel} from the import list and delete its uploaded file? Applied Summary Card data and history will be preserved.`)) return;
+    deleteUploadButton.disabled = true;
+    try {
+      const data = new FormData();
+      data.set('action', 'delete-summary-card-upload');
+      data.set('record_id', selectedRecordId);
+      data.set('_csrf', modal.dataset.csrf || '');
+      const response = await fetch(modal.dataset.profileApi, {
+        method: 'POST',
+        headers: { 'X-CSRF-Token': modal.dataset.csrf || '', Accept: 'application/json' },
+        body: data
+      });
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(result.error || 'Unable to delete this upload.');
+      const records = await getJson(`${modal.dataset.profileApi}?resource=import_records&destination=summary_cards`);
+      renderImportRecords(records);
+      setNotice(result.preserved_record
+        ? 'Upload file removed from the list. Its applied Summary Card history and audit record were preserved.'
+        : 'Upload file and unused record deleted. Existing Summary Card data and history were not changed.');
+    } catch (error) {
+      setNotice(error.message || 'Unable to delete this upload.', true);
+      deleteUploadButton.disabled = !sourceSelect.value;
+    }
+  });
+  sheetChooseButton.addEventListener('click', () => {
+    if (!sheetSelect.value) {
+      setNotice('Choose a worksheet before continuing.', true);
+      return;
+    }
+    previewRecord(state.recordId, state.destination, sheetSelect.value);
   });
 
   applyButton.addEventListener('click', async () => {
     if (!state || !reviewedCheckbox.checked) return;
+    const selectedSummaryRows = state.destination === 'summary_cards'
+      ? state.rows.filter(row => state.selected.has(row.key) && ['new_period', 'updated_period'].includes(row.kind))
+      : [];
+    if (state.destination === 'summary_cards' && !selectedSummaryRows.length) return;
     const plannedRows = state.destination === 'summary_cards'
-      ? state.rows.filter(row => ['insert', 'replace'].includes(row.kind)
-        || Object.values(state.currentKeys).includes(row.key) && (row.new_card || row.current_changed))
+      ? selectedSummaryRows
       : state.rows.filter(row => state.selected.has(row.key));
-    const replacementCount = plannedRows.filter(row => row.kind === 'replace').length;
-    const currentChanges = Object.values(state.currentKeys).filter(key => state.rows.find(row => row.key === key)?.current_changed || state.rows.find(row => row.key === key)?.new_card).length;
-    const confirmation = `Apply ${plannedRows.length} row(s), replace ${replacementCount} existing period(s), and update ${currentChanges} live card(s)?`;
+    const confirmation = state.destination === 'summary_cards'
+      ? `Apply ${selectedSummaryRows.length} selected Summary Card row(s)?`
+      : `Apply ${plannedRows.length} selected import row(s)?`;
     if (!window.confirm(confirmation)) return;
     applyButton.disabled = true;
     try {
       const result = await postJson(state.endpoint, modal.dataset.csrf, {
-        action: 'apply', record_id: state.recordId, current_keys: state.currentKeys, row_versions: state.rowVersions, reviewed_diff: true,
-        ...(state.destination === 'ranking_history' ? { accepted_keys: [...state.selected] } : {})
+        action: 'apply', record_id: state.recordId, sheet_name: state.sheetName, row_versions: state.rowVersions, reviewed_diff: true,
+        ...(state.destination === 'summary_cards'
+          ? { selected_rows: selectedSummaryRows.map(row => ({ sheet_name: row.sheet_name, row_number: row.row_number })) }
+          : { accepted_keys: [...state.selected] })
       });
       setNotice(result.message || 'Import completed.');
       if (result.batch_id) {
@@ -280,7 +400,7 @@ if (modal) {
       }
       let refreshed;
       try {
-        refreshed = await postJson(state.endpoint, modal.dataset.csrf, { action: 'preview', record_id: state.recordId });
+        refreshed = await postJson(state.endpoint, modal.dataset.csrf, { action: 'preview', record_id: state.recordId, sheet_name: state.sheetName });
       } catch (refreshError) {
         state.selected.clear();
         reviewedCheckbox.checked = false;
@@ -290,13 +410,16 @@ if (modal) {
       }
       state.rows = refreshed.rows || [];
       state.rowVersions = Object.fromEntries(state.rows.map(row => [row.key, row.row_version]));
-      state.currentKeys = Object.create(null);
-      if (state.destination === 'summary_cards') state.rows.filter(row => row.suggested).forEach(row => { state.currentKeys[row.import_key] = row.key; });
       state.selected.clear();
       reviewedCheckbox.checked = false;
       renderRows();
       document.dispatchEvent(new CustomEvent('iris:template-import-complete', { detail: result }));
     } catch (error) {
+      if (error.requires_sheet_selection) {
+        showSheetChoices(error);
+        setNotice('The template sheet selection changed. Choose a worksheet and review the new preview.', true);
+        return;
+      }
       setNotice(error.message || 'Import failed.', true);
       applyButton.disabled = state.selected.size === 0;
     }

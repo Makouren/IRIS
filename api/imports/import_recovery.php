@@ -84,10 +84,10 @@ try {
             if ($before === null) {
                 $pdo->prepare('DELETE FROM summary_card_snapshots WHERE id = ?')->execute([(int)$current['id']]);
             } else {
-                $pdo->prepare('UPDATE summary_card_snapshots SET main_value = ?, secondary_value = ?, year_date = ?, description = ?, secondary_description = ?, info_text = ?, source_record_id = ?, batch_id = ? WHERE id = ?')->execute([
-                    $before['main_value'], $before['secondary_value'], $before['year_date'], $before['description'] ?? null, $before['secondary_description'] ?? null, $before['info_text'] ?? null,
-                    $before['source_record_id'], $before['batch_id'], (int)$current['id']
-                ]);
+                $fields = ['title', 'period_label', 'period_sort', 'period_precision', 'is_published', 'main_value', 'main_label', 'secondary_label', 'secondary_value', 'year_date', 'description', 'secondary_description', 'info_text', 'source_info', 'source_record_id', 'batch_id', 'last_source_record_id', 'last_batch_id'];
+                $sets = implode(', ', array_map(static fn(string $field): string => '`' . $field . '` = ?', $fields));
+                $values = array_map(static fn(string $field) => $before[$field] ?? null, $fields);
+                $pdo->prepare('UPDATE summary_card_snapshots SET ' . $sets . ' WHERE id = ?')->execute([...$values, (int)$current['id']]);
             }
             continue;
         }

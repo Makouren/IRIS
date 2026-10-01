@@ -36,6 +36,33 @@ test('saved chart options use readable colors in dark mode', () => {
   }
 });
 
+test('saved rank line charts invert the value axis and keep raw ranks', () => {
+  let option;
+  const originalWindow = global.window;
+  const originalDocument = global.document;
+  global.window = { echarts: { init: () => ({ setOption: value => { option = value; } }) } };
+  global.document = { documentElement: { classList: { contains: () => true } } };
+
+  try {
+    const ranks = [50, 10, 5, 8, 1, 7];
+    createChart({}, 'line', {
+      rankSemantic: true,
+      rankValueMax: 50,
+      labels: ['2021', '2022', '2023', '2024', '2025', '2026'],
+      datasets: [{ label: 'Rank', data: ranks }]
+    });
+    assert.equal(option.yAxis.inverse, true);
+    assert.equal(option.yAxis.min, 0);
+    assert.equal(option.yAxis.max, 53);
+    assert.deepEqual(option.series[0].data.map(point => point.value), ranks);
+  } finally {
+    if (originalWindow === undefined) delete global.window;
+    else global.window = originalWindow;
+    if (originalDocument === undefined) delete global.document;
+    else global.document = originalDocument;
+  }
+});
+
 test('published pie labels are white with no text stroke in dark mode', () => {
   const originalDocument = global.document;
   global.document = { documentElement: { classList: { contains: className => className === 'dark' } } };

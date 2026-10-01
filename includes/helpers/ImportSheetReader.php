@@ -3,6 +3,19 @@ declare(strict_types=1);
 
 require_once __DIR__ . '/SheetValidationHelper.php';
 
+final class ImportSheetSelectionRequired extends RuntimeException
+{
+    public readonly array $candidates;
+    public readonly ?string $selectedSheet;
+
+    public function __construct(array $candidates, string $message = 'Choose the worksheet to preview.', ?string $selectedSheet = null)
+    {
+        $this->candidates = $candidates;
+        $this->selectedSheet = $selectedSheet;
+        parent::__construct($message);
+    }
+}
+
 final class ImportSheetReader
 {
     public static function read(string $path, string $extension, ?string $sheetSelector = null): array
@@ -32,10 +45,20 @@ final class ImportSheetReader
         foreach ($sheets as $sheet) {
             $headers = array_map([self::class, 'normalizeHeader'], $sheet['headers']);
             $groups = array_map(static fn($aliases): array => array_map([self::class, 'normalizeHeader'], is_array($aliases) ? $aliases : [$aliases]), $requiredAliases);
-            if ($groups && !array_filter($groups, static fn(array $aliases): bool => !array_intersect($aliases, $headers))) $matches[] = $sheet;
+            $hasRequiredHeaders = true;
+            foreach ($groups as $aliases) {
+                if ($aliases === [] || !array_intersect($aliases, $headers)) {
+                    $hasRequiredHeaders = false;
+                    break;
+                }
+            }
+            if ($hasRequiredHeaders) $matches[] = $sheet;
         }
         if (count($matches) === 1) return $matches[0];
-        throw new RuntimeException('Choose a worksheet in the template import profile; this workbook does not have one unambiguous matching sheet.');
+        if (count($matches) === 0) {
+            throw new InvalidArgumentException('No worksheet matches the configured template import mappings. Add the required header mappings for the canonical import fields.');
+        }
+        throw new ImportSheetSelectionRequired(array_values(array_map(static fn(array $sheet): string => (string)$sheet['name'], $matches)));
     }
 
     public static function normalizeHeader(mixed $value): string

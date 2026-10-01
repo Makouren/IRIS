@@ -5,6 +5,18 @@
             <button type="button" data-template-manager-close class="rounded-lg px-3 py-1 text-2xl leading-none text-gray-500 hover:bg-gray-100 dark:hover:bg-slate-800" aria-label="Close">&times;</button>
         </header>
         <div id="templateManagerNotice" class="mb-4 hidden rounded-lg p-3 text-sm" role="status"></div>
+        <section class="mb-5 rounded-lg border border-emerald-200 bg-emerald-50/60 p-4 dark:border-emerald-900 dark:bg-emerald-950/20" aria-labelledby="summaryCardProfileHeading">
+            <div class="mb-3"><h3 id="summaryCardProfileHeading" class="text-sm font-bold">Summary Card import profile</h3><p data-active-summary-profile class="mt-1 text-xs text-gray-600 dark:text-slate-300">Loading active profile…</p></div>
+            <div class="grid gap-3 lg:grid-cols-[minmax(220px,0.7fr)_minmax(0,1fr)]">
+                <div class="space-y-3">
+                    <label class="block text-sm font-semibold">Available Summary Card profiles<select data-summary-profile-select class="mt-1 block w-full rounded-lg border border-gray-300 bg-white p-2.5 text-sm dark:border-slate-700 dark:bg-slate-800"><option value="">Loading profiles…</option></select></label>
+                    <button type="button" data-summary-profile-activate class="rounded-md border border-emerald-700 px-3 py-2 text-sm font-bold text-emerald-900 hover:bg-emerald-100 dark:text-emerald-200 dark:hover:bg-emerald-950">Set as active profile</button>
+                    <label class="block text-sm font-semibold">Profile name<input data-summary-profile-name type="text" maxlength="150" class="mt-1 block w-full rounded-lg border border-gray-300 bg-white p-2.5 text-sm dark:border-slate-700 dark:bg-slate-800"></label>
+                    <button type="button" data-summary-profile-save class="rounded-md bg-emerald-700 px-3 py-2 text-sm font-bold text-white hover:bg-emerald-800">Save profile settings</button>
+                </div>
+                <label class="block text-sm font-semibold">Field mappings and identity<textarea data-summary-profile-json rows="12" spellcheck="false" class="mt-1 block w-full rounded-lg border border-gray-300 bg-white p-2.5 font-mono text-xs dark:border-slate-700 dark:bg-slate-800"></textarea></label>
+            </div>
+        </section>
         <div class="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(280px,0.8fr)]">
             <section>
                 <h3 class="mb-3 text-sm font-bold uppercase tracking-wide text-gray-500 dark:text-slate-400">Templates</h3>

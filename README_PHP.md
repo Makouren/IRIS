@@ -22,9 +22,9 @@ The Scanner uses browser-side JavaScript for spreadsheet ingestion and charting.
 
 ## Template-Driven Imports
 
-Office uploads are parsed server-side as CSV, TSV, or XLSX by the existing native reader. A Super Admin maps headers and defaults in an import profile, reviews the generated diff, acknowledges it, and approves. Summary cards use `import_key` as the Global Label; changed periods are archived and one chosen row per label updates the live card. Ranking rows use their complete identity and block ambiguous matches. Row versions reject stale previews, and import audit rows support recovery. No Composer dependency is required by the current reader.
+Office uploads are parsed server-side as CSV, TSV, or XLSX by the existing native reader. A Super Admin maps headers and defaults in an import profile, reviews the generated diff, acknowledges it, and approves. Summary Card imports require an explicit `import_key` Global Label and merge against complete database history. Backfills never replace newer periods. Blank cells preserve values; `__CLEAR__` clears explicitly. New periods are unpublished and only explicit period publication changes the public current period. Ranking rows use their complete identity and block ambiguous matches. Row versions reject stale previews, and import audit rows support recovery. No Composer dependency is required by the current reader.
 
-Apply `20261002_template_driven_imports.sql`, `20261002_allow_builtin_snapshot_imports.sql`, and `20261002_create_app_change_state.sql` after the earlier schema migrations. `config/db.php` also ensures the app change-state table exists on connection.
+Apply `20261002_template_driven_imports.sql`, `20261002_allow_builtin_snapshot_imports.sql`, `20261002_create_app_change_state.sql`, and `20261002_summary_card_history_v2.sql` after the earlier schema migrations. Built-in Snapshot files need a stable Global Label column or profile default. Equal period end dates sort by granularity (day, month, quarter, year). `config/db.php` also ensures the app change-state table exists on connection.
 
 The shared refresh client watches successful data changes on open pages. Super Admin tabs synchronize promptly; other roles poll every five seconds. A page with unsaved form or Studio edits defers the reload and displays a refresh prompt.
 

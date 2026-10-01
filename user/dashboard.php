@@ -392,6 +392,10 @@ try {
                     <form id="summaryCardsAdminForm" class="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <input type="hidden" name="id" id="summaryCardId" />
                         <label class="block text-sm font-semibold text-gray-700 dark:text-gray-200">
+                            Global Label
+                            <input type="text" name="import_key" id="summaryCardImportKey" maxlength="100" class="mt-1 w-full rounded-xl border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 px-3 py-2 text-sm" required>
+                        </label>
+                        <label class="block text-sm font-semibold text-gray-700 dark:text-gray-200">
                             Title
                             <input type="text" name="title" id="summaryCardTitle" class="mt-1 w-full rounded-xl border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 px-3 py-2 text-sm" required>
                         </label>
@@ -446,7 +450,7 @@ try {
                             </select>
                         </label>
                         <label class="inline-flex items-center gap-2 text-sm font-semibold text-gray-700 dark:text-gray-200 md:col-span-2">
-                            <input type="checkbox" id="summaryCardPublished" name="is_published" checked>
+                            <input type="checkbox" id="summaryCardPublished" name="is_published">
                             Publish this card
                         </label>
                         <div class="md:col-span-2 flex items-center justify-end gap-3">
@@ -800,6 +804,11 @@ try {
                             <button type="button" class="summary-card-toggle rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 px-2.5 py-1.5 text-[11px] font-semibold text-gray-700 dark:text-gray-200" data-id="${escapeHtmlDashboard(card.id)}" data-published="${card.is_published ? '1' : '0'}">${card.is_published ? 'Unpublish' : 'Publish'}</button>
                             <button type="button" class="summary-card-delete rounded-lg border border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-900/20 px-2.5 py-1.5 text-[11px] font-semibold text-red-700 dark:text-red-300" data-id="${escapeHtmlDashboard(card.id)}">Delete</button>
                         </div>` : '';
+                    const historyControl = Number(card.history_count || 0) > 1 ? `
+                        <div class="mt-3">
+                            <button type="button" class="summary-card-history-toggle text-xs font-semibold text-emerald-700 hover:underline dark:text-emerald-300" data-id="${escapeHtmlDashboard(card.id)}" aria-expanded="false">View Historical Data</button>
+                            <div class="summary-card-history-panel mt-2 hidden rounded-lg border border-gray-200 p-3 dark:border-gray-700" data-id="${escapeHtmlDashboard(card.id)}"></div>
+                        </div>` : '';
                     return `
                         <article class="summary-card-shell rounded-2xl p-5 shadow-sm">
                             <div class="flex items-start justify-between gap-3">
@@ -819,9 +828,67 @@ try {
                             </div>` : ''}
                             ${secondaryDescription ? `<p class="mt-2 text-sm italic text-gray-500 dark:text-gray-400">${secondaryDescription}</p>` : ''}
                             ${description ? `<p class="mt-3 text-sm text-gray-600 dark:text-gray-300">${description}</p>` : ''}
+                            ${historyControl}
                             ${adminControls}
                         </article>`;
                 }).join('');
+
+            document.querySelectorAll('.summary-card-history-toggle').forEach(button => {
+                button.addEventListener('click', async () => {
+                    const panel = [...document.querySelectorAll('.summary-card-history-panel')].find(item => item.dataset.id === button.dataset.id);
+                    if (!panel) return;
+                    if (!panel.classList.contains('hidden')) {
+                        panel.classList.add('hidden');
+                        button.setAttribute('aria-expanded', 'false');
+                        return;
+                    }
+                    panel.classList.remove('hidden');
+                    button.setAttribute('aria-expanded', 'true');
+                    if (panel.dataset.loaded === 'true') return;
+                    panel.textContent = 'Loading published history...';
+                    try {
+                        const response = await fetch('<?= e(base_url('api/iris.php')) ?>?resource=summary_card_history&id=' + encodeURIComponent(button.dataset.id), { headers: { Accept: 'application/json' }, cache: 'no-store' });
+                        const result = await response.json();
+                        if (!response.ok) throw new Error(result.error || 'Unable to load published history.');
+                        const history = (result.periods || []).filter(period => !period.is_current_public);
+                        panel.replaceChildren();
+                        if (!history.length) {
+                            panel.textContent = 'No published historical periods.';
+                            panel.dataset.loaded = 'true';
+                            return;
+                        }
+                        const label = document.createElement('label');
+                        label.className = 'block text-xs font-semibold';
+                        label.textContent = 'Period';
+                        const select = document.createElement('select');
+                        select.className = 'mt-1 block w-full rounded-md border border-gray-300 bg-white px-2 py-1.5 text-sm dark:border-slate-700 dark:bg-slate-800';
+                        history.forEach(period => select.add(new Option(period.period_label || period.period_key, period.period_key)));
+                        const detail = document.createElement('div');
+                        detail.className = 'mt-3 space-y-1 text-xs';
+                        const renderPeriod = () => {
+                            const period = history.find(item => item.period_key === select.value);
+                            detail.replaceChildren();
+                            for (const [name, value] of Object.entries({
+                                Value: period?.main_value, Label: period?.main_label, 'Secondary label': period?.secondary_label,
+                                'Secondary value': period?.secondary_value, 'Secondary description': period?.secondary_description,
+                                Description: period?.description, Information: period?.info_text
+                            })) {
+                                if (value == null || value === '') continue;
+                                const line = document.createElement('p');
+                                line.textContent = `${name}: ${value}`;
+                                detail.append(line);
+                            }
+                        };
+                        select.addEventListener('change', renderPeriod);
+                        label.append(select);
+                        panel.append(label, detail);
+                        renderPeriod();
+                        panel.dataset.loaded = 'true';
+                    } catch (error) {
+                        panel.textContent = error.message;
+                    }
+                });
+            });
 
             if (isAdmin) {
                 document.querySelectorAll('.summary-card-edit').forEach(button => {
@@ -933,7 +1000,9 @@ try {
                             <div class="flex items-start justify-between gap-3">
                                 <div>
                                     <div class="text-sm font-bold text-gray-900 dark:text-white">${escapeHtmlDashboard(card.title || 'Snapshot Card')}</div>
+                                    <div class="text-xs text-gray-500 dark:text-gray-400">Global Label: ${escapeHtmlDashboard(card.import_key || '')}</div>
                                     <div class="text-xs text-gray-500 dark:text-gray-400">${escapeHtmlDashboard(card.main_value || '')} · ${escapeHtmlDashboard(card.main_label || '')}</div>
+                                    <div class="mt-1 text-xs text-gray-500 dark:text-gray-400">Public: ${escapeHtmlDashboard(card.current_public_period || 'None')} · Latest imported: ${escapeHtmlDashboard(card.latest_imported_period || 'None')} · Periods: ${Number(card.history_count || 0)}</div>
                                     <span class="mt-1 inline-flex rounded-full bg-green-100 px-2 py-0.5 text-[10px] font-semibold text-green-900 dark:bg-green-900/30 dark:text-green-200">${escapeHtmlDashboard(card.category_name || 'Uncategorized')}</span>
                                 </div>
                                 <span class="rounded-full px-2 py-1 text-[10px] font-bold uppercase tracking-wide ${card.is_published ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-300' : 'bg-gray-200 text-gray-700 dark:bg-gray-800 dark:text-gray-300'}">${card.is_published ? 'Published' : 'Draft'}</span>
@@ -952,6 +1021,7 @@ try {
                         const card = cards.find(item => item.id === id);
                         if (!card) return;
                         document.getElementById('summaryCardId').value = card.id;
+                        document.getElementById('summaryCardImportKey').value = card.import_key || card.id || '';
                         document.getElementById('summaryCardTitle').value = card.title || '';
                         document.getElementById('summaryCardMainValue').value = card.main_value || '';
                         document.getElementById('summaryCardMainLabel').value = card.main_label || '';
@@ -1004,6 +1074,7 @@ try {
             summaryCardsAdminForm.addEventListener('submit', async (event) => {
                 event.preventDefault();
                 const payload = {
+                    import_key: document.getElementById('summaryCardImportKey').value,
                     title: document.getElementById('summaryCardTitle').value.trim(),
                     main_value: document.getElementById('summaryCardMainValue').value.trim(),
                     main_label: document.getElementById('summaryCardMainLabel').value.trim(),
@@ -1043,7 +1114,7 @@ try {
                 summaryCardNewCategory.value = '';
                 document.getElementById('summaryCardDisplayOrder').value = '0';
                 document.getElementById('summaryCardDisplayPrecision').value = '2';
-                document.getElementById('summaryCardPublished').checked = true;
+                document.getElementById('summaryCardPublished').checked = false;
                 summaryCardsAdminFormPanel.classList.add('hidden');
                 await refreshSummaryCardsAdmin();
                 loadSummaryCards();
@@ -1058,7 +1129,7 @@ try {
                 summaryCardNewCategory.value = '';
                 document.getElementById('summaryCardDisplayOrder').value = '0';
                 document.getElementById('summaryCardDisplayPrecision').value = '2';
-                document.getElementById('summaryCardPublished').checked = true;
+                document.getElementById('summaryCardPublished').checked = false;
             });
 
             cancelSummaryCardFormButton?.addEventListener('click', () => {

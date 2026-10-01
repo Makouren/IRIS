@@ -65,7 +65,7 @@ Parser and viewer modules for PDF, DOCX, and image OCR are present in the codeba
 
 Snapshot cards are maintained separately from Scanner graphs. Their title, values, labels, year, description, display order, precision, and publication state are stored in `summary_cards`. Publishing or unpublishing a card does not change records or saved graphs.
 
-Template-driven Snapshot imports use a Global Label (`summary_cards.import_key`) to update an existing card without duplicating it. Changed periods are archived in `summary_card_snapshots`; one row per label is selected for the live card, defaulting to the newest period. Re-importing unchanged data produces no writes.
+Template-driven Snapshot imports require an explicit Global Label (`summary_cards.import_key`) and compare every incoming period against database history. Older imports are backfills; only the latest explicitly published snapshot is public/current. New periods remain unpublished until an administrator publishes them. Blank cells preserve values; `__CLEAR__` explicitly clears a field. The Summary Card history manager supports correction, publication, provenance inspection, and read-only public history.
 
 Ranking History imports match the full ranking identity, display a side-by-side preview, and reject ambiguous matches. The Super Admin must acknowledge the diff before applying selected rows. Optimistic row versions prevent applying stale previews.
 
@@ -175,6 +175,8 @@ For Scanner publication, a record is linked to its charts by `saved_graphs.recor
 | `POST /api/imports/summary_card_import.php` | Preview or apply template-driven summary-card imports. |
 | `POST /api/imports/ranking_history_import.php` | Preview or apply template-driven ranking history imports. |
 | `POST /api/imports/import_recovery.php` | Revert an audited import batch when its rows are unchanged since application. |
+| `GET /api/iris.php?resource=summary_card_history&id={cardId}` | Read published period history; Super Admin can request `view=admin` for all periods. |
+| `POST /api/iris.php?resource=summary_card_history&id={cardId}` | Correct a period or explicitly publish/unpublish it with optimistic locking. |
 
 Graph publish/unpublish requests send JSON such as `{ "published": true }` or `{ "published": false }`. The API responds with the graph ID and the resulting publication state. Browser persistence is managed by `scanner/js/database/dbManager.js`; MySQL is canonical when the PHP API is available.
 
@@ -183,7 +185,7 @@ Graph publish/unpublish requests send JSON such as `{ "published": true }` or `{
 1. Place or clone the repository under `C:/xampp/htdocs/iris` (or another Apache document-root subdirectory).
 2. Start Apache and MySQL from the XAMPP Control Panel.
 3. Import [`database.sql`](database.sql) once into MySQL using phpMyAdmin or the MySQL client. The script creates/selects `iris_db` and seeds the ranking body catalog.
-4. Apply the required migrations in [`migrations/`](migrations/), including the template-driven imports and app change-state migrations for V3.4.5.
+4. Apply the required migrations in [`migrations/`](migrations/), including template imports, app change state, and `20261002_summary_card_history_v2.sql`. Snapshot imports require a stable Global Label column or a configured profile default.
 5. Set `IRIS_DB_HOST`, `IRIS_DB_PORT`, `IRIS_DB_NAME`, `IRIS_DB_USER`, and `IRIS_DB_PASS` in [`config/db.php`](config/db.php) for the environment. The current defaults are intended for local XAMPP development, not production.
 6. Open `http://localhost/iris/`, register a CLSU account, and sign in. Registration requires an email ending in `@clsu2.edu.ph` and a password of at least eight characters.
 7. Registration assigns the `user` role. To grant administrator access, run the following as a database administrator, substituting the account name:
