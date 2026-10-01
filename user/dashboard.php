@@ -77,6 +77,10 @@ try {
     <script src="<?= e(base_url('scanner/js/chartColors.js')) ?>?v=<?= (int) filemtime(__DIR__.'/../scanner/js/chartColors.js') ?>"></script>
     <script>window.IRISFieldColors = <?= json_encode($fieldColors, JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>;</script>
     <script src="<?= e(base_url('scanner/js/graphExport.js')) ?>?v=<?= (int) filemtime(__DIR__.'/../scanner/js/graphExport.js') ?>"></script>
+    <script type="module">
+        import * as IRISChartBuilder from '../scanner/js/modules/chartEngine.js?v=remove-rose-20261001';
+        window.IRISChartBuilder = IRISChartBuilder;
+    </script>
     <!-- Font Awesome -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <!-- Google Fonts -->
@@ -158,7 +162,6 @@ try {
                             <div class="admin-dropdown z-50 hidden my-3 w-56 text-base list-none rounded-xl shadow-2xl" id="observatory-menu">
                                 <ul class="py-2" aria-labelledby="observatory-menu-button">
                                     <li><a href="#scanner-published-graphs"><i class="fa-solid fa-chart-column"></i> Scanner Analytics</a></li>
-                                    <li><a href="<?= e(base_url('admin/dashboard.php')) ?>"><i class="fa-solid fa-sliders"></i> Admin Portal</a></li>
                                 </ul>
                             </div>
                         </div>
@@ -183,9 +186,6 @@ try {
                                 </span>
                             </div>
                             <ul class="py-2" aria-labelledby="user-menu-button">
-                                <?php if (($_SESSION['role'] ?? null) === 'super_admin'): ?>
-                                    <li><a href="<?= e(base_url('admin/dashboard.php')) ?>"><i class="fa-solid fa-shield-halved"></i> Admin Portal</a></li>
-                                <?php endif; ?>
                                 <li><a href="<?= e(base_url('auth/change_password.php')) ?>"><i class="fa-solid fa-key"></i> Change password</a></li>
                             </ul>
                             <div class="py-1 border-t border-slate-700">
@@ -1208,9 +1208,9 @@ try {
                 yData.get(yearKey).push(row);
             });
 
-            const dark = document.documentElement.classList.contains('dark');
-            const textColor = dark ? '#E5E7EB' : '#475569';
-            const splitLineColor = dark ? 'rgba(203,213,225,.22)' : 'rgba(30,96,49,.10)';
+            const chartTheme = window.IRISChartBuilder.getChartTheme({ dark: document.documentElement.classList.contains('dark') });
+            const textColor = chartTheme.textColor;
+            const splitLineColor = chartTheme.gridColor;
 
             // Setup responsive grid on parent
             chartElement.className = 'grid grid-cols-1 md:grid-cols-2 2xl:grid-cols-3 gap-6';
@@ -1256,9 +1256,9 @@ try {
                     color: [seriesColor],
                     tooltip: {
                         trigger: 'item',
-                        backgroundColor: dark ? '#172033' : '#fff',
-                        borderColor: '#dfe7df',
-                        textStyle: { color: dark ? '#f8fafc' : '#1f2937', fontSize: 13 },
+                        backgroundColor: chartTheme.tooltipBackground,
+                        borderColor: chartTheme.tooltipBorder,
+                        textStyle: { color: chartTheme.labelColor, fontSize: 13 },
                         formatter: params => {
                             const d = params.data;
                             if (!d) return '';
@@ -1322,12 +1322,12 @@ try {
             const instance = echarts.init(div);
             rankingChartInstances.push(instance);
             
-            const dark = document.documentElement.classList.contains('dark');
-            const textColor = dark ? '#E5E7EB' : '#475569';
+            const chartTheme = window.IRISChartBuilder.getChartTheme({ dark: document.documentElement.classList.contains('dark') });
+            const textColor = chartTheme.textColor;
             
             instance.setOption({
                 title: { text: `THE Impact SDG - ${targetYear}`, left: 'center', textStyle: { color: textColor } },
-                tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' } },
+                tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' }, backgroundColor: chartTheme.tooltipBackground, borderColor: chartTheme.tooltipBorder, textStyle: { color: chartTheme.labelColor } },
                 grid: { left: '20%', right: '10%', top: '15%', bottom: '10%', containLabel: true },
                 xAxis: { type: 'value', inverse: true, show: false },
                 yAxis: { type: 'category', data: rows.map(r => r.category || 'SDG').reverse(), axisLabel: { color: textColor } },
@@ -1534,179 +1534,8 @@ try {
             renderRankingHistoryFromControls();
         });
 
-        // --- Apache ECharts Data & Initialization ---
-        const trendYears = [];
-        const trendRanks = [];
-        const trendDisplay = [];
-        const collegePieData = [];
-        const breakdownSections = [];
-
+        // --- Published Observatory Graphs ---
         let chartInstances = [];
-
-        function renderAllCharts() {
-            chartInstances.forEach(c => c && c.dispose());
-            chartInstances = [];
-
-            const isDark = document.documentElement.classList.contains('dark');
-            const textColor = isDark ? '#E5E7EB' : '#1F2937';
-            const splitLineColor = isDark ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.06)';
-            const tooltipBg = isDark ? '#1f2937' : '#ffffff';
-            const tooltipBorder = isDark ? '#374151' : '#e5e7eb';
-            const tooltipText = isDark ? '#f9fafb' : '#111827';
-
-            // 1. QS Rank Line Chart
-            const trendElem = document.getElementById('trendChart');
-            if (trendElem) {
-                const trendColor = window.IRISChartColors.resolveFieldColors(['Rank'], { fieldColors: window.IRISFieldColors, legacyColors: ['#10b981'] })[0];
-                const trendChart = echarts.init(trendElem);
-                chartInstances.push(trendChart);
-                trendChart.setOption({
-                    backgroundColor: 'transparent',
-                    tooltip: {
-                        trigger: 'axis',
-                        backgroundColor: tooltipBg,
-                        borderColor: tooltipBorder,
-                        textStyle: { color: tooltipText },
-                        formatter: function(params) {
-                            const idx = params[0].dataIndex;
-                            return `Year: <b>${trendYears[idx]}</b><br/>Standing: <b>${trendDisplay[idx] || '—'}</b>`;
-                        }
-                    },
-                    grid: { left: '3%', right: '4%', bottom: '3%', top: '10%', containLabel: true },
-                    xAxis: {
-                        type: 'category',
-                        boundaryGap: false,
-                        data: trendYears,
-                        axisLine: { lineStyle: { color: splitLineColor } },
-                        axisLabel: { color: textColor }
-                    },
-                    yAxis: {
-                        type: 'value',
-                        inverse: true, // Lower number = higher rank
-                        splitLine: { lineStyle: { color: splitLineColor } },
-                        axisLabel: { color: textColor }
-                    },
-                    series: [{
-                        name: 'Rank',
-                        type: 'line',
-                        smooth: true,
-                        data: trendRanks,
-                        lineStyle: { width: 3, color: trendColor },
-                        itemStyle: { color: trendColor },
-                        areaStyle: {
-                            color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
-                                { offset: 0, color: 'rgba(16, 185, 129, 0.35)' },
-                                { offset: 1, color: 'rgba(16, 185, 129, 0.0)' }
-                            ])
-                        }
-                    }]
-                });
-            }
-
-            // 2. College Contribution Doughnut Chart
-            const collegeElem = document.getElementById('collegeChart');
-            if (collegeElem) {
-                const collegeColors = window.IRISChartColors.resolveFieldColors(collegePieData.map(item => item.name), {
-                    fieldColors: window.IRISFieldColors,
-                    legacyColors: ['#1E6031', '#B7791F', '#0F766E', '#2563EB', '#C2410C', '#7C3AED']
-                });
-                const collegeChart = echarts.init(collegeElem);
-                chartInstances.push(collegeChart);
-                collegeChart.setOption({
-                    backgroundColor: 'transparent',
-                    tooltip: {
-                        trigger: 'item',
-                        backgroundColor: tooltipBg,
-                        borderColor: tooltipBorder,
-                        textStyle: { color: tooltipText },
-                        formatter: params => `${params.name}<br/><strong>${Number(params.value).toLocaleString(undefined, { maximumFractionDigits: 2 })}</strong> (${params.percent}%)`
-                    },
-                    legend: {
-                        orient: 'vertical',
-                        right: '1%',
-                        top: 'middle',
-                        width: '42%',
-                        type: 'scroll',
-                        textStyle: { color: textColor, fontSize: 11 },
-                        formatter: name => String(name).length > 24 ? `${String(name).slice(0, 24)}...` : name
-                    },
-                    series: [{
-                        type: 'pie',
-                        radius: ['45%', '70%'],
-                        center: ['32%', '50%'],
-                        label: {
-                            show: true,
-                            color: textColor,
-                            fontSize: 10,
-                            formatter: params => {
-                                const name = String(params.name || 'College');
-                                const displayName = name.length > 18 ? `${name.slice(0, 18)}...` : name;
-                                return `${displayName}: ${params.percent}%`;
-                            }
-                        },
-                        labelLine: { show: true, length: 10, length2: 8 },
-                        itemStyle: {
-                            borderRadius: 6,
-                            borderColor: isDark ? '#1f2937' : '#ffffff',
-                            borderWidth: 2
-                        },
-                        data: collegePieData.map((item, index) => ({ ...item, itemStyle: { ...(item.itemStyle || {}), color: collegeColors[index] } }))
-                    }],
-                    color: collegeColors
-                });
-            }
-
-            // 3. Category Breakdown Mini Bar Charts
-            breakdownSections.forEach((section, idx) => {
-                const elem = document.getElementById('breakdownChart' + idx);
-                if (!elem) return;
-                const sectionColors = window.IRISChartColors.resolveFieldColors(section.labels, {
-                    fieldColors: window.IRISFieldColors,
-                    legacyColors: section.labels.map(() => '#10b981')
-                });
-                const chart = echarts.init(elem);
-                chartInstances.push(chart);
-                chart.setOption({
-                    backgroundColor: 'transparent',
-                    tooltip: {
-                        trigger: 'axis',
-                        axisPointer: { type: 'shadow' },
-                        backgroundColor: tooltipBg,
-                        borderColor: tooltipBorder,
-                        textStyle: { color: tooltipText },
-                        formatter: function(params) {
-                            const dataIndex = params[0].dataIndex;
-                            return `${section.labels[dataIndex]}<br/>Rank/Score: <b>${section.displays[dataIndex]}</b>`;
-                        }
-                    },
-                    grid: { left: '3%', right: '5%', bottom: '3%', top: '5%', containLabel: true },
-                    xAxis: {
-                        type: 'value',
-                        inverse: true,
-                        splitLine: { lineStyle: { color: splitLineColor } },
-                        axisLabel: { color: textColor, fontSize: 10 }
-                    },
-                    yAxis: {
-                        type: 'category',
-                        data: section.labels,
-                        axisLine: { lineStyle: { color: splitLineColor } },
-                        axisLabel: {
-                            color: textColor,
-                            fontSize: 10,
-                            formatter: function(val) {
-                                return val.length > 15 ? val.slice(0, 15) + '...' : val;
-                            }
-                        }
-                    },
-                    color: sectionColors,
-                    series: [{
-                        type: 'bar',
-                        data: section.values.map((value, index) => ({ value, itemStyle: { color: sectionColors[index] } })),
-                        itemStyle: { color: '#10b981', borderRadius: [4, 0, 0, 4] }
-                    }]
-                });
-            });
-        }
 
         // Live Filters
         const canManagePublishedGraphs = <?= json_encode(($_SESSION['role'] ?? null) === 'super_admin') ?>;
@@ -1733,31 +1562,10 @@ try {
             if (empty) empty.style.display = 'none';
             count.innerHTML = `<i class="fa-solid fa-circle-check mr-1"></i> ${graphs.length} published graph${graphs.length === 1 ? '' : 's'}`;
 
-            const isDark = document.documentElement.classList.contains('dark');
-            const textColor = isDark ? '#F8FAFC' : '#4b5563';
-            const splitLineColor = isDark ? '#374151' : '#f3f4f6';
-            const tooltipBg = isDark ? '#1f2937' : '#ffffff';
-            const tooltipBorder = isDark ? '#374151' : '#e5e7eb';
-            const tooltipText = isDark ? '#f9fafb' : '#111827';
-
             graphs.forEach((graph, index) => {
                 const card = document.createElement('div');
                 card.className = 'scanner-published-card bg-white dark:bg-gray-800 p-6 rounded-2xl border border-gray-200 dark:border-gray-700 shadow-sm';
                 const chartId = `scannerPublishedChart_${index}`;
-                const base = window.GraphExport && typeof window.GraphExport.buildSavedChartOption === 'function'
-                    ? window.GraphExport.buildSavedChartOption(graph)
-                    : null;
-                const labels = Array.isArray(graph.labels) ? graph.labels.map(v => String(v ?? '')) : (base?.xAxis?.data || []);
-                const storedType = String(graph.chart_type || 'bar').toLowerCase();
-                const normalizedType = ['bar', 'line', 'pie', 'doughnut', 'polararea', 'rankedbar', 'ranked-bar'].includes(storedType)
-                    ? storedType.replace(/-+/g, '')
-                    : (base && base.series && base.series[0] && base.series[0].type ? base.series[0].type : 'bar');
-                const type = normalizedType === 'rankedbar' ? 'rankedBar' : normalizedType;
-                const values = Array.isArray(graph.values_data) ? graph.values_data.map(v => {
-                    if (v === null || v === undefined || String(v).trim() === '') return null;
-                    const n = Number(v);
-                    return Number.isFinite(n) ? n : null;
-                }) : (base && Array.isArray(base.series?.[0]?.data) ? base.series[0].data.map(item => typeof item === 'object' ? Number(item.value ?? 0) : Number(item ?? 0)) : []);
                 card.innerHTML = `
                     <div class="flex items-start justify-between gap-4 pb-4 border-b border-gray-100 dark:border-gray-700">
                         <div class="min-w-0">
@@ -1796,31 +1604,16 @@ try {
                 if (!elem) return;
                 const chart = echarts.init(elem);
                 card._publishedChart = chart;
+                card._publishedGraph = graph;
                 if (typeof ResizeObserver !== 'undefined') {
                     card._chartResizeObserver = new ResizeObserver(() => chart.resize());
                     card._chartResizeObserver.observe(elem);
                 }
                 chartInstances.push(chart);
-
-                const option = base || (type === 'rankedBar' ? {
-                    tooltip: { trigger: 'axis', backgroundColor: tooltipBg, borderColor: tooltipBorder, textStyle: { color: tooltipText }, formatter: params => {
-                        const point = Array.isArray(params) ? params[0] : params;
-                        const label = labels[point.dataIndex] || point.name || 'Item';
-                        const value = values[point.dataIndex] ?? 0;
-                        return `${label}<br/>Rank: <b>${value}</b>`;
-                    } },
-                    grid: { left: '6%', right: '6%', bottom: '6%', top: '6%', containLabel: true },
-                    xAxis: { type: 'value', min: 0, axisLabel: { color: textColor } },
-                    yAxis: { type: 'category', data: labels.slice().reverse(), axisLabel: { color: textColor, fontSize: 10 } },
-                    series: [{ type: 'bar', data: values.slice().reverse().map((value, index) => ({ value, name: labels.slice().reverse()[index] || `Item ${index + 1}` })), itemStyle: { color: '#10b981', borderRadius: [0, 4, 4, 0] } }]
-                } : {
-                    tooltip: { trigger: 'axis', backgroundColor: tooltipBg, borderColor: tooltipBorder, textStyle: { color: tooltipText } },
-                    grid: { left: '4%', right: '4%', bottom: labels.length > 7 ? '15%' : '6%', top: '8%', containLabel: true },
-                    xAxis: { type: 'category', data: labels, axisLabel: { color: textColor, rotate: labels.length > 6 ? 35 : 0 } },
-                    yAxis: { type: 'value', axisLabel: { color: textColor } },
-                    series: [{ type: type === 'line' ? 'line' : 'bar', data: values, itemStyle: { color: '#10b981' }, lineStyle: type === 'line' ? { width: 3, color: '#10b981' } : undefined }]
-                });
-                chart.setOption(option);
+                chart.setOption(window.IRISChartBuilder.buildSavedGraphOption(graph, {
+                    width: elem.clientWidth,
+                    theme: { dark: document.documentElement.classList.contains('dark') }
+                }));
             });
         }
 
@@ -1846,13 +1639,34 @@ try {
                 });
         }
 
+        new MutationObserver(() => {
+            const theme = window.IRISChartBuilder.getChartTheme({ dark: document.documentElement.classList.contains('dark') });
+            rankingChartInstances.forEach(chart => chart?.setOption({
+                textStyle: { color: theme.textColor },
+                title: { textStyle: { color: theme.labelColor } },
+                tooltip: { backgroundColor: theme.tooltipBackground, borderColor: theme.tooltipBorder, textStyle: { color: theme.labelColor } },
+                xAxis: { axisLabel: { color: theme.textColor }, axisLine: { lineStyle: { color: theme.gridColor } }, splitLine: { lineStyle: { color: theme.gridColor } } },
+                yAxis: { axisLabel: { color: theme.textColor }, axisLine: { lineStyle: { color: theme.gridColor } }, splitLine: { lineStyle: { color: theme.gridColor } } },
+                series: [{ label: { color: theme.labelColor } }]
+            }));
+            document.querySelectorAll('.scanner-published-card').forEach(card => {
+                const element = card.querySelector('[id^="scannerPublishedChart_"]');
+                if (element && card._publishedGraph && card._publishedChart) {
+                    card._publishedChart.setOption(window.IRISChartBuilder.buildSavedGraphOption(card._publishedGraph, {
+                        width: element.clientWidth,
+                        theme: { dark: document.documentElement.classList.contains('dark') }
+                    }), true);
+                }
+            });
+        }).observe(document.documentElement, { attributes: true, attributeFilter: ['class'] });
+
         document.addEventListener('DOMContentLoaded', () => {
             loadSummaryCards();
             loadRankingHistory();
             loadPublishedScannerGraphs();
             window.addEventListener('resize', () => {
                 chartInstances.forEach(chart => chart?.resize?.());
-                rankingChartInstance?.resize?.();
+                rankingChartInstances.forEach(chart => chart?.resize?.());
             });
         });
     </script>

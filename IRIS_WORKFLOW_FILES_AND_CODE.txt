@@ -1,0 +1,362 @@
+IRIS WORKFLOW FILE MAP AND CODE
+================================
+
+WORKSPACE ROOT
+--------------
+C:\xampp\htdocs\IRIS V2.0.1\IRIS
+
+This is a Notepad-friendly map of the files for Office Upload, Review Editor,
+Saved Graphs, Public Observatory, and shared chart rendering. Code blocks below
+are the relevant wiring excerpts, not full copies of the source files. The path
+labels identify where each full implementation resides.
+
+WORKFLOW OVERVIEW
+-----------------
+Office user uploads a spreadsheet
+    -> admin/office_upload.php
+    -> admin/upload_process.php
+    -> includes/SpreadsheetReader.php parses the spreadsheet
+    -> records row is created with Pending Review status
+    -> Super Admin opens admin/review_editor.php
+    -> scanner/js/modules/studioWorkbench.js maps fields and saves a graph
+    -> scanner/js/modules/chartEngine.js builds the preview options
+    -> api/iris.php stores/loads saved graph data
+    -> admin/saved_graphs.php renders saved graphs
+    -> user/dashboard.php renders graphs whose is_published flag is true
+
+
+1. OFFICE UPLOAD
+================
+
+FILE: admin/office_upload.php
+ROLE: Office-facing upload form, upload history, and available templates.
+NEXT FILE: The form submits to admin/upload_process.php.
+
+Relevant form wiring:
+
+    <form method="POST"
+          action="<?= e(base_url('admin/upload_process.php')) ?>"
+          enctype="multipart/form-data">
+        <?= csrf_field() ?>
+        <input id="officeFile" name="office_file" type="file"
+               required accept=".xlsx,.csv,.tsv">
+        <button type="submit">Send for review</button>
+    </form>
+
+Template list wiring:
+
+    <div id="activeTemplatesList"
+         data-api="<?= e(base_url('api/templates.php')) ?>"
+         data-download-base="<?= e(base_url('admin/template_download.php')) ?>">
+
+    <script src="<?= e(base_url('admin/js/officeTemplates.js')) ?>"
+            defer></script>
+
+FILE: admin/upload_process.php
+ROLE: Validates the file, parses it, stores it outside the web root, and adds a
+      Pending Review record associated with the uploading office/user.
+USES: includes/functions.php and includes/SpreadsheetReader.php.
+
+Relevant parse and record insert:
+
+    $parsed = (new SpreadsheetReader())->parse(
+        $file['tmp_name'], $extension, (string)$file['name']
+    );
+
+    $insert = $pdo->prepare("INSERT INTO records
+        (id, fileName, fileType, fileSize, scannedAt, status, uploaded_by,
+         office_name, uploaded_at, docType, rawText, extractedData,
+         graphDrafts, adminNotes, metadata, updatedAt)
+        VALUES (?, ?, ?, ?, NOW(), 'Pending Review', ?, ?, NOW(), ?, ?, ?, ?, '', ?, NULL)");
+
+The handler finishes by returning the uploader to office_upload.php with a
+success or error flash message. It does not publish a chart by itself.
+
+FILE: admin/js/officeTemplates.js
+ROLE: Client-side behavior for the Active Templates section on office_upload.php.
+
+FILE: includes/SpreadsheetReader.php
+ROLE: Reads XLSX, CSV, and TSV data for the office upload handler.
+
+FILE: includes/functions.php
+ROLE: Shared PHP helpers used by upload, authentication, URL generation, and DB
+      access. The office upload page and upload handler both require it.
+
+
+2. REVIEW EDITOR / RECORDS STUDIO
+=================================
+
+FILE: admin/review_editor.php
+ROLE: Review Editor page markup. Defines chart controls, category/value mapping,
+      precision selector, nested-pie group selector, and the Studio chart canvas.
+
+Relevant chart selector and canvas:
+
+    <select id="studioChartTypeSelect">
+        <option value="bar">Bar Chart</option>
+        <option value="line">Line Chart</option>
+        <option value="pie">Pie Chart</option>
+        <option value="doughnut">Doughnut Chart</option>
+        <option value="rankedBar">Ranked Bar Chart</option>
+        <option value="nestedPie">Nested Pie</option>
+    </select>
+
+    <select id="studioCategoryCol"></select>
+    <select id="studioValueCol"></select>
+    <select id="studioGroupField"></select>
+    <select id="studioValuePrecisionSelect"></select>
+    <div id="studioChartCanvas"></div>
+
+FILE: admin/includes/footer.php
+ROLE: Loads shared scripts and the ES module application on admin pages,
+      including review_editor.php.
+
+Relevant application loader:
+
+    <script src="<?= e(base_url('scanner/js/database/dbManager.js')) ?>"></script>
+    <script src="<?= e(base_url('scanner/js/chartData.js')) ?>"></script>
+    <script src="<?= e(base_url('scanner/js/chartMapping.js')) ?>"></script>
+    <script src="<?= e(base_url('scanner/js/chartColors.js')) ?>"></script>
+    <script src="<?= e(base_url('scanner/js/graphExport.js')) ?>"></script>
+    <script type="module"
+            src="<?= e(base_url('scanner/js/app.js')) ?>"></script>
+
+FILE: scanner/js/app.js
+ROLE: Starts the Scanner modules and connects them through shared app state.
+      Imports include Studio, Saved Graphs, drafts, navigation, and admin portal.
+
+Relevant module imports:
+
+    import { initGraphsTab } from './modules/graphsTab.js?...';
+    import { initSavedGraphsTab } from './modules/savedGraphsTab.js?...';
+    import { initAdminPortal } from './modules/adminPortal.js?...';
+    import { initStudioWorkbench } from './modules/studioWorkbench.js?...';
+
+FILE: scanner/js/modules/adminPortal.js
+ROLE: Loads records for the Review Editor, restores saved graph mappings/config,
+      and opens the selected record in the Studio.
+
+FILE: scanner/js/modules/studioWorkbench.js
+ROLE: Connects the Studio controls, field mapping, display precision, chart save,
+      and publish behavior.
+
+Relevant renderer connection:
+
+    import { renderStudioChart } from './chartEngine.js?...';
+
+    ctx.api.renderStudioChart = record => renderStudioChart(record, {
+        ctx,
+        state: ctx.state,
+        getStudioActiveSheet: ctx.api.getStudioActiveSheet,
+        elements: {
+            canvas: $('studioChartCanvas'),
+            typeSelect: $('studioChartTypeSelect'),
+            categorySelect: $('studioCategoryCol'),
+            valueSelect: $('studioValueCol'),
+            groupFieldSelect: $('studioGroupField'),
+            valuePrecision: $('studioValuePrecisionSelect')
+        }
+    });
+
+FILE: scanner/js/modules/studioColorCustomizer.js
+ROLE: Studio chart color controls. Resolves chart and field colors and persists
+      shared field-color changes.
+
+
+3. SAVED GRAPHS
+===============
+
+FILE: admin/saved_graphs.php
+ROLE: Saved Graphs page shell. Defines the file selector, bulk toolbar, and graph
+      card container.
+
+Relevant container:
+
+    <section id="adminSavedGraphsPanel">
+        <select id="savedGraphsRecordSelect"></select>
+        <button id="savedGraphsViewAllBtn">View All</button>
+        <button id="savedGraphsPrintAll">Print All</button>
+        <button id="savedGraphsExportSelected">Export</button>
+        <button id="savedGraphsPublishSelected">Publish</button>
+        <button id="savedGraphsDeleteSelected">Delete</button>
+        <div id="savedDashboardGraphsContainer"></div>
+    </section>
+
+FILE: scanner/js/modules/savedGraphsTab.js
+ROLE: Fetches saved graph records, filters/groups them, builds graph cards, and
+      handles selection, publish, export, print, deletion, and theme refresh.
+
+Relevant loading and render connection:
+
+    ctx.api.renderSavedGraphsTab = async () => {
+        const container = $('savedDashboardGraphsContainer');
+        if (!container) return;
+        const graphs = await ctx.dbManager.getAllSavedGraphs();
+        const records = await ctx.dbManager.getAllRecords();
+        // Filter by selected record or show all, then render graph cards.
+    };
+
+    card._savedGraph = { ...graph, chart_type: chartType };
+    card._savedChart = createChart(chartHost, chartType, card._savedGraph);
+
+FILE: scanner/js/database/dbManager.js
+ROLE: Browser-side persistence client. Provides graph save/update/read/publish,
+      and print/export API calls.
+
+Relevant graph persistence methods:
+
+    async saveGraph(graphData) { ... }
+    async updateGraph(graphId, graphData) { ... }
+    async getAllSavedGraphs() { ... }
+    async getGraphById(graphId) { ... }
+
+FILE: api/iris.php
+ROLE: Authenticated graph API. Reads, creates, updates, publishes, exports, and
+      deletes saved_graphs records.
+
+Relevant route entry:
+
+    if ($resource === 'graphs') {
+        if ($_SERVER['REQUEST_METHOD'] === 'GET') {
+            // Return one graph, all graphs, or graphs for a record.
+        }
+        // POST/PUT routes save or update graphs; publish and export actions follow.
+    }
+
+FILE: database.sql
+ROLE: Base schema for a fresh installation. The saved_graphs table stores the
+      record link, chart type, labels, values_data, chart_data, and colors.
+
+Relevant columns:
+
+    CREATE TABLE IF NOT EXISTS saved_graphs (
+        id VARCHAR(255) PRIMARY KEY,
+        record_id VARCHAR(255) NOT NULL,
+        title VARCHAR(255),
+        chart_type VARCHAR(50),
+        orientation VARCHAR(20) DEFAULT 'vertical',
+        labels JSON,
+        values_data JSON,
+        chart_data JSON NULL,
+        colors JSON NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    );
+
+
+4. PUBLIC OBSERVATORY VIEW
+==========================
+
+FILE: user/dashboard.php
+ROLE: Public dashboard page. Renders published graphs and Ranking History charts.
+      It loads the shared chart builder and fetches published graph data.
+
+Relevant shared builder and graph call:
+
+    import * as IRISChartBuilder from
+        '../scanner/js/modules/chartEngine.js?...';
+    window.IRISChartBuilder = IRISChartBuilder;
+
+    chart.setOption(window.IRISChartBuilder.buildSavedGraphOption(graph, {
+        width: elem.clientWidth,
+        theme: { dark: document.documentElement.classList.contains('dark') }
+    }));
+
+FILE: api/dashboard_graphs.php
+ROLE: Read endpoint for public graphs. Selects only saved graphs marked
+      is_published = 1, and returns chart_data, config metadata, labels, values,
+      source details, and field colors.
+
+Relevant query fields:
+
+    SELECT sg.id, sg.record_id, sg.title, sg.chart_type, sg.orientation,
+           sg.colors, sg.chart_data, sg.value_axis_reversed,
+           sg.value_axis_min, sg.value_axis_max, sg.rank_semantic,
+           sg.rank_value_min, sg.rank_value_max, sg.labels, sg.values_data,
+           sg.is_published, sg.created_at
+    FROM saved_graphs sg
+    WHERE sg.is_published = 1
+
+
+5. SHARED CHART CODE
+====================
+
+FILE: scanner/js/modules/chartEngine.js
+ROLE: One ECharts option builder for Studio, Saved Graphs, and the public view.
+      Also owns the Studio row-to-chart transformation and saved-graph adapter.
+
+Relevant exports and call sites:
+
+    export function buildChartOption({
+        type, labels, values, rawValues, series, config, colors,
+        theme, precision, context, showTitle
+    } = {}) { ... }
+
+    export function buildSavedGraphOption(graphData, options = {}) {
+        // Normalize saved graph payload, resolve colors, then call builder.
+        return buildChartOption({ ... });
+    }
+
+    export function createChart(element, type, graphData, options = {}) {
+        const chart = window.echarts.init(element);
+        chart.setOption(buildSavedGraphOption(graphData, options));
+        return chart;
+    }
+
+FILE: scanner/js/chartData.js
+ROLE: Groups/aggregates rows and serializes real graph values and series before
+      Studio saves a graph.
+
+FILE: scanner/js/chartMapping.js
+ROLE: Infers category/value fields and parses numeric, rank, and year values.
+
+FILE: scanner/js/chartColors.js
+ROLE: Resolves field-specific and custom colors used by Studio and saved views.
+
+FILE: scanner/js/graphExport.js
+ROLE: Normalizes graph exports and constructs printable graph sheets.
+
+FILE: scanner/js/ai/graphEngine.js
+ROLE: Generates chart drafts from spreadsheet data. Draft cards are rendered by
+      scanner/js/modules/graphsTab.js, which mounts them through chartEngine.js.
+
+FILE: scanner/js/modules/graphsTab.js
+ROLE: Draft chart cards in the Scanner workspace; uses createChart() for rendering.
+
+FILE: scanner/js/modules/README.md
+ROLE: Developer notes about module responsibilities and chart rendering.
+
+
+6. DATABASE AND MIGRATION FILES
+===============================
+
+FILE: config/db.php
+ROLE: Creates/ensures the application tables and required columns at runtime.
+
+FILE: migrations/20261001_unify_saved_graph_types.sql
+ROLE: Ensures chart_data exists and converts legacy Polar Area chart rows to Bar.
+
+FILE: migrations/20261001_remove_nightingale_chart.sql
+ROLE: Converts Rose/Nightingale records created by earlier versions to Bar and
+      removes the old roseMode entry from saved chart JSON.
+
+
+7. PAGES AND FILES THAT ARE OFTEN CONFUSED
+==========================================
+
+FILE: scanner/index.php
+ROLE: Standalone Scanner interface. Contains its own Scanner/Studio markup and
+      loads the same Scanner modules. It is not the office upload form.
+
+FILE: admin/dashboard.php
+ROLE: Admin record-management/dashboard page. It is distinct from the public
+      Observatory at user/dashboard.php and from the office upload form at
+      admin/office_upload.php.
+
+FILE: admin/upload_source.php
+ROLE: Separate upload-related admin page/route. The office submission form in
+      this workflow is specifically admin/office_upload.php, which posts to
+      admin/upload_process.php.
+
+
+END OF FILE MAP
+===============

@@ -6,7 +6,7 @@
 
 [`state.js`](state.js) stores the active scan/record, queues, filters, and chart instances. [`chartEngine.js`](chartEngine.js) handles Studio row filtering, sorting, grouping, limits, and ECharts options. [`studioWorkbench.js`](studioWorkbench.js) connects Studio controls and persists selected chart settings; Studio Publish approves the active record and publishes only its active chart.
 
-GraphEngine creates ECharts option objects from spreadsheet rows. Draft and saved graph cards use the existing `createChart()` ECharts adapter, which also converts older saved label/value payloads. General chart types are Bar, Line, Pie, Doughnut, and Polar Area; Studio and saved graphs additionally support Ranked Bar.
+`chartEngine.js` builds the ECharts option used by Studio, Saved Graphs, and the public Observatory. Draft and saved graph cards mount options through `createChart()`, which also adapts legacy saved label/value payloads. Supported chart types are Bar, Line, Pie, Doughnut, Ranked Bar, and Nested Pie.
 
 ## Module responsibilities
 

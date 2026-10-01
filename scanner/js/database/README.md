@@ -13,7 +13,7 @@
 
 ## Saved Graph Data
 
-Saved graphs store chart type, labels, original values, rank metadata, axis metadata, publication state, and creation time. Studio and saved graphs support Bar, Line, Pie, Doughnut, Polar Area, and Ranked Bar. Publication is explicit and is not inferred from record status.
+Saved graphs store chart type, labels, real values, chart configuration, rank and axis metadata, colors, publication state, and creation time. Supported types are Bar, Line, Pie, Doughnut, Ranked Bar, and Nested Pie. Publication is explicit and is not inferred from record status.
 
 ## PHP API Routes
 

@@ -50,9 +50,23 @@ function output_graph(array $g): array {
     $g['labels'] = json_col($g['labels'], []);
     $g['values_data'] = json_col($g['values_data'], []);
     $g['chart_data'] = json_col($g['chart_data'] ?? null, json_col($g['chartData'] ?? null, null));
+    if (in_array(strtolower((string)($g['chart_type'] ?? '')), ['polararea', 'polar-area', 'rose', 'nightingale'], true)) {
+        $g['chart_type'] = 'bar';
+        $g['chart_data'] = is_array($g['chart_data']) ? $g['chart_data'] : [];
+        $g['chart_data']['irisConfig'] = array_merge($g['chart_data']['irisConfig'] ?? [], ['type' => 'bar']);
+        unset($g['chart_data']['irisConfig']['roseMode']);
+    }
     $g['colors'] = valid_graph_colors(json_col($g['colors'] ?? null, null));
     $g['is_published'] = isset($g['is_published']) ? (bool)$g['is_published'] : false;
     return $g;
+}
+function normalize_graph_type($type): string {
+    $value = (string)($type ?? 'bar');
+    if (in_array(strtolower($value), ['polararea', 'polar-area', 'rose', 'nightingale'], true)) return 'bar';
+    foreach (['bar', 'line', 'pie', 'doughnut', 'rankedBar', 'nestedPie'] as $allowed) {
+        if (strtolower($value) === strtolower($allowed)) return $allowed;
+    }
+    return 'bar';
 }
 function valid_graph_colors($colors): ?array {
     if (!is_array($colors) || !array_is_list($colors) || count($colors) > 1000) return null;
@@ -547,9 +561,20 @@ try {
                 foreach ($graphs as $graph) {
                     $labels = json_col($graph['labels'], []);
                     $values = json_col($graph['values_data'], []);
-                    $out .= 'Title: '.($graph['title'] ?? 'Saved Chart')."\nChart Type: ".strtoupper($graph['chart_type'] ?? 'bar')."\nSource Record ID: ".$graph['record_id']."\n\nCategory: Value\n";
-                    foreach ($labels as $index => $label) {
-                        $out .= ($label ?: 'Item '.($index + 1)).': '.($values[$index] ?? '')."\n";
+                    $chartData = json_col($graph['chart_data'] ?? null, []);
+                    $nestedGroups = $chartData['irisConfig']['nestedGroups'] ?? [];
+                    $nested = strtolower((string)($graph['chart_type'] ?? '')) === 'nestedpie' && is_array($nestedGroups) && count($nestedGroups) > 0;
+                    $out .= 'Title: '.($graph['title'] ?? 'Saved Chart')."\nChart Type: ".strtoupper($graph['chart_type'] ?? 'bar')."\nSource Record ID: ".$graph['record_id']."\n\n".($nested ? 'Group: Category: Value' : 'Category: Value')."\n";
+                    if ($nested) {
+                        foreach ($nestedGroups as $group) {
+                            foreach (($group['children'] ?? []) as $child) {
+                                $out .= json_encode((string)($group['label'] ?? ''), JSON_UNESCAPED_UNICODE).': '.json_encode((string)($child['label'] ?? ''), JSON_UNESCAPED_UNICODE).': '.($child['rawValue'] ?? $child['value'] ?? '')."\n";
+                            }
+                        }
+                    } else {
+                        foreach ($labels as $index => $label) {
+                            $out .= json_encode((string)($label ?: 'Item '.($index + 1)), JSON_UNESCAPED_UNICODE).': '.($values[$index] ?? '')."\n";
+                        }
                     }
                     $out .= "\n\n";
                 }
@@ -570,6 +595,67 @@ try {
             echo json_encode(['mode' => 'database', 'count' => count($new), 'exported_ids' => $new]);
             exit;
         }
+        if ($_SERVER['REQUEST_METHOD'] === 'PUT') {
+            ensure_admin_for_mutation();
+            if (($_SESSION['role'] ?? '') !== 'super_admin') bad('Forbidden', 403);
+            if ($id === null || $id === '') bad('Graph id is required.');
+            $data = json_input();
+            $existingQuery = $pdo->prepare('SELECT id, record_id FROM saved_graphs WHERE id = ?');
+            $existingQuery->execute([$id]);
+            $existing = $existingQuery->fetch(PDO::FETCH_ASSOC);
+            if (!$existing) bad('Graph not found', 404);
+            $recordId = $data['record_id'] ?? $data['recordId'] ?? null;
+            if ($recordId !== null && (string)$recordId !== (string)$existing['record_id']) bad('A saved graph cannot be moved to another record.', 409);
+
+            $colors = require_graph_colors($data);
+            $chartData = $data['chart_data'] ?? $data['chartData'] ?? null;
+            $sets = [
+                'title = ?',
+                'chart_type = ?',
+                'orientation = ?',
+                'value_axis_reversed = ?',
+                'value_axis_min = ?',
+                'value_axis_max = ?',
+                'rank_semantic = ?',
+                'rank_value_min = ?',
+                'rank_value_max = ?',
+                'labels = ?',
+                'values_data = ?',
+                'chart_data = ?',
+                'colors = ?'
+            ];
+            $values = [
+                $data['title'] ?? 'Saved Chart',
+                normalize_graph_type($data['chart_type'] ?? $data['chartType'] ?? 'bar'),
+                $data['orientation'] ?? 'vertical',
+                !empty($data['valueAxisReversed']) ? 1 : 0,
+                is_numeric($data['valueAxisMin'] ?? null) ? $data['valueAxisMin'] : null,
+                is_numeric($data['valueAxisMax'] ?? null) ? $data['valueAxisMax'] : null,
+                !empty($data['rankSemantic']) ? 1 : 0,
+                is_numeric($data['rankValueMin'] ?? null) ? $data['rankValueMin'] : null,
+                is_numeric($data['rankValueMax'] ?? null) ? $data['rankValueMax'] : null,
+                json_encode($data['labels'] ?? []),
+                json_encode($data['values_data'] ?? $data['valuesData'] ?? $data['data'] ?? []),
+                json_encode($chartData ?? []),
+                $colors === null ? null : json_encode($colors)
+            ];
+            if (array_key_exists('is_published', $data)) {
+                $sets[] = 'is_published = ?';
+                $values[] = (int)(bool)$data['is_published'];
+            }
+            $updatedAtCheck = $pdo->prepare("SELECT COUNT(*) FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'saved_graphs' AND COLUMN_NAME = 'updated_at'");
+            $updatedAtCheck->execute();
+            if ((int)$updatedAtCheck->fetchColumn() > 0) $sets[] = 'updated_at = NOW()';
+            $values[] = $id;
+            $update = $pdo->prepare('UPDATE saved_graphs SET ' . implode(', ', $sets) . ' WHERE id = ?');
+            $update->execute($values);
+            $query = $pdo->prepare('SELECT * FROM saved_graphs WHERE id = ?');
+            $query->execute([$id]);
+            $saved = $query->fetch(PDO::FETCH_ASSOC);
+            if (!$saved) bad('Graph not found', 404);
+            echo json_encode(output_graph($saved));
+            exit;
+        }
         if ($_SERVER['REQUEST_METHOD']==='POST') {
             ensure_admin_for_mutation();
             $d=json_input();
@@ -583,7 +669,7 @@ try {
             $published = isset($d['is_published']) ? (int)(bool)$d['is_published'] : 0;
             $chartData = $d['chart_data'] ?? $d['chartData'] ?? null;
             $stmt=$pdo->prepare('INSERT INTO saved_graphs (id,record_id,title,chart_type,orientation,value_axis_reversed,value_axis_min,value_axis_max,rank_semantic,rank_value_min,rank_value_max,labels,values_data,chart_data,colors,is_published) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)');
-            $stmt->execute([$gid,$rid,$d['title']??'Saved Chart',$d['chart_type']??$d['chartType']??'bar',$d['orientation']??'vertical',!empty($d['valueAxisReversed'])?1:0,is_numeric($d['valueAxisMin']??null)?$d['valueAxisMin']:null,is_numeric($d['valueAxisMax']??null)?$d['valueAxisMax']:null,!empty($d['rankSemantic'])?1:0,is_numeric($d['rankValueMin']??null)?$d['rankValueMin']:null,is_numeric($d['rankValueMax']??null)?$d['rankValueMax']:null,json_encode($d['labels']??[]),json_encode($d['values_data']??$d['valuesData']??$d['data']??[]),json_encode($chartData ?? []),$colors === null ? null : json_encode($colors),$published]);
+            $stmt->execute([$gid,$rid,$d['title']??'Saved Chart',normalize_graph_type($d['chart_type']??$d['chartType']??'bar'),$d['orientation']??'vertical',!empty($d['valueAxisReversed'])?1:0,is_numeric($d['valueAxisMin']??null)?$d['valueAxisMin']:null,is_numeric($d['valueAxisMax']??null)?$d['valueAxisMax']:null,!empty($d['rankSemantic'])?1:0,is_numeric($d['rankValueMin']??null)?$d['rankValueMin']:null,is_numeric($d['rankValueMax']??null)?$d['rankValueMax']:null,json_encode($d['labels']??[]),json_encode($d['values_data']??$d['valuesData']??$d['data']??[]),json_encode($chartData ?? []),$colors === null ? null : json_encode($colors),$published]);
             $q=$pdo->prepare('SELECT * FROM saved_graphs WHERE id=?');
             $q->execute([$gid]);
             echo json_encode(output_graph($q->fetch(PDO::FETCH_ASSOC)));

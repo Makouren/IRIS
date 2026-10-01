@@ -364,8 +364,8 @@ require_once __DIR__.'/includes/header.php';
                                 <option value="line">Line Chart</option>
                                 <option value="pie">Pie Chart</option>
                                 <option value="doughnut">Doughnut Chart</option>
-                                <option value="polarArea">Polar Area</option>
-                                <!-- Temporarily disabled: <option value="rankedBar">Ranked Bar Chart</option> -->
+                                <option value="rankedBar">Ranked Bar Chart</option>
+                                <option value="nestedPie">Nested Pie</option>
                             </select>
                         </div>
                     </div>
@@ -379,6 +379,10 @@ require_once __DIR__.'/includes/header.php';
                         <div style="display: flex; align-items: center; gap: 0.35rem;">
                             <label style="font-size: 0.75rem; font-weight: 700; color: var(--text-muted); white-space: nowrap;" id="studioValueLabel">Value (Y-axis):</label>
                             <select id="studioValueCol" class="form-input" style="width: auto; padding: 0.3rem 0.55rem; font-size: 0.78rem;" aria-label="Value column"></select>
+                        </div>
+                        <div id="studioGroupFieldWrapper" style="display: none; align-items: center; gap: 0.35rem;">
+                            <label for="studioGroupField" style="font-size: 0.75rem; font-weight: 700; color: var(--text-muted); white-space: nowrap;">Group (inner ring):</label>
+                            <select id="studioGroupField" class="form-input" style="width: auto; padding: 0.3rem 0.55rem; font-size: 0.78rem;"></select>
                         </div>
                         <div style="display: flex; align-items: center; gap: 0.35rem;">
                             <label style="font-size: 0.75rem; font-weight: 700; color: var(--text-muted); white-space: nowrap;" id="studioValuePrecisionLabel">Display Precision:</label>

@@ -15,6 +15,6 @@ This folder contains browser-side chart recommendations. It does not call an ext
 
 ## Chart types
 
-GraphEngine suggestions use Bar, Line, Pie, Doughnut, and Polar Area. Studio also supports a dedicated Ranked Bar type with year selection and reverse display order; it is configured in the Studio chart engine rather than generated as a generic GraphEngine suggestion. Excel drafts use the parser-provided rows, retain separate numerical fields as separate chart suggestions, infer chronological sequences from values as well as headers, and emit Apache ECharts option objects. Invalid cells are omitted rather than converted to zero; identifier-like columns and structural document-statistics fallbacks are excluded from Excel chart generation.
+GraphEngine suggestions use Bar, Line, Pie, and Doughnut. Studio also supports Ranked Bar with year selection and reverse display order, plus Nested Pie with a selected group field. All chart views are built by the shared Apache ECharts option builder. Excel drafts use parser-provided rows, retain separate numerical fields as separate chart suggestions, infer chronological sequences from values as well as headers, and omit invalid cells rather than converting them to zero.
 
 Saved-graph SQL-formatted text exports use graph data, not rendered canvas pixels. Print exports render a chart preview separately from the data table. Publishing is separate from chart generation: the database graph row carries the explicit publication flag.

@@ -316,6 +316,39 @@ class DatabaseManager {
     return response.json();
   }
 
+  async updateGraph(graphId, graphData) {
+    if (!graphId) throw new Error('Graph id is required.');
+    const chartData = graphData.chart_data || graphData.chartData || graphData.option || graphData.config || {};
+    const payload = {
+      record_id: graphData.record_id || graphData.recordId,
+      title: graphData.title || 'Saved Chart',
+      chart_type: graphData.chart_type || graphData.chartType || 'bar',
+      orientation: graphData.orientation || 'vertical',
+      valueAxisReversed: graphData.valueAxisReversed === true,
+      valueAxisMin: graphData.valueAxisMin,
+      valueAxisMax: graphData.valueAxisMax,
+      rankSemantic: graphData.rankSemantic === true,
+      rankValueMin: graphData.rankValueMin,
+      rankValueMax: graphData.rankValueMax,
+      labels: graphData.labels || [],
+      values_data: graphData.values_data || graphData.valuesData || graphData.data || [],
+      colors: Array.isArray(graphData.colors) && graphData.colors.every(color => typeof color === 'string' && /^#[0-9A-Fa-f]{6}$/.test(color)) ? graphData.colors : null,
+      chart_data: chartData && typeof chartData === 'object' ? chartData : {}
+    };
+    if (Object.prototype.hasOwnProperty.call(graphData, 'is_published')) {
+      payload.is_published = graphData.is_published === true || graphData.is_published === 1 || graphData.is_published === '1';
+    }
+
+    const response = await fetch(this.config.endpoints.graphById(graphId), {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+    const result = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(result.error || `Unable to update graph (HTTP ${response.status})`);
+    return result;
+  }
+
   async publishGraph(graphId, published = true) {
     const response = await fetch(`${this.config.endpoints.graphById(graphId)}&action=${published ? 'publish' : 'unpublish'}`, {
       method: 'POST',
@@ -411,6 +444,17 @@ class DatabaseManager {
     }
   }
 
+  async getGraphById(graphId) {
+    if (!graphId) throw new Error('Graph id is required.');
+    const response = await fetch(this.config.endpoints.graphById(graphId), {
+      headers: { Accept: 'application/json' },
+      cache: 'no-store'
+    });
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(payload.error || `Unable to load graph (HTTP ${response.status})`);
+    return payload;
+  }
+
   async getGraphsByRecord(recordId) {
     if (!recordId) return [];
 
@@ -419,14 +463,23 @@ class DatabaseManager {
       if (!response.ok) return [];
       const rows = await response.json();
       return (rows || []).map(row => ({
+        ...row,
         id: row.id,
         title: row.title || 'Saved Chart',
+        is_published: row.is_published === true || row.is_published === 1,
         source: 'Saved Chart',
         primaryType: row.chart_type || 'bar',
+        chart_type: row.chart_type || 'bar',
+        orientation: row.orientation || 'vertical',
+        values_data: Array.isArray(row.values_data) ? row.values_data : [],
+        labels: Array.isArray(row.labels) ? row.labels : [],
+        colors: Array.isArray(row.colors) ? row.colors : null,
+        chart_data: row.chart_data || {},
         rankSemantic: row.rank_semantic === true || row.rank_semantic === 1,
         recommendation: 'Saved chart from the dashboard studio.',
         isDraft: true,
         chartData: {
+          ...(row.chart_data || {}),
           labels: Array.isArray(row.labels) ? row.labels : [],
           rankSemantic: row.rank_semantic === true || row.rank_semantic === 1,
           datasets: [{
