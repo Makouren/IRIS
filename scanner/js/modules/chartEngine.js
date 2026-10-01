@@ -99,7 +99,7 @@ export function createChart(ctx, type, chartData, { reverseOrder = false, colors
       ...series,
       name: series.name || colorFields[index],
       type: 'line',
-      smooth: series.smooth ?? true,
+      smooth: series.smooth ?? false,
       data: series.data || [],
       itemStyle: { ...(series.itemStyle || {}), color: colors[index] },
       lineStyle: { ...(series.lineStyle || {}), color: colors[index] }
@@ -119,7 +119,7 @@ export function createChart(ctx, type, chartData, { reverseOrder = false, colors
           ...series,
           name: series.name || colorFields[index],
           type: 'line',
-          smooth: true,
+          smooth: false,
           data: series.data || [],
           itemStyle: { ...(series.itemStyle || {}), color: colors[index] },
           lineStyle: { ...(series.lineStyle || {}), color: colors[index], width: series.lineStyle?.width || 3 }
@@ -132,7 +132,7 @@ export function createChart(ctx, type, chartData, { reverseOrder = false, colors
         labels,
         type === 'line' ? labels.map(() => colors[0]) : colors
       ),
-      smooth: type === 'line',
+      smooth: false,
       itemStyle: { color: type === 'line' ? colors[0] : barFill, borderRadius: type === 'line' ? 0 : [0, 7, 7, 0] },
       lineStyle: type === 'line' ? { color: colors[0], width: 3 } : undefined
     }];
@@ -264,7 +264,7 @@ export function renderStudioChart(arg1, arg2, arg3 = {}) {
   if (rankedMode) {
     const selectedYearRaw = rankedYearSelect?.value ?? yearConfiguration.selectedYear ?? yearConfiguration.availableYears[0] ?? 'all';
     const selectedYear = selectedYearRaw === 'all' ? 'all' : Number(selectedYearRaw);
-    const ranked = window.ChartMapping.buildRankedBarRows(sheet.rows, { yearColumn, selectedYear, labelColumn: labelCol, valueColumn: valueCol, limit, reverseOrder });
+    const ranked = window.ChartMapping.buildRankedBarRows(sheet.rows, { yearColumn, selectedYear, labelColumn: labelCol, valueColumn: valueCol, limit, reverseOrder, valueIsRank: rankSemantic });
     state.studioChartConfig = { ...(state.studioChartConfig || {}), reverseOrder, yearColumn, selectedYear, rankedYear: selectedYear, availableYears: ranked.options?.availableYears || yearConfiguration.availableYears || [] };
     chartRows = ranked.rows.map(row => ({
       sourceIndex: row.sourceIndex,
@@ -312,7 +312,17 @@ export function renderStudioChart(arg1, arg2, arg3 = {}) {
   });
   state.studioChartColors = [...chartColors];
   const rawValues = chartRows.map(row => rankedMode ? Number(row.rawValue ?? row.value ?? 0) : row.value);
-  const values = rankedMode ? chartRows.map(row => Number(row.visualValue ?? row.value ?? 0)) : (rankSemantic ? (() => { const maximum = Math.max(...rawValues); return rawValues.map(value => maximum - value); })() : rawValues);
+  // Rank fields are drawn with inverted bar heights (taller = better rank) ONLY for
+  // cartesian charts. Pie/doughnut/polar use the real numbers. The inverted number is
+  // a drawing aid and must never be shown to the reader; labels and tooltips use rawValues.
+  const lineRank = rankSemantic && type === 'line';   // real ranks on an inverted axis (1 at top), ticks stay visible
+  const invertForRank = rankSemantic && !rankedMode && !circular && !polar && !lineRank;   // bars: inverted heights, ticks hidden
+  const hideValueTicks = rankedMode || invertForRank;
+  const values = rankedMode
+    ? chartRows.map(row => Number(row.visualValue ?? row.value ?? 0))
+    : (invertForRank
+        ? (() => { const maximum = Math.max(...rawValues); return rawValues.map(value => maximum - value + 1); })()
+        : rawValues);
   const yMin = Math.min(...values); const yMax = Math.max(...values); const axisMin = rankedMode ? 0 : (rankSemantic ? 0 : yMin >= 0 && yMin <= yMax * 0.8 ? 0 : Math.floor(yMin * 0.9));
   const horizontal = rankedMode;
   const rankValueMin = rankedMode ? 0 : (rankSemantic ? 0 : undefined);
@@ -356,7 +366,7 @@ export function renderStudioChart(arg1, arg2, arg3 = {}) {
       textStyle: { color: labelColor },
       formatter: circular ? params => `${params.name}: ${formatValue(params.value)} (${params.percent}%)` : params => {
         const point = Array.isArray(params) ? params[0] : params;
-        const rawValue = rankSemantic ? rawValues[point.dataIndex] : Number(point.value ?? 0);
+        const rawValue = (rankedMode || invertForRank) ? rawValues[point.dataIndex] : Number(point.value ?? 0);
         return `<b>${fullLabels[point.dataIndex] || point.name}</b><br/>${headerName}: <b>${formatValue(rawValue)}</b>`;
       }
     },
@@ -381,6 +391,7 @@ export function renderStudioChart(arg1, arg2, arg3 = {}) {
       data: horizontal ? undefined : labels,
       axisLine: { lineStyle: { color: gridLineColor } },
       axisLabel: {
+        show: horizontal ? !hideValueTicks : true,
         rotate: chartRows.length > 6 ? 35 : 0,
         interval: 0,
         overflow: 'none',
@@ -394,12 +405,14 @@ export function renderStudioChart(arg1, arg2, arg3 = {}) {
     yAxis: circular || polar ? undefined : {
       type: horizontal ? 'category' : 'value',
       data: horizontal ? labels : undefined,
-      name: horizontal ? '' : headerName,
-      nameTextStyle: { fontSize: 12, fontWeight: 700, color: labelColor, padding: [0, 0, 8, 0] },
+      name: horizontal ? '' : (invertForRank ? `${headerName} (taller = better)` : (lineRank ? `${headerName} (1 = best)` : headerName)),
+      nameTextStyle: { fontSize: 12, fontWeight: 700, color: labelColor, padding: [0, 0, 8, 0], align: 'left' },
+      inverse: !horizontal && lineRank,
       min: horizontal ? undefined : axisMin,
-      max: horizontal ? undefined : yMax,
+      max: horizontal ? undefined : (lineRank ? Math.ceil(yMax * 1.05) : yMax),
       axisLine: { lineStyle: { color: gridLineColor } },
       axisLabel: {
+        show: horizontal ? true : !hideValueTicks,
         color: textColor,
         fontSize: 11,
         fontWeight: 600,
@@ -428,10 +441,10 @@ export function renderStudioChart(arg1, arg2, arg3 = {}) {
       emphasis: { itemStyle: { shadowBlur: 12, shadowColor: 'rgba(15, 23, 42, 0.38)' } }
     } : {
       type: rankedMode ? 'bar' : type,
-      smooth: type === 'line',
+      smooth: false,
       data: buildColoredSeriesData(values.map((value, index) => ({
         value,
-        ...(rankedMode ? { rawValue: rawValues[index] } : rankSemantic ? { rawValue: rawValues[index] } : {}),
+        ...((rankedMode || invertForRank) ? { rawValue: rawValues[index] } : {}),
         name: labels[index]
       })), labels, chartColors),
       itemStyle: { color: chartColors[0], borderRadius: type === 'bar' || rankedMode ? (horizontal ? [0, 4, 4, 0] : [4, 4, 0, 0]) : undefined },
@@ -442,7 +455,7 @@ export function renderStudioChart(arg1, arg2, arg3 = {}) {
         fontSize: 11,
         fontWeight: 700,
         color: labelColor,
-        formatter: params => formatValue(rankedMode ? (params.data?.rawValue ?? rawValues[params.dataIndex] ?? params.value) : params.value)
+        formatter: params => formatValue((rankedMode || invertForRank) ? (params.data?.rawValue ?? rawValues[params.dataIndex] ?? params.value) : params.value)
       }
     }]
   });

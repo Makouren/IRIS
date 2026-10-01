@@ -62,6 +62,16 @@
     return { availableYears: unique, selectedYear: unique[0] ?? null };
   }
 
+  /**
+   * options:
+   *   valueIsRank  (bool)   true -> parse value column with parseRankValue (handles "101-150" bands)
+   *   valueHeader  (string) used to auto-detect rank fields when valueIsRank is not given
+   *
+   * Each returned row has:
+   *   value / labelValue = the REAL number from the file (use this for data labels, tooltips, tables)
+   *   visualValue        = inverted bar height (taller = better rank); never show this as a number
+   * Rows whose value is blank or unreadable are skipped, never plotted as 0.
+   */
   function buildRankedBarRows(rows, options = {}) {
     const safeRows = Array.isArray(rows) ? rows : [];
     const yearColumn = Number.isInteger(options.yearColumn) ? options.yearColumn : null;
@@ -76,22 +86,26 @@
     const valueColumn = Number.isInteger(options.valueColumn) ? options.valueColumn : 1;
     const limit = Number.isFinite(Number(options.limit)) ? Math.max(1, Number(options.limit)) : safeRows.length || 30;
     const reverseOrder = Boolean(options.reverseOrder);
+    const valueIsRank = options.valueIsRank !== undefined
+      ? Boolean(options.valueIsRank)
+      : isRankField(options.valueHeader);
+    const parse = valueIsRank ? parseRankValue : parseNumericValue;
     const yearFilter = yearColumn !== null && selectedYear !== null && selectedYear !== 'all';
     const filtered = yearFilter
       ? safeRows.filter(row => parseYearValue(row?.[yearColumn]) === Number(selectedYear))
       : safeRows.slice();
     const prepared = filtered.map((row, index) => {
-      const value = parseNumericValue(row?.[valueColumn]);
+      const value = parse(row?.[valueColumn]);
       const label = String(row?.[labelColumn] ?? `Item ${index + 1}`).trim() || `Item ${index + 1}`;
       return {
         label,
-        value: value !== null ? value : 0,
-        rawValue: value !== null ? value : 0,
+        value,
+        rawValue: value,
         row,
         year: parseYearValue(row?.[yearColumn]),
         sourceIndex: index
       };
-    }).filter(item => Number.isFinite(item.value));
+    }).filter(item => item.value !== null && Number.isFinite(item.value));
     const sorted = prepared.slice().sort((a, b) => Number(a.value) - Number(b.value));
     const top = sorted.slice(0, Math.min(limit, sorted.length || limit));
     const displayRows = reverseOrder ? top.slice().reverse() : top;
@@ -108,7 +122,8 @@
         selectedYear,
         availableYears: allYears,
         limit,
-        reverseOrder
+        reverseOrder,
+        valueIsRank
       }
     };
   }
