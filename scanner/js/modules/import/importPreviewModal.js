@@ -103,15 +103,22 @@ if (modal) {
 
   function valuesFor(row, side) {
     if (state.destination === 'summary_cards') {
+      const includeCardSettings = (values, settings) => {
+        const cardSettings = { ...(settings || {}) };
+        if (Array.isArray(cardSettings.category_names)) cardSettings.category_names = cardSettings.category_names.join(', ');
+        return { ...values, ...cardSettings };
+      };
       if (side === 'existing') {
         const existing = row.snapshot_before;
-        if (!existing) return {};
-        return Object.fromEntries(['title', 'main_value', 'secondary_value', 'year_date', 'main_label', 'secondary_label', 'description', 'secondary_description', 'info_text', 'source_info', 'updated_at']
-          .filter(field => existing[field] !== null && existing[field] !== undefined && existing[field] !== '')
-          .map(field => [field, existing[field]]));
+        const existingValues = existing
+          ? Object.fromEntries(['title', 'main_value', 'secondary_value', 'year_date', 'main_label', 'secondary_label', 'description', 'secondary_description', 'info_text', 'source_info', 'updated_at']
+            .filter(field => existing[field] !== null && existing[field] !== undefined && existing[field] !== '')
+            .map(field => [field, existing[field]]))
+          : {};
+        return includeCardSettings(existingValues, row.card_settings_before);
       }
       const { period_key, period_label, period_sort, period_precision, ...sourceValues } = row.snapshot_after || {};
-      return sourceValues;
+      return includeCardSettings(sourceValues, row.card_settings_after);
     }
     return side === 'existing'
       ? { ...row.existing, id: undefined, seed_managed: undefined }

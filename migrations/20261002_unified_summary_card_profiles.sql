@@ -54,7 +54,9 @@ SELECT NULL, 'Unified Summary Cards', 'summary_cards', 'Summary Cards',
         'secondary_value', JSON_ARRAY('Secondary Value'),
         'description', JSON_ARRAY('Description'),
         'secondary_description', JSON_ARRAY('Italic Supporting Text'),
-        'info_text', JSON_ARRAY('Information')
+        'info_text', JSON_ARRAY('Information'),
+        'category_names', JSON_ARRAY('Categories'),
+        'display_precision', JSON_ARRAY('Display Precision')
     ),
     JSON_ARRAY('import_key', 'period_key', 'main_value', 'main_label', 'card_title'),
     JSON_ARRAY('import_key', 'main_label', 'card_title'),
@@ -69,7 +71,9 @@ SELECT NULL, 'Unified Summary Cards', 'summary_cards', 'Summary Cards',
         'secondary_value', 'Secondary Value',
         'description', 'Description',
         'secondary_description', 'Italic Supporting Text',
-        'info_text', 'Information'
+        'info_text', 'Information',
+        'category_names', 'Categories',
+        'display_precision', 'Display Precision'
     ),
     JSON_OBJECT()
 WHERE NOT EXISTS (

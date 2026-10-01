@@ -177,6 +177,28 @@ final class TemplateImportSupport
         return $key;
     }
 
+    public static function normalizeCategoryNames(mixed $value): ?array
+    {
+        if (!is_scalar($value) && $value !== null) throw new InvalidArgumentException('Categories must be a delimited list of names.');
+        $text = trim((string)($value ?? ''));
+        if ($text === '') return null;
+        $names = [];
+        foreach (explode(',', $text) as $name) {
+            $name = trim($name);
+            if ($name !== '') $names[] = $name;
+        }
+        return $names ?: null;
+    }
+
+    public static function normalizeDisplayPrecision(mixed $value): ?int
+    {
+        if (!is_scalar($value) && $value !== null) throw new InvalidArgumentException('Display Precision must be a number from 0 to 2.');
+        $text = trim((string)($value ?? ''));
+        if ($text === '') return null;
+        if (!preg_match('/^[0-2]$/', $text)) throw new InvalidArgumentException('Display Precision must be 0, 1, or 2.');
+        return (int)$text;
+    }
+
     public static function parse(PDO $pdo, string $recordId, string $destination, ?string $selectedSheet = null): array
     {
         $record = self::record($pdo, $recordId);
@@ -246,6 +268,16 @@ final class TemplateImportSupport
             $legacyImportKey = null;
             foreach ($fieldIndexes as $field => $index) {
                 $rawValue = (string)($row['values'][$index] ?? '');
+                if ($field === 'category_names') {
+                    $categoryNames = self::normalizeCategoryNames($rawValue);
+                    if ($categoryNames !== null) $mapped[$field] = $categoryNames;
+                    continue;
+                }
+                if ($field === 'display_precision') {
+                    $displayPrecision = self::normalizeDisplayPrecision($rawValue);
+                    if ($displayPrecision !== null) $mapped[$field] = $displayPrecision;
+                    continue;
+                }
                 $mapped[$field] = $field === 'import_key' ? $rawValue : trim($rawValue);
             }
             if ($builtInSummary && !empty($mapped['import_key']) && !empty($mapped['main_label'])) {

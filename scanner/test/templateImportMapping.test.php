@@ -169,22 +169,38 @@ $unifiedProfile = [
         'main_value' => 'Main Value',
         'main_label' => 'Main Label',
         'period_key' => 'Year / Date',
+        'category_names' => 'Categories',
+        'display_precision' => 'Display Precision',
     ],
     'header_aliases' => [],
 ];
 $unifiedIndexes = TemplateImportSupport::resolveFieldIndexes(
     $unifiedHeaders,
     $unifiedProfile,
-    ['import_key', 'card_title', 'main_value', 'main_label', 'period_key']
+    ['import_key', 'card_title', 'main_value', 'main_label', 'period_key', 'category_names', 'display_precision']
 );
 assertSame(0, $unifiedIndexes['import_key'], 'Global Label should map to the stable Summary Card import_key without an import_key column.');
 assertSame(1, $unifiedIndexes['card_title'], 'Title should resolve from the unified template.');
 assertSame(3, $unifiedIndexes['main_label'], 'Main Label should resolve from the unified template.');
 assertSame(4, $unifiedIndexes['period_key'], 'Year / Date should map to canonical period_key.');
+assertSame(11, $unifiedIndexes['category_names'], 'Categories should resolve to the canonical Summary Card categories field.');
+assertSame(12, $unifiedIndexes['display_precision'], 'Display Precision should resolve to its canonical field.');
+$categoryNames = TemplateImportSupport::normalizeCategoryNames(' International, National , Regional ');
+assertSame(['International', 'National', 'Regional'], $categoryNames, 'Categories should split on commas and trim surrounding whitespace only.');
+assertSame(null, TemplateImportSupport::normalizeCategoryNames(''), 'Blank Categories should preserve the existing assignment.');
+assertSame(0, TemplateImportSupport::normalizeDisplayPrecision('0'), 'Display Precision zero must remain numeric zero.');
+assertSame(1, TemplateImportSupport::normalizeDisplayPrecision('1'), 'Display Precision one must remain numeric one.');
+assertSame(null, TemplateImportSupport::normalizeDisplayPrecision(''), 'Blank Display Precision should preserve the existing/default value.');
 $overallRank = ['import_key' => 'WURI', 'card_title' => "World's Universities with Real Impact", 'main_label' => 'Global rank'];
 $fundingCategory = ['import_key' => 'WURI', 'card_title' => 'Funding for Sustainability', 'main_label' => 'Global category rank'];
 $costBenefitCategory = ['import_key' => 'WURI', 'card_title' => 'Cost-Benefit Management', 'main_label' => 'Global category rank'];
 $unifiedFields = ['import_key', 'main_label', 'card_title'];
+assertTrue(!in_array('category_names', $unifiedFields, true), 'Categories must remain outside the configured identity unless the active profile explicitly includes it.');
+assertSame(
+    TemplateImportSupport::canonicalImportKey($overallRank, $unifiedFields, 'Summary Cards', 3),
+    TemplateImportSupport::canonicalImportKey(array_replace($overallRank, ['category_names' => ['International', 'National']]), $unifiedFields, 'Summary Cards', 3),
+    'Changing Categories alone must not change Summary Card identity when the profile does not configure it as identity.'
+);
 assertTrue(
     TemplateImportSupport::identityPeriodKey($overallRank, $unifiedFields, 'Y:2025', 'Summary Cards', 3)
         !== TemplateImportSupport::identityPeriodKey($fundingCategory, $unifiedFields, 'Y:2025', 'Summary Cards', 4),

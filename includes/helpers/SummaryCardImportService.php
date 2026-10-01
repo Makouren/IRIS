@@ -4,6 +4,7 @@ declare(strict_types=1);
 require_once __DIR__ . '/LatestYearResolver.php';
 require_once __DIR__ . '/SummaryCardHistory.php';
 require_once __DIR__ . '/ImportBatchAudit.php';
+require_once __DIR__ . '/SummaryCardCategoryStorage.php';
 
 final class SummaryCardImportService
 {
@@ -98,6 +99,13 @@ final class SummaryCardImportService
         return hash('sha256', json_encode(array_intersect_key($period, array_flip(self::CONTENT_FIELDS)), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES));
     }
 
+    private static function sameCategories(array $left, array $right): bool
+    {
+        sort($left, SORT_STRING);
+        sort($right, SORT_STRING);
+        return $left === $right;
+    }
+
     private static function build(PDO $pdo, array $parsed, bool $lock): array
     {
         $groups = [];
@@ -155,7 +163,13 @@ final class SummaryCardImportService
             $group['periods'] = $group['card']
                 ? SummaryCardHistory::periods($pdo, (string)$group['card']['id'], $lock)
                 : [];
-            $group['version'] = hash('sha256', SummaryCardHistory::version($group['card'], $group['periods']) . "\0" . $profileVersion);
+            $group['card_settings_before'] = $group['card'] ? [
+                'category_names' => SummaryCardCategoryStorage::names($pdo, (string)$group['card']['id']),
+                'display_precision' => (int)($group['card']['display_precision'] ?? 2)
+            ] : null;
+            $settingsForVersion = $group['card_settings_before'] ?? ['category_names' => [], 'display_precision' => 2];
+            $group['card_settings_after'] = $settingsForVersion;
+            $group['version'] = hash('sha256', SummaryCardHistory::version($group['card'], $group['periods']) . "\0" . json_encode($settingsForVersion, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR) . "\0" . $profileVersion);
             $group['before_latest'] = SummaryCardHistory::latest($group['periods']);
             $group['before_public'] = SummaryCardHistory::latest($group['periods'], true);
             $group['simulation'] = $group['periods'];
@@ -168,6 +182,13 @@ final class SummaryCardImportService
                 }
                 $base = $existing ?? self::historyBefore($group['simulation'], $input['period']) ?? [];
                 $incoming = $input['values'];
+                if (!empty($incoming['category_names']) && is_array($incoming['category_names'])) {
+                    $group['card_settings_after']['category_names'] = $incoming['category_names'];
+                }
+                if (array_key_exists('display_precision', $incoming)) {
+                    $precision = TemplateImportSupport::normalizeDisplayPrecision($incoming['display_precision']);
+                    if ($precision !== null) $group['card_settings_after']['display_precision'] = $precision;
+                }
                 $logicalKey = self::importKey($incoming, $input['sheet_name'], $input['row_number']);
                 if (!empty($incoming['card_title']) && trim((string)$incoming['card_title']) !== '') $incoming['title'] = $incoming['card_title'];
                 $state = self::mergedState($incoming, $base, $existing !== null, $logicalKey, $input['period'], (string)$parsed['record']['fileName'], $input['row_number']);
@@ -190,6 +211,15 @@ final class SummaryCardImportService
                     'sheet_name' => $input['sheet_name'], 'row_number' => $input['row_number']
                 ];
             }
+            $settingsBefore = $group['card_settings_before'] ?? ['category_names' => [], 'display_precision' => 2];
+            $group['card_settings_changed'] = !self::sameCategories($settingsBefore['category_names'], $group['card_settings_after']['category_names'])
+                || (int)$settingsBefore['display_precision'] !== (int)$group['card_settings_after']['display_precision'];
+            foreach ($group['rows'] as $rowIndex => &$row) {
+                $row['card_settings_before'] = $group['card_settings_before'];
+                $row['card_settings_after'] = $group['card_settings_after'];
+                $row['card_settings_changed'] = $group['card_settings_changed'] && $rowIndex === 0;
+            }
+            unset($row);
             $group['after_latest'] = SummaryCardHistory::latest($group['simulation']);
             $group['after_public'] = SummaryCardHistory::latest($group['simulation'], true);
             $group['current_public_unchanged'] = (string)($group['before_public']['period_key'] ?? '') === (string)($group['after_public']['period_key'] ?? '')
@@ -227,11 +257,11 @@ final class SummaryCardImportService
         }
     }
 
-    private static function insertCard(PDO $pdo, string $key, array $state): array
+    private static function insertCard(PDO $pdo, string $key, array $state, int $displayPrecision): array
     {
         $id = 'summary_card_' . bin2hex(random_bytes(12));
-        $query = $pdo->prepare('INSERT INTO summary_cards (id, import_key, title, main_value, main_label, year_date, secondary_label, secondary_value, description, secondary_description, info_text, is_published, display_order, display_precision) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 0, 2)');
-        $query->execute([$id, $key, $state['title'], $state['main_value'], $state['main_label'], $state['year_date'], $state['secondary_label'], $state['secondary_value'], $state['description'], $state['secondary_description'], $state['info_text']]);
+        $query = $pdo->prepare('INSERT INTO summary_cards (id, import_key, title, main_value, main_label, year_date, secondary_label, secondary_value, description, secondary_description, info_text, is_published, display_order, display_precision) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 0, ?)');
+        $query->execute([$id, $key, $state['title'], $state['main_value'], $state['main_label'], $state['year_date'], $state['secondary_label'], $state['secondary_value'], $state['description'], $state['secondary_description'], $state['info_text'], $displayPrecision]);
         $saved = $pdo->prepare('SELECT * FROM summary_cards WHERE id = ?');
         $saved->execute([$id]);
         return $saved->fetch(PDO::FETCH_ASSOC);
@@ -264,7 +294,7 @@ final class SummaryCardImportService
                     throw new RuntimeException('Summary Card history changed after preview. Refresh the preview before applying.', 409);
                 }
             }
-            $work = array_values(array_filter($built['rows'], static fn(array $row): bool => $row['kind'] !== 'unchanged' || $row['identity_migration']));
+            $work = array_values(array_filter($built['rows'], static fn(array $row): bool => $row['kind'] !== 'unchanged' || $row['identity_migration'] || $row['card_settings_changed']));
             if (!$work) {
                 $pdo->commit();
                 return ['success' => true, 'inserted' => 0, 'updated' => 0, 'message' => 'No changes detected.'];
@@ -273,12 +303,17 @@ final class SummaryCardImportService
             $updated = count($work) - $inserted;
             $batchId = ImportBatchAudit::create($pdo, $parsed['record'], 'summary_cards', $userId, $inserted, $updated);
             foreach ($built['groups'] as $key => $group) {
-                $changes = array_values(array_filter($group['rows'], static fn(array $row): bool => $row['kind'] !== 'unchanged' || $row['identity_migration']));
+                $changes = array_values(array_filter($group['rows'], static fn(array $row): bool => $row['kind'] !== 'unchanged' || $row['identity_migration'] || $row['card_settings_changed']));
                 if (!$changes) continue;
                 $card = $group['card'];
+                $createdCard = !$card;
+                $settingsBefore = $group['card_settings_before'] ?? ['category_names' => [], 'display_precision' => 2];
+                $settingsAfter = $group['card_settings_after'];
                 if (!$card) {
                     $initial = $group['after_latest'];
-                    $card = self::insertCard($pdo, $key, $initial);
+                    $card = self::insertCard($pdo, $key, $initial, (int)$settingsAfter['display_precision']);
+                    if ($settingsAfter['category_names']) SummaryCardCategoryStorage::replace($pdo, (string)$card['id'], $settingsAfter['category_names']);
+                    $card['category_names'] = SummaryCardCategoryStorage::names($pdo, (string)$card['id']);
                     ImportBatchAudit::row($pdo, $batchId, 'summary_card', (string)$card['id'], $changes[0]['sheet_name'], $changes[0]['row_number'], null, $card);
                 } elseif ((string)$card['import_key'] !== (string)$key) {
                     $beforeIdentity = $card;
@@ -286,13 +321,28 @@ final class SummaryCardImportService
                     $card = self::identityQuery($pdo, $key, true);
                     ImportBatchAudit::row($pdo, $batchId, 'summary_card', (string)$card['id'], $changes[0]['sheet_name'], $changes[0]['row_number'], $beforeIdentity, $card);
                 }
+                $beforeCard = $card;
+                $settingsChanged = !$createdCard && $group['card_settings_changed'];
+                if ($settingsChanged) {
+                    if ((int)$settingsBefore['display_precision'] !== (int)$settingsAfter['display_precision']) {
+                        $pdo->prepare('UPDATE summary_cards SET display_precision = ? WHERE id = ?')->execute([(int)$settingsAfter['display_precision'], $card['id']]);
+                    }
+                    if (!self::sameCategories($settingsBefore['category_names'], $settingsAfter['category_names'])) {
+                        SummaryCardCategoryStorage::replace($pdo, (string)$card['id'], $settingsAfter['category_names']);
+                    }
+                }
                 foreach ($changes as $row) {
                     if ($row['kind'] !== 'unchanged') self::savePeriod($pdo, $row, (string)$card['id'], (string)$parsed['record']['id'], $batchId);
                 }
-                $beforeCard = $card;
                 $savedCard = SummaryCardHistory::syncLive($pdo, (string)$card['id']);
-                if (self::equalState($beforeCard, $savedCard) && (int)$beforeCard['is_published'] === (int)$savedCard['is_published']) continue;
-                ImportBatchAudit::row($pdo, $batchId, 'summary_card', (string)$card['id'], $changes[0]['sheet_name'], $changes[0]['row_number'], $beforeCard, $savedCard);
+                if (self::equalState($beforeCard, $savedCard) && (int)$beforeCard['is_published'] === (int)$savedCard['is_published'] && !$settingsChanged) continue;
+                $auditBefore = $beforeCard;
+                $auditAfter = $savedCard;
+                if ($settingsChanged) {
+                    $auditBefore['category_names'] = $settingsBefore['category_names'];
+                    $auditAfter['category_names'] = SummaryCardCategoryStorage::names($pdo, (string)$card['id']);
+                }
+                ImportBatchAudit::row($pdo, $batchId, 'summary_card', (string)$card['id'], $changes[0]['sheet_name'], $changes[0]['row_number'], $auditBefore, $auditAfter);
             }
             $pdo->commit();
             return ['success' => true, 'inserted' => $inserted, 'updated' => $updated, 'batch_id' => $batchId, 'message' => 'Summary Card periods were applied.'];

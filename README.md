@@ -4,6 +4,10 @@
 
 IRIS is a plain-PHP application. Apache serves PHP pages and PDO-backed APIs; browser JavaScript handles interactive workflows, file parsing, and charts. There is no Laravel application, Composer runtime, Node.js web server, or Python service.
 
+## V3.4.7 Highlight
+
+V3.4.7 introduces the **Unified Summary Cards** template: a reusable import profile for standardized Summary Card spreadsheets, independent of a specific uploaded office template. Super Admins can select the active profile, map stable Global Labels and reporting periods consistently, and optionally import card categories and display precision. Imports retain the existing diff review, historical-period, and explicit-publication safeguards. See [README_V3.4.7.md](README_V3.4.7.md) for release details and migration steps.
+
 ## What the System Does
 
 - Presents institutional rankings, ranking breakdowns, college contributions, program results, and accreditation data.
@@ -65,7 +69,7 @@ Parser and viewer modules for PDF, DOCX, and image OCR are present in the codeba
 
 Snapshot cards are maintained separately from Scanner graphs. Their title, values, labels, year, description, display order, precision, and publication state are stored in `summary_cards`. Publishing or unpublishing a card does not change records or saved graphs.
 
-Template-driven Snapshot imports require an explicit Global Label (`summary_cards.import_key`) and compare every incoming period against database history. Older imports are backfills; only the latest explicitly published snapshot is public/current. New periods remain unpublished until an administrator publishes them. Blank cells preserve values; `__CLEAR__` explicitly clears a field. The Summary Card history manager supports correction, publication, provenance inspection, and read-only public history.
+The Unified Summary Cards profile maps office spreadsheet headers to Summary Card fields, including Global Label (`summary_cards.import_key`), reporting period, card content, optional categories, and display precision. Imports compare every incoming period against database history. Older imports are backfills; only the latest explicitly published snapshot is public/current. New periods remain unpublished until an administrator publishes them. Blank cells preserve values; `__CLEAR__` explicitly clears a field. The Summary Card history manager supports correction, publication, provenance inspection, and read-only public history.
 
 Ranking History imports match the full ranking identity, display a side-by-side preview, and reject ambiguous matches. The Super Admin must acknowledge the diff before applying selected rows. Optimistic row versions prevent applying stale previews.
 
@@ -185,7 +189,7 @@ Graph publish/unpublish requests send JSON such as `{ "published": true }` or `{
 1. Place or clone the repository under `C:/xampp/htdocs/iris` (or another Apache document-root subdirectory).
 2. Start Apache and MySQL from the XAMPP Control Panel.
 3. Import [`database.sql`](database.sql) once into MySQL using phpMyAdmin or the MySQL client. The script creates/selects `iris_db` and seeds the ranking body catalog.
-4. Apply the required migrations in [`migrations/`](migrations/), including template imports, app change state, and `20261002_summary_card_history_v2.sql`. Snapshot imports require a stable Global Label column or a configured profile default.
+4. Apply the required migrations in [`migrations/`](migrations/), including template imports, app change state, Summary Card history, and the Unified Summary Cards profile migrations. Imports require a stable Global Label column or a configured profile default.
 5. Set `IRIS_DB_HOST`, `IRIS_DB_PORT`, `IRIS_DB_NAME`, `IRIS_DB_USER`, and `IRIS_DB_PASS` in [`config/db.php`](config/db.php) for the environment. The current defaults are intended for local XAMPP development, not production.
 6. Open `http://localhost/iris/`, register a CLSU account, and sign in. Registration requires an email ending in `@clsu2.edu.ph` and a password of at least eight characters.
 7. Registration assigns the `user` role. To grant administrator access, run the following as a database administrator, substituting the account name:
@@ -227,7 +231,8 @@ The suite covers graph/chart mapping, table filtering, document pagination, grap
 ## Related Documentation
 
 - [`README_PHP.md`](README_PHP.md): PHP deployment notes.
-- [`README_V3.4.5.md`](README_V3.4.5.md): V3.4.5 release changes and manual verification checklist.
+- [`README_V3.4.7.md`](README_V3.4.7.md): V3.4.7 release changes and manual verification checklist.
+- [`README_V3.4.5.md`](README_V3.4.5.md): Historical V3.4.5 release notes.
 - [`scanner/js/ai/README.md`](scanner/js/ai/README.md): chart suggestions and shared chart utilities.
 - [`scanner/js/database/README.md`](scanner/js/database/README.md): persistence and API routes.
 - [`scanner/js/modules/README.md`](scanner/js/modules/README.md): browser module responsibilities.
