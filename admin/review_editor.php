@@ -493,6 +493,11 @@ require_once __DIR__.'/includes/header.php';
                             <button id="studioBtnAddRow" type="button" class="btn-studio-action" style="background: rgba(16,185,129,0.12); border: 1.5px solid rgba(16,185,129,0.7); color: var(--text-main);">
                                 <i class="fa-solid fa-plus" aria-hidden="true"></i> Add Row
                             </button>
+                            <?php if (($_SESSION['role'] ?? '') === 'super_admin'): ?>
+                                <button id="studioBtnMergeUpload" data-role="<?= e($_SESSION['role'] ?? '') ?>" type="button" class="btn-studio-action" style="background: var(--bg-highlight); border: 1.5px solid var(--border-light); color: var(--text-main);">
+                                    <i class="fa-solid fa-code-merge" aria-hidden="true"></i> Merge from office upload
+                                </button>
+                            <?php endif; ?>
                         </div>
                     </div>
 

@@ -8,6 +8,16 @@ if ($currentRole === 'super_admin' && !ALLOW_SUPER_ADMIN_UPLOAD) {
 	requireRole(['super_admin', 'admin']);
 }
 verify_csrf();
+$templateId = filter_var($_POST['template_id'] ?? null, FILTER_VALIDATE_INT);
+if (!$templateId || $templateId < 1) {
+	flash_redirect('admin/office_upload.php', 'error', 'Choose a ranking body with an active linked template.');
+}
+$pdo = db();
+$templateQuery = $pdo->prepare('SELECT templates.id FROM templates INNER JOIN ranking_bodies bodies ON bodies.id = templates.ranking_body_id WHERE templates.id = ? AND templates.is_active = 1 LIMIT 1');
+$templateQuery->execute([$templateId]);
+if (!$templateQuery->fetchColumn()) {
+	flash_redirect('admin/office_upload.php', 'error', 'The selected ranking body template is no longer active. Choose another option.');
+}
 
 $file = $_FILES['office_file'] ?? null;
 if (!$file || $file['error'] !== UPLOAD_ERR_OK || !is_uploaded_file($file['tmp_name'])) {
@@ -88,7 +98,6 @@ if (!move_uploaded_file($file['tmp_name'], $storedPath)) {
 chmod($storedPath, 0640);
 
 try {
-	$pdo = db();
 	$account = $pdo->prepare('SELECT office_name FROM users WHERE id = ? AND role = ? AND is_active = 1 LIMIT 1');
 	$account->execute([(int)$_SESSION['user_id'], $currentRole]);
 	$officeName = $account->fetchColumn();
@@ -101,8 +110,8 @@ try {
 	$metadata = json_encode(array_merge($parsed['metadata'], ['stored_file' => $storedName]), JSON_THROW_ON_ERROR);
 	$insert = $pdo->prepare("INSERT INTO records
 		(id, fileName, fileType, fileSize, scannedAt, status, uploaded_by, office_name, uploaded_at,
-		 docType, rawText, extractedData, graphDrafts, adminNotes, metadata, updatedAt)
-		VALUES (?, ?, ?, ?, NOW(), 'Pending Review', ?, ?, NOW(), ?, ?, ?, ?, '', ?, NULL)");
+		 template_id, docType, rawText, extractedData, graphDrafts, adminNotes, metadata, updatedAt)
+		VALUES (?, ?, ?, ?, NOW(), 'Pending Review', ?, ?, NOW(), ?, ?, ?, ?, ?, '', ?, NULL)");
 	$insert->execute([
 		$recordId,
 		function_exists('mb_substr') ? mb_substr($originalName, 0, 255, 'UTF-8') : substr($originalName, 0, 255),
@@ -110,6 +119,7 @@ try {
 		(int)$file['size'],
 		(int)$_SESSION['user_id'],
 		$officeName,
+		(int)$templateId,
 		'Office Upload',
 		(string)$parsed['rawText'],
 		json_encode($parsed['sheetsData'], JSON_THROW_ON_ERROR),

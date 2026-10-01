@@ -11,6 +11,12 @@ $uploads = $uploadsQuery->fetchAll(PDO::FETCH_ASSOC);
 $templateQuery = db()->prepare('SELECT id, name, original_filename FROM templates WHERE is_active = 1 ORDER BY name ASC, id DESC');
 $templateQuery->execute();
 $templates = $templateQuery->fetchAll(PDO::FETCH_ASSOC);
+$uploadTypeQuery = db()->query("SELECT bodies.id AS ranking_body_id, bodies.name AS ranking_body_name, bodies.short_name,
+        templates.id AS template_id, templates.name AS template_name, templates.original_filename
+    FROM ranking_bodies bodies
+    LEFT JOIN templates ON templates.ranking_body_id = bodies.id AND templates.is_active = 1
+    ORDER BY bodies.name ASC, templates.name ASC, templates.id DESC");
+$uploadTypes = $uploadTypeQuery->fetchAll(PDO::FETCH_ASSOC);
 $success = flash('success');
 $error = flash('error');
 ?>
@@ -45,6 +51,24 @@ $error = flash('error');
             <?php if ($error): ?><div class="mb-4 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-900 dark:border-red-900 dark:bg-red-950 dark:text-red-200" role="alert"><?= e($error) ?></div><?php endif; ?>
             <form method="POST" action="<?= e(base_url('admin/upload_process.php')) ?>" enctype="multipart/form-data" class="space-y-4">
                 <?= csrf_field() ?>
+                <label for="officeRankingBody" class="block text-sm font-semibold">Ranking body / template type</label>
+                <select id="officeRankingBody" name="template_id" required class="block w-full rounded-lg border border-gray-300 bg-gray-50 px-3 py-3 text-sm dark:border-slate-700 dark:bg-slate-800">
+                    <option value="">Choose the ranking body matching this file</option>
+                    <?php $openRankingBody = null; foreach ($uploadTypes as $uploadType): ?>
+                        <?php if ((string)$openRankingBody !== (string)$uploadType['ranking_body_id']): ?>
+                            <?php if ($openRankingBody !== null): ?></optgroup><?php endif; ?>
+                            <optgroup label="<?= e($uploadType['ranking_body_name'] . ' (' . $uploadType['short_name'] . ')') ?>">
+                            <?php $openRankingBody = $uploadType['ranking_body_id']; ?>
+                        <?php endif; ?>
+                        <?php if ($uploadType['template_id'] === null): ?>
+                            <option disabled>No active template linked</option>
+                        <?php else: ?>
+                            <option value="<?= (int)$uploadType['template_id'] ?>"><?= e($uploadType['template_name'] . ' — ' . $uploadType['original_filename']) ?></option>
+                        <?php endif; ?>
+                    <?php endforeach; ?>
+                    <?php if ($openRankingBody !== null): ?></optgroup><?php endif; ?>
+                </select>
+                <p class="text-xs text-gray-500 dark:text-slate-400">Ranking bodies are managed by the Super Admin. New bodies and linked active templates appear here when this page is refreshed.</p>
                 <label for="officeFile" class="block text-sm font-semibold">Select document</label>
                     <input id="officeFile" name="office_file" type="file" required accept=".xlsx,.csv,.tsv" class="block w-full cursor-pointer rounded-lg border border-gray-300 bg-gray-50 text-sm file:mr-4 file:border-0 file:bg-emerald-700 file:px-4 file:py-3 file:font-semibold file:text-white dark:border-slate-700 dark:bg-slate-800">
                     <p class="text-xs text-gray-500 dark:text-slate-400">XLSX, CSV, or TSV. Maximum 10 MB. Other file types cannot be read automatically yet.</p>

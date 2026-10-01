@@ -94,6 +94,7 @@
     <script src="<?= e(base_url('scanner/js/tableFilter.js')) ?>"></script>
     <script src="<?= e(base_url('scanner/js/chartData.js')) ?>?v=<?= (int) filemtime(__DIR__.'/../../scanner/js/chartData.js') ?>"></script>
     <script src="<?= e(base_url('scanner/js/chartMapping.js')) ?>"></script>
+    <script src="<?= e(base_url('scanner/js/sheetMerge.js')) ?>?v=<?= (int) filemtime(__DIR__.'/../../scanner/js/sheetMerge.js') ?>"></script>
     <script src="<?= e(base_url('scanner/js/sourceIngestion.js')) ?>"></script>
     <script src="<?= e(base_url('scanner/js/documentPagination.js')) ?>"></script>
     <script src="<?= e(base_url('scanner/js/chartColors.js')) ?>?v=<?= (int) filemtime(__DIR__.'/../../scanner/js/chartColors.js') ?>"></script>

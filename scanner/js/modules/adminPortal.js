@@ -220,10 +220,15 @@ export function initAdminPortal(ctx) {
       const uploader = officeName || (record.uploaded_by ? 'Office' : 'Legacy / Super Admin');
       const templateLabel = record.template_name ? ` · via ${record.template_name}` : '';
       const isNew = Boolean(record.uploaded_at && !record.opened_at);
+        const merge = record.metadata?.merge;
+        const recentMerge = window.SheetMerge?.isRecentMerge(record.metadata, new Date()) === true;
+        const mergeBadgeTitle = recentMerge
+          ? `Merged ${new Date(merge.merged_at).toLocaleString()} from ${merge.source_office || 'office'}, replaced ${merge.replaced_file || 'previous file'}`
+          : '';
       return `<tr>
         <td><input class="admin-record-checkbox" type="checkbox" data-id="${escape(record.id)}" aria-label="Select record ${escape(record.id)}"></td>
         <td>${escape(record.id)}</td>
-        <td>${escape(record.fileName || 'Untitled')}</td>
+          <td>${escape(record.fileName || 'Untitled')}${recentMerge ? ` <span class="badge badge-low" title="${escape(mergeBadgeTitle)}">NEW</span>` : ''}</td>
         <td>${escape(uploader)}${escape(templateLabel)}${isNew ? ' <span class="badge badge-low" aria-label="New, not yet opened">New</span>' : ''}</td>
         <td>${escape((record.fileType || 'UNKNOWN').toUpperCase())}</td>
         <td><span class="badge">${escape(displayStatus)}</span></td>

@@ -256,6 +256,36 @@ class DatabaseManager {
     return payload;
   }
 
+  async stageRestore(oldId, officeId) {
+    await this.initPromise;
+    const response = await fetch(`${this.config.endpoints.recordById(oldId)}&action=stage-restore`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ office_id: officeId })
+    });
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(payload.error || `Unable to stage merge recovery (HTTP ${response.status})`);
+    return payload;
+  }
+
+  async trashStoredFile(oldId, trashId) {
+    await this.initPromise;
+    const response = await fetch(`${this.config.endpoints.recordById(oldId)}&action=trash-stored-file`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ trash_id: trashId })
+    });
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(payload.error || `Unable to move the previous file to trash (HTTP ${response.status})`);
+    return payload;
+  }
+
+  async restoreMerge(oldId, trashId) {
+    await this.initPromise;
+    const response = await fetch(`${this.config.endpoints.recordById(oldId)}&action=restore-merge`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ trash_id: trashId })
+    });
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(payload.error || `Unable to restore the previous file (HTTP ${response.status})`);
+    return payload;
+  }
+
   async setRecordsPublication(ids, published) {
     await this.initPromise;
     const recordIds = [...new Set((ids || []).filter(Boolean))];

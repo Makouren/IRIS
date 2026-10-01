@@ -79,6 +79,92 @@ function require_graph_colors(array $data): ?array {
     if ($colors === null) bad('colors must be an array of six-digit HEX values.');
     return $colors;
 }
+function upload_storage_root(): ?string {
+    $storagePath = getenv('IRIS_UPLOAD_DIR') ?: dirname(__DIR__, 4) . DIRECTORY_SEPARATOR . 'iris-private-uploads';
+    $realStorage = realpath($storagePath);
+    if (!$realStorage || !is_dir($realStorage)) return null;
+    $documentRoot = realpath((string)($_SERVER['DOCUMENT_ROOT'] ?? ''));
+    if ($documentRoot && (strcasecmp($realStorage, $documentRoot) === 0 || strncasecmp($realStorage, $documentRoot . DIRECTORY_SEPARATOR, strlen($documentRoot) + 1) === 0)) return null;
+    return $realStorage;
+}
+function stored_upload_path(?string $name): ?string {
+    if (!is_string($name) || !preg_match('/^[a-f0-9]{48}\.(xlsx|csv|tsv)$/', $name)) return null;
+    $root = upload_storage_root();
+    if (!$root) return null;
+    $path = realpath($root . DIRECTORY_SEPARATOR . $name);
+    return $path && dirname($path) === $root && is_file($path) ? $path : null;
+}
+function merge_trash_directory(bool $create = false): ?string {
+    $root = upload_storage_root();
+    if (!$root) return null;
+    $path = $root . DIRECTORY_SEPARATOR . 'trash';
+    if (!is_dir($path) && $create && !mkdir($path, 0750, true) && !is_dir($path)) return null;
+    $real = realpath($path);
+    return $real && dirname($real) === $root && is_dir($real) ? $real : null;
+}
+function valid_trash_id($trashId): bool {
+    return is_string($trashId) && preg_match('/^[a-f0-9]{24}$/', $trashId) === 1;
+}
+function stored_file_in_use(PDO $pdo, string $name, string $exceptRecordId): bool {
+    $escaped = str_replace(['!', '%', '_'], ['!!', '!%', '!_'], $name);
+    $query = $pdo->prepare("SELECT id, metadata FROM records WHERE id <> ? AND metadata LIKE ? ESCAPE '!' ");
+    $query->execute([$exceptRecordId, '%"stored_file"%' . $escaped . '%']);
+    foreach ($query->fetchAll(PDO::FETCH_ASSOC) as $row) {
+        $metadata = json_col($row['metadata'] ?? null, []);
+        if (is_array($metadata) && ($metadata['stored_file'] ?? null) === $name) return true;
+    }
+    return false;
+}
+function unlink_stored_upload_after_delete(PDO $pdo, array $record): void {
+    $metadata = json_col($record['metadata'] ?? null, []);
+    $name = is_array($metadata) ? (string)($metadata['stored_file'] ?? '') : '';
+    if ($name === '') return;
+    $path = stored_upload_path($name);
+    if (!$path || stored_file_in_use($pdo, $name, (string)$record['id'])) return;
+    if (!@unlink($path)) error_log('IRIS could not unlink stored upload after record deletion: ' . $name);
+}
+function cleanup_expired_merge_trash(string $trashDirectory): void {
+    $cutoff = time() - 30 * 24 * 60 * 60;
+    foreach (glob($trashDirectory . DIRECTORY_SEPARATOR . '*.json') ?: [] as $manifestPath) {
+        $trashId = basename($manifestPath, '.json');
+        if (!valid_trash_id($trashId)) continue;
+        $manifest = json_decode((string)@file_get_contents($manifestPath), true);
+        $createdAt = is_array($manifest) ? strtotime((string)($manifest['created_at'] ?? '')) : false;
+        if ($createdAt === false || $createdAt >= $cutoff) continue;
+        $oldName = is_array($manifest) ? (string)($manifest['old_stored_file'] ?? '') : '';
+        if (preg_match('/^[a-f0-9]{48}\.(xlsx|csv|tsv)$/', $oldName, $match)) {
+            $trashedFile = $trashDirectory . DIRECTORY_SEPARATOR . $trashId . '.' . $match[1];
+            if (is_file($trashedFile) && !@unlink($trashedFile)) error_log('IRIS could not expire trashed merge file: ' . $trashId);
+        }
+        if (!@unlink($manifestPath)) error_log('IRIS could not expire merge manifest: ' . $trashId);
+    }
+    foreach (glob($trashDirectory . DIRECTORY_SEPARATOR . '*') ?: [] as $path) {
+        $name = basename($path);
+        if (!preg_match('/^([a-f0-9]{24})\.(xlsx|csv|tsv)$/', $name, $match) || !is_file($path)) continue;
+        if (is_file($trashDirectory . DIRECTORY_SEPARATOR . $match[1] . '.json')) continue;
+        $modified = filemtime($path);
+        if ($modified !== false && $modified < $cutoff && !@unlink($path)) error_log('IRIS could not expire orphaned merge file: ' . $name);
+    }
+}
+function load_merge_manifest(string $trashId): array {
+    if (!valid_trash_id($trashId)) bad('Invalid recovery id.', 400);
+    $trashDirectory = merge_trash_directory();
+    $path = $trashDirectory ? $trashDirectory . DIRECTORY_SEPARATOR . $trashId . '.json' : '';
+    if ($path === '' || !is_file($path)) bad('Recovery data has expired or was not found.', 404);
+    $manifest = json_decode((string)file_get_contents($path), true);
+    if (!is_array($manifest)) bad('Recovery manifest is unreadable.', 500);
+    return [$trashDirectory, $path, $manifest];
+}
+function insert_row_from_snapshot(PDO $pdo, string $table, array $row): void {
+    if (!in_array($table, ['records', 'saved_graphs'], true)) bad('Invalid recovery table.', 500);
+    $columns = $pdo->query('SHOW COLUMNS FROM `' . $table . '`')->fetchAll(PDO::FETCH_COLUMN);
+    $fields = array_values(array_intersect($columns, array_keys($row)));
+    if (!$fields || !in_array('id', $fields, true)) bad('Recovery snapshot does not match the current database schema.', 409);
+    $quoted = array_map(static fn(string $field): string => '`' . $field . '`', $fields);
+    $sql = 'INSERT INTO `' . $table . '` (' . implode(',', $quoted) . ') VALUES (' . implode(',', array_fill(0, count($fields), '?')) . ')';
+    $values = array_map(static fn(string $field) => $row[$field], $fields);
+    $pdo->prepare($sql)->execute($values);
+}
 function normalize_field_key($value): string {
     return strtolower(preg_replace('/\s+/', ' ', trim((string)$value)) ?? '');
 }
@@ -422,6 +508,171 @@ try {
             $rows = $pdo->query('SELECT records.*, templates.name AS template_name FROM records LEFT JOIN templates ON templates.id = records.template_id ORDER BY records.scannedAt DESC, records.updatedAt DESC')->fetchAll(PDO::FETCH_ASSOC);
             echo json_encode(array_map('output_record',$rows)); exit;
         }
+        if ($_SERVER['REQUEST_METHOD'] === 'POST' && $action === 'stage-restore') {
+            ensure_admin_for_mutation();
+            if ($id === null || $id === '') bad('Existing record id is required.');
+            $data = json_input();
+            $officeId = $data['office_id'] ?? null;
+            if (!is_scalar($officeId) || (string)$officeId === '' || (string)$officeId === (string)$id) bad('A different office record id is required.');
+            $trashDirectory = merge_trash_directory(true);
+            if (!$trashDirectory) bad('Private merge recovery storage is unavailable.', 500);
+            cleanup_expired_merge_trash($trashDirectory);
+            $trashId = bin2hex(random_bytes(12));
+            $manifestPath = $trashDirectory . DIRECTORY_SEPARATOR . $trashId . '.json';
+            $temporaryPath = $manifestPath . '.tmp';
+            $pdo->beginTransaction();
+            try {
+                $oldQuery = $pdo->prepare('SELECT * FROM records WHERE id=? FOR UPDATE');
+                $oldQuery->execute([$id]);
+                $oldRow = $oldQuery->fetch(PDO::FETCH_ASSOC);
+                if (!$oldRow) bad('Existing record not found.', 404);
+                $officeQuery = $pdo->prepare('SELECT * FROM records WHERE id=? FOR UPDATE');
+                $officeQuery->execute([$officeId]);
+                $officeRow = $officeQuery->fetch(PDO::FETCH_ASSOC);
+                if (!$officeRow) bad('Office upload not found.', 404);
+                if (strtolower((string)($officeRow['status'] ?? '')) !== 'pending review') bad('The office upload must still be Pending Review.', 409);
+                if (empty($officeRow['uploaded_by']) || empty($officeRow['office_name'])) bad('The selected record is not an office upload.', 409);
+                if (!in_array(strtolower((string)($officeRow['fileType'] ?? '')), ['xlsx', 'csv', 'tsv'], true)) bad('The office upload is not a supported spreadsheet.', 409);
+                if (empty($oldRow['template_id']) || empty($officeRow['template_id']) || (string)$oldRow['template_id'] !== (string)$officeRow['template_id']) bad('Both records must be assigned to the same template.', 409);
+                $oldMetadata = json_col($oldRow['metadata'] ?? null, []);
+                $officeMetadata = json_col($officeRow['metadata'] ?? null, []);
+                if (!is_array($oldMetadata)) $oldMetadata = [];
+                if (!is_array($officeMetadata)) $officeMetadata = [];
+                if (!empty($oldMetadata['merge']['trash_id'])) bad('Restore the previous file before staging another merge.', 409);
+                $graphQuery = $pdo->prepare('SELECT * FROM saved_graphs WHERE record_id=?');
+                $graphQuery->execute([$officeId]);
+                $oldStoredFile = (string)($oldMetadata['stored_file'] ?? '');
+                if (!preg_match('/^[a-f0-9]{48}\.(xlsx|csv|tsv)$/', $oldStoredFile)) $oldStoredFile = null;
+                $manifest = [
+                    'trash_id' => $trashId,
+                    'created_at' => gmdate('c'),
+                    'old_id' => (string)$id,
+                    'office_id' => (string)$officeId,
+                    'old_row' => $oldRow,
+                    'office_row' => $officeRow,
+                    'office_saved_graphs' => $graphQuery->fetchAll(PDO::FETCH_ASSOC),
+                    'old_stored_file' => $oldStoredFile,
+                ];
+                $encoded = json_encode($manifest, JSON_THROW_ON_ERROR);
+                if (file_put_contents($temporaryPath, $encoded, LOCK_EX) === false || !rename($temporaryPath, $manifestPath)) {
+                    @unlink($temporaryPath);
+                    bad('Unable to write merge recovery manifest.', 500);
+                }
+                chmod($manifestPath, 0640);
+                $pdo->commit();
+            } catch (Throwable $exception) {
+                if ($pdo->inTransaction()) $pdo->rollBack();
+                @unlink($temporaryPath);
+                @unlink($manifestPath);
+                throw $exception;
+            }
+            echo json_encode(['success' => true, 'trash_id' => $trashId]);
+            exit;
+        }
+        if ($_SERVER['REQUEST_METHOD'] === 'POST' && $action === 'trash-stored-file') {
+            ensure_admin_for_mutation();
+            if ($id === null || $id === '') bad('Existing record id is required.');
+            $data = json_input();
+            $trashId = (string)($data['trash_id'] ?? '');
+            [$trashDirectory, $manifestPath, $manifest] = load_merge_manifest($trashId);
+            if ((string)($manifest['old_id'] ?? '') !== (string)$id) bad('Recovery manifest does not match this record.', 409);
+            $recordQuery = $pdo->prepare('SELECT metadata FROM records WHERE id=?');
+            $recordQuery->execute([$id]);
+            $recordMetadata = json_col($recordQuery->fetchColumn(), []);
+            if (!is_array($recordMetadata) || (string)($recordMetadata['merge']['trash_id'] ?? '') !== $trashId) bad('The record has not been staged for this merge.', 409);
+            $name = $manifest['old_stored_file'] ?? null;
+            if (!$name) {
+                echo json_encode(['success' => true, 'moved' => false]);
+                exit;
+            }
+            $sourcePath = stored_upload_path((string)$name);
+            if (!$sourcePath) {
+                $extension = pathinfo((string)$name, PATHINFO_EXTENSION);
+                $existingTrashPath = $trashDirectory . DIRECTORY_SEPARATOR . $trashId . '.' . $extension;
+                if (is_file($existingTrashPath)) {
+                    echo json_encode(['success' => true, 'moved' => true]);
+                    exit;
+                }
+                bad('The previous stored file could not be found.', 404);
+            }
+            if (stored_file_in_use($pdo, (string)$name, (string)$id)) bad('The previous file is still referenced by another record.', 409);
+            $extension = pathinfo((string)$name, PATHINFO_EXTENSION);
+            $destination = $trashDirectory . DIRECTORY_SEPARATOR . $trashId . '.' . $extension;
+            if (file_exists($destination)) bad('A recovery file already exists for this merge.', 409);
+            if (!rename($sourcePath, $destination)) bad('Unable to move the previous file to trash.', 500);
+            chmod($destination, 0640);
+            echo json_encode(['success' => true, 'moved' => true]);
+            exit;
+        }
+        if ($_SERVER['REQUEST_METHOD'] === 'POST' && $action === 'restore-merge') {
+            ensure_admin_for_mutation();
+            if ($id === null || $id === '') bad('Existing record id is required.');
+            $data = json_input();
+            $trashId = (string)($data['trash_id'] ?? '');
+            [$trashDirectory, $manifestPath, $manifest] = load_merge_manifest($trashId);
+            if ((string)($manifest['old_id'] ?? '') !== (string)$id) bad('Recovery manifest does not match this record.', 409);
+            $createdAt = strtotime((string)($manifest['created_at'] ?? ''));
+            if ($createdAt === false || time() - $createdAt > 30 * 24 * 60 * 60) bad('Merge recovery has expired.', 410);
+            $oldRow = $manifest['old_row'] ?? null;
+            $officeRow = $manifest['office_row'] ?? null;
+            if (!is_array($oldRow) || !is_array($officeRow) || (string)($officeRow['id'] ?? '') !== (string)($manifest['office_id'] ?? '')) bad('Recovery manifest is incomplete.', 500);
+            $currentQuery = $pdo->prepare('SELECT metadata FROM records WHERE id=?');
+            $currentQuery->execute([$id]);
+            $currentRow = $currentQuery->fetch(PDO::FETCH_ASSOC);
+            if (!$currentRow) bad('Merged record not found.', 404);
+            $currentMetadata = json_col($currentRow['metadata'] ?? null, []);
+            if (!is_array($currentMetadata) || (string)($currentMetadata['merge']['trash_id'] ?? '') !== $trashId) bad('This merge was already restored or replaced.', 409);
+            $officeCheck = $pdo->prepare('SELECT id FROM records WHERE id=?');
+            $officeCheck->execute([$manifest['office_id']]);
+            if ($officeCheck->fetchColumn()) bad('The office upload id is already in use.', 409);
+
+            $pdo->beginTransaction();
+            try {
+                $restoreFields = ['fileName','fileType','fileSize','docType','rawText','extractedData','adminNotes','metadata'];
+                $sets = [];
+                $values = [];
+                foreach ($restoreFields as $field) {
+                    if (!array_key_exists($field, $oldRow)) continue;
+                    $sets[] = '`' . $field . '`=?';
+                    $values[] = $oldRow[$field];
+                }
+                $sets[] = 'updatedAt=NOW()';
+                $values[] = $id;
+                $pdo->prepare('UPDATE records SET ' . implode(',', $sets) . ' WHERE id=?')->execute($values);
+                insert_row_from_snapshot($pdo, 'records', $officeRow);
+                foreach (($manifest['office_saved_graphs'] ?? []) as $graphRow) {
+                    if (is_array($graphRow)) insert_row_from_snapshot($pdo, 'saved_graphs', $graphRow);
+                }
+                $pdo->commit();
+            } catch (Throwable $exception) {
+                if ($pdo->inTransaction()) $pdo->rollBack();
+                throw $exception;
+            }
+
+            $fileRestored = true;
+            $oldName = $manifest['old_stored_file'] ?? null;
+            if ($oldName) {
+                $existingOriginal = stored_upload_path((string)$oldName);
+                if (!$existingOriginal) {
+                    $root = upload_storage_root();
+                    $extension = pathinfo((string)$oldName, PATHINFO_EXTENSION);
+                    $trashedFile = $trashDirectory . DIRECTORY_SEPARATOR . $trashId . '.' . $extension;
+                    $destination = $root ? $root . DIRECTORY_SEPARATOR . $oldName : '';
+                    if (!$root || !$destination || file_exists($destination) || !is_file($trashedFile) || !rename($trashedFile, $destination)) {
+                        $fileRestored = false;
+                        error_log('IRIS merge restore could not return prior file for recovery id ' . $trashId);
+                    } else {
+                        chmod($destination, 0640);
+                    }
+                }
+            }
+            if (!@unlink($manifestPath)) error_log('IRIS merge restore could not delete manifest ' . $trashId);
+            $resultQuery = $pdo->prepare('SELECT * FROM records WHERE id=?');
+            $resultQuery->execute([$id]);
+            $restoredRecord = $resultQuery->fetch(PDO::FETCH_ASSOC);
+            echo json_encode(['success' => true, 'record' => output_record($restoredRecord), 'file_restored' => $fileRestored]);
+            exit;
+        }
         if ($_SERVER['REQUEST_METHOD'] === 'POST' && $action === 'bulk-approve') {
             ensure_admin_for_mutation();
             $data=json_input();
@@ -497,8 +748,26 @@ try {
             ensure_admin_for_mutation();
             $data=json_input(); $ids=array_values(array_unique(array_filter($data['ids']??[], fn($x)=>is_scalar($x)&&$x!=='')));
             if (!$ids) bad('ids must be a non-empty array');
-            $ph=implode(',',array_fill(0,count($ids),'?')); $q=$pdo->prepare("SELECT id FROM records WHERE id IN ($ph)");$q->execute($ids);$existing=$q->fetchAll(PDO::FETCH_COLUMN);
-            if ($existing) { $ph2=implode(',',array_fill(0,count($existing),'?')); $pdo->prepare("DELETE FROM saved_graphs WHERE record_id IN ($ph2)")->execute($existing); $q=$pdo->prepare("DELETE FROM records WHERE id IN ($ph2)");$q->execute($existing); }
+            $existingRows = [];
+            $pdo->beginTransaction();
+            try {
+                $ph=implode(',',array_fill(0,count($ids),'?'));
+                $q=$pdo->prepare("SELECT * FROM records WHERE id IN ($ph) FOR UPDATE");
+                $q->execute($ids);
+                $existingRows=$q->fetchAll(PDO::FETCH_ASSOC);
+                $existing=array_column($existingRows,'id');
+                if ($existing) {
+                    $ph2=implode(',',array_fill(0,count($existing),'?'));
+                    $pdo->prepare("DELETE FROM saved_graphs WHERE record_id IN ($ph2)")->execute($existing);
+                    $q=$pdo->prepare("DELETE FROM records WHERE id IN ($ph2)");$q->execute($existing);
+                }
+                $pdo->commit();
+            } catch (Throwable $exception) {
+                if ($pdo->inTransaction()) $pdo->rollBack();
+                throw $exception;
+            }
+            $existing=array_column($existingRows,'id');
+            foreach ($existingRows as $deletedRecord) unlink_stored_upload_after_delete($pdo, $deletedRecord);
             $set=array_fill_keys($existing,true); $results=[]; foreach($ids as $x)$results[]=['id'=>$x,'success'=>isset($set[$x]),'error'=>isset($set[$x])?null:'Record not found'];
             echo json_encode(['results'=>$results,'successCount'=>count($existing),'failureCount'=>count($ids)-count($existing)]); exit;
         }
@@ -523,7 +792,21 @@ try {
         }
         if ($_SERVER['REQUEST_METHOD'] === 'DELETE') {
             ensure_admin_for_mutation();
-            if($id===null)bad('Record id is required');$q=$pdo->prepare('SELECT * FROM records WHERE id=?');$q->execute([$id]);$r=$q->fetch(PDO::FETCH_ASSOC);if(!$r)bad('Record not found',404);$pdo->prepare('DELETE FROM saved_graphs WHERE record_id=?')->execute([$id]);$q=$pdo->prepare('DELETE FROM records WHERE id=?');$q->execute([$id]);echo json_encode(['message'=>'Record and published graphs deleted','record'=>$r]);exit; }
+            if($id===null)bad('Record id is required');
+            $pdo->beginTransaction();
+            try {
+                $q=$pdo->prepare('SELECT * FROM records WHERE id=? FOR UPDATE');$q->execute([$id]);$r=$q->fetch(PDO::FETCH_ASSOC);if(!$r)bad('Record not found',404);
+                $pdo->prepare('DELETE FROM saved_graphs WHERE record_id=?')->execute([$id]);
+                $q=$pdo->prepare('DELETE FROM records WHERE id=?');$q->execute([$id]);
+                if($q->rowCount() < 1) bad('Record not found',404);
+                $pdo->commit();
+            } catch (Throwable $exception) {
+                if ($pdo->inTransaction()) $pdo->rollBack();
+                throw $exception;
+            }
+            unlink_stored_upload_after_delete($pdo,$r);
+            echo json_encode(['message'=>'Record and published graphs deleted','record'=>$r]);exit;
+        }
     }
 
     if ($resource === 'graphs') {

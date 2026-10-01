@@ -8,6 +8,7 @@ import { initGraphsTab } from './modules/graphsTab.js?v=remove-rose-20261001';
 import { initSavedGraphsTab } from './modules/savedGraphsTab.js?v=remove-rose-20261001';
 import { initAdminPortal } from './modules/adminPortal.js?v=remove-rose-20261001';
 import { initStudioWorkbench } from './modules/studioWorkbench.js?v=remove-rose-20261001';
+import { initStudioAppend } from './modules/studioAppend.js';
 import { initStudioActions } from './modules/studioActions.js';
 import { initDocumentViewer } from './modules/documentViewer.js';
 import { initTableGrid } from './modules/tableGrid.js';
@@ -35,6 +36,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   initStudioActions(ctx);
 
   initAdminPortal(ctx);
+  initStudioAppend(ctx);
   initNavigationTabs(ctx);
   initFileIngestion(ctx);
 
