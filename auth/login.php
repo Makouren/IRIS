@@ -2,7 +2,8 @@
 require_once __DIR__.'/../includes/functions.php';
 
 if (!empty($_SESSION['user_id'])) {
-    redirect_to((strtolower((string)($_SESSION['role'] ?? 'user')) === 'admin') ? 'admin/dashboard.php' : 'user/dashboard.php');
+    $role = strtolower((string)($_SESSION['role'] ?? 'user'));
+    redirect_to($role === 'super_admin' ? 'admin/review_editor.php' : ($role === 'admin' ? 'admin/office_upload.php' : 'user/dashboard.php'));
 }
 
 $error = flash('error');
@@ -19,13 +20,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         flash_redirect('auth/login.php', 'error', 'Please enter your username/email and password.');
     }
 
-    if (str_contains($login, '@') && !preg_match('/^[A-Za-z0-9._%+-]+@clsu2\.edu\.ph$/i', $login)) {
+    if (str_contains($login, '@') && !filter_var($login, FILTER_VALIDATE_EMAIL)) {
         set_old(['username' => $login]);
-        flash_redirect('auth/login.php', 'error', 'Use your username or a valid CLSU2 email like name@clsu2.edu.ph.');
+        flash_redirect('auth/login.php', 'error', 'Enter a valid username or email address.');
     }
 
     try {
-        // Allow administrators and users to sign in with either username or CLSU email.
+        // All account roles may sign in with either username or email.
         $q = db()->prepare('SELECT * FROM users WHERE username = ? OR email = ? LIMIT 1');
         $q->execute([$login, $login]);
         $user = $q->fetch();
@@ -49,7 +50,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
     }
 
-    if (!$user || !$validPassword) {
+    if (!$user || !$validPassword || (int)($user->is_active ?? 1) !== 1) {
         set_old(['username' => $login]);
         flash_redirect('auth/login.php', 'error', 'Invalid username/email or password.');
     }
@@ -69,7 +70,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $_SESSION['username'] = $user->username;
     $_SESSION['role'] = strtolower(trim((string)$user->role));
 
-    $destination = $_SESSION['role'] === 'admin' ? 'admin/dashboard.php' : 'user/dashboard.php';
+    $destination = $_SESSION['role'] === 'super_admin' ? 'admin/review_editor.php' : ($_SESSION['role'] === 'admin' ? 'admin/office_upload.php' : 'user/dashboard.php');
     flash_redirect($destination, 'success', 'Welcome back, '.$user->username.'!');
 }
 ?>
@@ -199,7 +200,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             </form>
 
             <p class="text-xs text-center text-gray-500 dark:text-slate-400 mt-6">
-                No account? <a href="<?= e(base_url('auth/register.php')) ?>" class="font-semibold text-emerald-600 dark:text-emerald-400 hover:underline">Register here</a>
+                Accounts are provisioned by the Super Admin.
             </p>
         </div>
     </div>

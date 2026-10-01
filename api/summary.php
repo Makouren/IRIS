@@ -1,6 +1,6 @@
 <?php
 require_once __DIR__ . '/../includes/functions.php';
-require_auth();
+requireRole(['super_admin', 'admin', 'user'], true);
 header('Content-Type: application/json; charset=utf-8');
 
 $pdo = db();

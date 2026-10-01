@@ -20,6 +20,21 @@ $pageTitle = $pageTitle ?? 'IRIS Admin Control Panel';
             } catch (e) {}
         })();
     </script>
+    <meta name="csrf-token" content="<?= e(csrf_token()) ?>">
+    <script>
+        (function () {
+            const originalFetch = window.fetch.bind(window);
+            window.fetch = (input, init = {}) => {
+                const method = String(init.method || 'GET').toUpperCase();
+                if (['POST', 'PUT', 'PATCH', 'DELETE'].includes(method)) {
+                    const headers = new Headers(init.headers || {});
+                    if (!headers.has('X-CSRF-Token')) headers.set('X-CSRF-Token', document.querySelector('meta[name="csrf-token"]')?.content || '');
+                    init = { ...init, headers };
+                }
+                return originalFetch(input, init);
+            };
+        })();
+    </script>
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
         tailwind.config = {
@@ -250,16 +265,18 @@ $pageTitle = $pageTitle ?? 'IRIS Admin Control Panel';
                             <span class="hidden sm:inline-block font-semibold text-xs px-1"><?= htmlspecialchars(($_SESSION['username'] ?? 'A')) ?></span>
                             <i class="fa-solid fa-chevron-down text-[10px] text-slate-400 mr-1"></i>
                         </button>
-                        <div class="admin-dropdown z-50 hidden my-3 w-56 text-base list-none rounded-xl shadow-2xl" id="user-dropdown">
+                            <div class="admin-dropdown z-50 hidden my-3 w-56 text-base list-none rounded-xl shadow-2xl" id="user-dropdown">
                             <div class="px-4 py-3 border-b border-slate-700">
                                 <span class="dropdown-name block text-sm font-bold"><?= htmlspecialchars(($_SESSION['username'] ?? 'A')) ?></span>
-                                <span class="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold bg-amber-400 text-slate-900 mt-1">ADMINISTRATOR</span>
+                                <span class="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold bg-amber-400 text-slate-900 mt-1">SUPER ADMIN</span>
                             </div>
                             <ul class="py-2" aria-labelledby="user-menu-button">
-                                <li><a href="<?= e(base_url('admin/dashboard.php')) ?>" class="block px-4 py-2 text-sm"><i class="fa-solid fa-cloud-arrow-up mr-2"></i> File Ingestion</a></li>
                                 <li><a href="<?= e(base_url('admin/review_editor.php')) ?>" class="block px-4 py-2 text-sm"><i class="fa-solid fa-pen-to-square mr-2"></i> Review Editor</a></li>
                                 <li><a href="<?= e(base_url('admin/saved_graphs.php')) ?>" class="block px-4 py-2 text-sm"><i class="fa-solid fa-chart-line mr-2"></i> Saved Graphs</a></li>
                                 <li><a href="<?= e(base_url('user/dashboard.php')) ?>" class="block px-4 py-2 text-sm"><i class="fa-solid fa-globe mr-2"></i> Observatory View</a></li>
+                                <li><button type="button" data-account-manager-open class="block w-full px-4 py-2 text-left text-sm"><i class="fa-solid fa-users-gear mr-2"></i> Manage accounts</button></li>
+                                <li><button type="button" data-template-manager-open class="block w-full px-4 py-2 text-left text-sm"><i class="fa-solid fa-file-lines mr-2"></i> Manage Templates</button></li>
+                                <li><a href="<?= e(base_url('auth/change_password.php')) ?>" class="block px-4 py-2 text-sm"><i class="fa-solid fa-key mr-2"></i> Change password</a></li>
                             </ul>
                             <div class="py-1 border-t border-slate-700">
                                 <form method="POST" action="<?= e(base_url('auth/logout.php')) ?>" class="w-full">
@@ -280,7 +297,8 @@ $pageTitle = $pageTitle ?? 'IRIS Admin Control Panel';
     <!-- Main Shell -->
     <main class="admin-scanner-shell flex-1 w-full py-8">
         <div class="app-container">
-            <button id="uploadWidgetTrigger" class="floating-upload-trigger" type="button" aria-label="Open institutional upload window">
+            <!-- UPLOAD MOVED TO ADMIN ROLE: the Super Admin upload widget is retained here for a future setting change. -->
+            <!-- <button id="uploadWidgetTrigger" class="floating-upload-trigger" type="button" aria-label="Open institutional upload window">
                 <span class="floating-upload-icon"><i class="fa-solid fa-cloud-arrow-up" aria-hidden="true"></i></span>
             </button>
 
@@ -332,4 +350,4 @@ $pageTitle = $pageTitle ?? 'IRIS Admin Control Panel';
                         </div>
                     </div>
                 </div>
-            </div>
+            </div> -->

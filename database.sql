@@ -15,15 +15,17 @@
 CREATE DATABASE IF NOT EXISTS iris_db;
 USE iris_db;
 
--- Users (admin = IAO staff, user = general viewer)
+-- Users (super_admin = full control, admin = office uploads, user = viewer)
 CREATE TABLE users (
-    id INT AUTO_INCREMENT PRIMARY KEY,
+    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
     username VARCHAR(50) NOT NULL UNIQUE,
     email VARCHAR(100) NOT NULL UNIQUE,
     password VARCHAR(255) NOT NULL,
-    role ENUM('admin','user') NOT NULL DEFAULT 'user',
+    role ENUM('super_admin','admin','user') NOT NULL DEFAULT 'user',
+    office_name VARCHAR(100) NULL,
+    is_active TINYINT NOT NULL DEFAULT 1,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-);
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- Ranking bodies: QS, THE, Webometrics, CWTS, URAP, SCImago, WURI, AppliedHE,
 -- AD Scientific Index, EduRank, etc.
@@ -111,14 +113,14 @@ CREATE TABLE accreditations (
 -- rows in more than one of those).
 CREATE TABLE uploads_log (
     id INT AUTO_INCREMENT PRIMARY KEY,
-    uploaded_by INT NOT NULL,
+    uploaded_by BIGINT UNSIGNED NOT NULL,
     filename VARCHAR(255) NOT NULL,
     file_type VARCHAR(10) DEFAULT NULL,
     upload_type VARCHAR(50) NOT NULL,
     rows_inserted INT DEFAULT 0,
     uploaded_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (uploaded_by) REFERENCES users(id)
-);
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- Seed the ranking bodies
 INSERT INTO ranking_bodies (name, short_name) VALUES
@@ -133,10 +135,9 @@ INSERT INTO ranking_bodies (name, short_name) VALUES
 ('AD Scientific Index', 'AD Scientific Index'),
 ('EduRank', 'EduRank');
 
--- To create your first admin account:
--- 1. Go to auth/register.php and register normally (it saves as role='user').
--- 2. Then run this to promote it to admin (replace 'wayne' with your username):
---    UPDATE users SET role = 'admin' WHERE username = 'wayne';
+-- Self-registration is disabled. Existing installations should run
+-- migrations/20261001_account_separation.sql; create additional accounts
+-- from the Super Admin's Manage accounts modal.
 
 
 -- ============================================
@@ -188,6 +189,22 @@ INSERT INTO ranking_bodies (name, short_name) VALUES
 -- ============================================================
 -- IRIS-7 Scanner / Analytics tables (fused into the same iris_db)
 -- ============================================================
+CREATE TABLE IF NOT EXISTS templates (
+    id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+    name VARCHAR(150) NOT NULL,
+    file_path VARCHAR(255) NOT NULL,
+    original_filename VARCHAR(255) NOT NULL,
+    ranking_body_id INT NULL,
+    uploaded_by BIGINT UNSIGNED NOT NULL,
+    is_active TINYINT(1) NOT NULL DEFAULT 1,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    KEY idx_templates_uploaded_by (uploaded_by),
+    KEY idx_templates_ranking_body_id (ranking_body_id),
+    CONSTRAINT fk_templates_uploaded_by FOREIGN KEY (uploaded_by) REFERENCES users(id) ON DELETE RESTRICT,
+    CONSTRAINT fk_templates_ranking_body FOREIGN KEY (ranking_body_id) REFERENCES ranking_bodies(id) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 CREATE TABLE IF NOT EXISTS records (
     id VARCHAR(255) PRIMARY KEY,
     fileName VARCHAR(255),
@@ -195,14 +212,22 @@ CREATE TABLE IF NOT EXISTS records (
     fileSize INT DEFAULT 0,
     scannedAt DATETIME NULL,
     status VARCHAR(50) DEFAULT 'Pending Review',
+    uploaded_by INT NULL,
+    office_name VARCHAR(100) NULL,
+    uploaded_at DATETIME NULL,
+    opened_at DATETIME NULL,
+    template_id INT NULL,
     docType VARCHAR(100) DEFAULT 'General Institutional Data',
     rawText LONGTEXT,
     extractedData JSON,
     graphDrafts JSON,
     adminNotes TEXT,
     metadata JSON,
-    updatedAt DATETIME NULL
-);
+    updatedAt DATETIME NULL,
+    KEY idx_records_uploaded_by (uploaded_by),
+    KEY idx_records_template_id (template_id),
+    CONSTRAINT fk_records_template FOREIGN KEY (template_id) REFERENCES templates(id) ON DELETE RESTRICT
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 CREATE TABLE IF NOT EXISTS saved_graphs (
     id VARCHAR(255) PRIMARY KEY,

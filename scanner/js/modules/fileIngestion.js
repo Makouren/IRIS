@@ -87,8 +87,8 @@ export async function getAndClearPendingUploads() {
 
 export function initFileIngestion(ctx) {
   const input = [
-    document.getElementById('adminInlineFileInput'),
-    document.getElementById('adminWidgetFileInput'),
+    /* UPLOAD MOVED TO ADMIN ROLE: document.getElementById('adminInlineFileInput'), */
+    /* UPLOAD MOVED TO ADMIN ROLE: document.getElementById('adminWidgetFileInput'), */
     document.getElementById('scannerUploadFileInput'),
     document.getElementById('fileInput'),
     document.querySelector('#inlineUploadDropzone input[type="file"]'),
@@ -96,15 +96,16 @@ export function initFileIngestion(ctx) {
   ].find(Boolean) || null;
 
   const browse = [
-    document.getElementById('adminInlineBrowseBtn'),
-    document.getElementById('adminWidgetBrowseBtn'),
+    /* UPLOAD MOVED TO ADMIN ROLE: document.getElementById('adminInlineBrowseBtn'), */
+    /* UPLOAD MOVED TO ADMIN ROLE: document.getElementById('adminWidgetBrowseBtn'), */
     document.getElementById('scannerUploadBrowseBtn'),
     document.getElementById('btnInlineBrowse'),
     document.getElementById('btnBrowse')
   ].find(Boolean) || null;
 
   const dropzone = $('dropzone') || $('inlineUploadDropzone');
-  const trigger = $('uploadWidgetTrigger'); const modal = $('uploadWidgetModal'); const closeBtn = $('closeUploadWidget');
+  /* UPLOAD MOVED TO ADMIN ROLE: const trigger = $('uploadWidgetTrigger'); const modal = $('uploadWidgetModal'); const closeBtn = $('closeUploadWidget'); */
+  const trigger = null; const modal = null; const closeBtn = null;
   const progressCard = $('progressCard'); const workspace = $('workspaceGrid');
   const status = $('progressStatus'); const percent = $('progressPercent'); const fill = $('progressFill');
 
@@ -285,9 +286,9 @@ export function initFileIngestion(ctx) {
   ctx.api.openUploadModal = openModal;
   window.IRIS_OPEN_UPLOAD_MODAL = openModal;
 
-  trigger?.addEventListener('click', openModal);
-  closeBtn?.addEventListener('click', closeModal);
-  modal?.addEventListener('click', event => { if (event.target === modal) closeModal(); });
+  /* UPLOAD MOVED TO ADMIN ROLE: trigger?.addEventListener('click', openModal); */
+  /* UPLOAD MOVED TO ADMIN ROLE: closeBtn?.addEventListener('click', closeModal); */
+  /* UPLOAD MOVED TO ADMIN ROLE: modal?.addEventListener('click', event => { if (event.target === modal) closeModal(); }); */
 
   document.addEventListener('keydown', event => {
     if (event.key === 'Escape' && modal?.classList.contains('active')) {
@@ -295,7 +296,7 @@ export function initFileIngestion(ctx) {
     }
   });
 
-  modal?.addEventListener('keydown', event => {
+  /* UPLOAD MOVED TO ADMIN ROLE: modal?.addEventListener('keydown', event => {
     if (event.key === 'Tab') {
       const focusables = Array.from(modal.querySelectorAll('button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])')).filter(el => !el.disabled && el.offsetParent !== null);
       if (!focusables.length) return;
@@ -309,9 +310,9 @@ export function initFileIngestion(ctx) {
         first.focus();
       }
     }
-  });
+  }); */
 
-  [browse, document.getElementById('btnInlineBrowse'), document.getElementById('adminInlineBrowseBtn'), document.getElementById('adminWidgetBrowseBtn'), document.getElementById('scannerUploadBrowseBtn')].filter(Boolean).forEach(button => {
+  [browse, document.getElementById('btnInlineBrowse'), document.getElementById('scannerUploadBrowseBtn')].filter(Boolean).forEach(button => {
     button.addEventListener('click', () => {
       input?.click();
     });

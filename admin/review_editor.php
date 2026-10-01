@@ -547,6 +547,7 @@ require_once __DIR__.'/includes/header.php';
 
     <div style="display: flex; gap: 1rem; margin-bottom: 1rem; flex-wrap: wrap;">
         <input type="text" id="adminSearchInput" class="form-input" placeholder="Search records by filename, category, or values..." style="flex: 1; min-width: 250px;">
+        <select id="adminOfficeFilter" class="form-input" style="width: auto; min-width: 180px;"><option value="all">All offices</option></select>
         <select id="adminStatusFilter" class="form-input" style="width: auto;">
             <option value="all">All Statuses</option>
             <option value="Pending Review">Pending Review</option>
@@ -569,6 +570,7 @@ require_once __DIR__.'/includes/header.php';
                     <th><input id="adminSelectAll" type="checkbox" aria-label="Select all visible records"></th>
                     <th>Record ID</th>
                     <th>File Name</th>
+                    <th>Uploaded By</th>
                     <th>Format</th>
                     <th>Review Status</th>
                     <th>Scanned Date</th>

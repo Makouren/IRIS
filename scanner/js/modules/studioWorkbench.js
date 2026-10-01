@@ -1,4 +1,4 @@
-import { $, parseEditableValue } from '../utils/helpers.js';
+import { $, escapeHtml, parseEditableValue } from '../utils/helpers.js';
 import { renderStudioChart } from './chartEngine.js?v=data-preserving-colors-20260930';
 import { initStudioColorCustomizer } from './studioColorCustomizer.js';
 
@@ -20,7 +20,19 @@ export function initStudioWorkbench(ctx) {
     $('studioChartTitleInput')?.removeAttribute('data-customized');
     ctx.api.renderDocumentWindow(record);
     const sheet = ctx.api.getStudioActiveSheet(record);
-    if (sheet) { ctx.api.updateFieldSelectOptions(sheet.data); ctx.api.renderStudioTableGrid(record); ctx.api.renderStudioChart(record); }
+    if (sheet) {
+      ctx.api.updateFieldSelectOptions(sheet.data);
+      ctx.api.renderStudioTableGrid(record);
+      ctx.api.renderStudioChart(record);
+    } else {
+      const table = $('studioTableContainer');
+      if (table) table.textContent = 'No parsed spreadsheet data is available for this record. Re-upload the file to extract its contents.';
+      ['studioCategoryCol', 'studioValueCol'].forEach(id => {
+        const select = $(id);
+        if (select) { select.replaceChildren(); select.disabled = true; }
+      });
+      ctx.api.renderStudioChart(record);
+    }
   };
   ctx.api.updateFieldSelectOptions = sheet => {
     if (!sheet?.headers) return;
@@ -32,8 +44,8 @@ export function initStudioWorkbench(ctx) {
     if (yearWrap) yearWrap.style.display = ranked ? 'flex' : 'none';
     if (reverseWrap) reverseWrap.style.display = ranked ? 'flex' : 'none';
     const category = $('studioCategoryCol'); const value = $('studioValueCol'); const previousCategory = category?.value; const previousValue = value?.value;
-    if (category) { category.innerHTML = sheet.headers.map((header, index) => `<option value="${index}">${header || `Column ${index + 1}`}</option>`).join(''); category.value = previousCategory !== '' && sheet.headers[Number(previousCategory)] ? previousCategory : String(inferred.labelColumn); }
-    if (value) { value.innerHTML = sheet.headers.map((header, index) => `<option value="${index}">${header || `Column ${index + 1}`}${inferred.columnTypes?.[index] === 'numeric' ? ' <i class="fa-solid fa-check" aria-hidden="true"></i>' : inferred.columnTypes?.[index] === 'text' ? ' (text)' : ''}</option>`).join(''); value.value = previousValue !== '' && sheet.headers[Number(previousValue)] ? previousValue : String(inferred.valueColumn); }
+    if (category) { category.disabled = false; category.innerHTML = sheet.headers.map((header, index) => `<option value="${index}">${escapeHtml(header || `Column ${index + 1}`)}</option>`).join(''); category.value = previousCategory !== '' && sheet.headers[Number(previousCategory)] ? previousCategory : String(inferred.labelColumn); }
+    if (value) { value.disabled = false; value.innerHTML = sheet.headers.map((header, index) => `<option value="${index}">${escapeHtml(header || `Column ${index + 1}`)}${inferred.columnTypes?.[index] === 'numeric' ? ' <i class="fa-solid fa-check" aria-hidden="true"></i>' : inferred.columnTypes?.[index] === 'text' ? ' (text)' : ''}</option>`).join(''); value.value = previousValue !== '' && sheet.headers[Number(previousValue)] ? previousValue : String(inferred.valueColumn); }
     if ($('studioCategoryLabel')) $('studioCategoryLabel').textContent = circular ? 'Labels:' : 'Category (X-axis):';
     if ($('studioValueLabel')) $('studioValueLabel').textContent = circular ? 'Value (single):' : 'Value (Y-axis):';
     const filter = $('studioFilterField'); const previousFilter = filter?.value;

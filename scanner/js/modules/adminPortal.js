@@ -4,6 +4,7 @@ export function initAdminPortal(ctx) {
   const selectedRecordIds = new Set();
 
   const escape = value => String(value ?? '').replace(/[&<>"']/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[ch]));
+  const projectBase = ctx.dbManager.config.endpoints.records.split('/api/iris.php')[0];
   const showToast = message => {
     const toast = document.createElement('div');
     toast.className = 'pdf-copy-toast visible';
@@ -133,25 +134,36 @@ export function initAdminPortal(ctx) {
       const status = record.status || 'Pending Review';
       const displayStatus = status === 'Approved' ? 'Published' : status;
       const approved = status === 'Approved';
+      const officeName = record.office_name || '';
+      const uploader = officeName || (record.uploaded_by ? 'Office' : 'Legacy / Super Admin');
+      const templateLabel = record.template_name ? ` · via ${record.template_name}` : '';
+      const isNew = Boolean(record.uploaded_at && !record.opened_at);
       return `<tr>
         <td><input class="admin-record-checkbox" type="checkbox" data-id="${escape(record.id)}" aria-label="Select record ${escape(record.id)}"></td>
         <td>${escape(record.id)}</td>
         <td>${escape(record.fileName || 'Untitled')}</td>
+        <td>${escape(uploader)}${escape(templateLabel)}${isNew ? ' <span class="badge badge-low" aria-label="New, not yet opened">New</span>' : ''}</td>
         <td>${escape((record.fileType || 'UNKNOWN').toUpperCase())}</td>
         <td><span class="badge">${escape(displayStatus)}</span></td>
         <td>${scannedDate ? escape(new Date(scannedDate).toLocaleString()) : 'N/A'}</td>
         <td><div class="admin-record-actions">
           <button class="archive-load-button btn-table-load-studio" data-id="${escape(record.id)}"><i class="fa-solid fa-palette" aria-hidden="true"></i> Review</button>
+          ${record.metadata?.stored_file ? `<a class="archive-load-button" href="${escape(projectBase)}/admin/upload_source.php?id=${encodeURIComponent(record.id)}" target="_blank" rel="noopener"><i class="fa-solid fa-file-arrow-up" aria-hidden="true"></i> Source</a>` : ''}
+          ${record.metadata?.stored_file && status !== 'Approved' ? `<button class="archive-load-button" type="button" data-template-review-record="${escape(record.id)}"><i class="fa-solid fa-code-compare" aria-hidden="true"></i> Diff &amp; approve</button>` : ''}
           ${approved ? `<button class="archive-load-button btn-table-unpublish" data-id="${escape(record.id)}" title="Unpublish this record and its saved charts"><i class="fa-solid fa-eye-slash" aria-hidden="true"></i> Unpublish</button>` : `<button class="archive-load-button btn-table-approve" data-id="${escape(record.id)}"><i class="fa-solid fa-circle-check" aria-hidden="true"></i> Publish</button>`}
           <button class="archive-delete-button btn-table-delete" data-id="${escape(record.id)}" title="Delete record"><i class="fa-solid fa-trash" aria-hidden="true"></i> Delete</button>
         </div></td>
       </tr>`;
     }).join('');
-    body.innerHTML = html || '<tr><td colspan="7">No matching scanned records in database.</td></tr>';
+    body.innerHTML = html || '<tr><td colspan="8">No matching scanned records in database.</td></tr>';
 
-    all('.btn-table-load-studio').forEach(button => button.onclick = () => {
+    all('.btn-table-load-studio').forEach(button => button.onclick = async () => {
       const record = filtered.find(item => String(item.id) === String(button.dataset.id));
       if (record) {
+        try {
+          const response = await fetch(ctx.dbManager.config.endpoints.recordById(record.id), { headers: { Accept: 'application/json' } });
+          if (response.ok) Object.assign(record, await response.json());
+        } catch (error) {}
         ctx.state.studioActiveRecord = record;
         setEditorRecordUrl(record.id);
         ctx.api.renderStudioWorkbench(record);
@@ -262,12 +274,26 @@ export function initAdminPortal(ctx) {
       if ($('statPendingDb')) $('statPendingDb').textContent = records.filter(r => r.status === 'Pending Review' || !r.status).length;
       if ($('statVerifiedDb')) $('statVerifiedDb').textContent = records.filter(r => ['Approved', 'Verified & Approved'].includes(r.status)).length;
       if ($('statTablesDb')) $('statTablesDb').textContent = records.reduce((sum, r) => sum + Object.keys(r.extractedData || {}).length, 0);
+      const officeFilter = $('adminOfficeFilter');
+      if (officeFilter) {
+        const selectedOffice = officeFilter.value || 'all';
+        const offices = [...new Set(records.map(record => record.office_name).filter(Boolean))].sort((a, b) => a.localeCompare(b));
+        officeFilter.innerHTML = '<option value="all">All offices</option>' + offices.map(name => `<option value="${escape(name)}">${escape(name)}</option>`).join('');
+        officeFilter.value = offices.includes(selectedOffice) ? selectedOffice : 'all';
+      }
 
       if (records.length) {
         if (select) {
-          select.innerHTML = records.map(r => `<option value="${escape(r.id)}">${escape(r.fileName)} (${escape((r.fileType || '').toUpperCase())})</option>`).join('');
-          select.onchange = event => {
-            ctx.state.studioActiveRecord = records.find(r => String(r.id) === String(event.target.value)) || null;
+          select.innerHTML = records.map(r => `<option value="${escape(r.id)}">${escape(r.fileName)} (${escape((r.fileType || '').toUpperCase())})${r.office_name ? ` · Uploaded by ${escape(r.office_name)}` : ''}${r.template_name ? ` · via ${escape(r.template_name)}` : ''}</option>`).join('');
+          select.onchange = async event => {
+            const record = records.find(r => String(r.id) === String(event.target.value)) || null;
+            if (record) {
+              try {
+                const response = await fetch(ctx.dbManager.config.endpoints.recordById(record.id), { headers: { Accept: 'application/json' } });
+                if (response.ok) Object.assign(record, await response.json());
+              } catch (error) {}
+            }
+            ctx.state.studioActiveRecord = record;
             setEditorRecordUrl(ctx.state.studioActiveRecord?.id);
             ctx.api.renderStudioWorkbench(ctx.state.studioActiveRecord);
           };
@@ -277,6 +303,12 @@ export function initAdminPortal(ctx) {
         const preferredRecord = preferredRecordId ? records.find(r => String(r.id) === String(preferredRecordId)) : null;
         const matchedRecord = urlRecordId ? records.find(r => String(r.id) === String(urlRecordId)) : null;
         ctx.state.studioActiveRecord = preferredRecord || matchedRecord || records.find(r => String(r.id) === String(ctx.state.studioActiveRecord?.id)) || records[0];
+        if (ctx.state.studioActiveRecord?.uploaded_at && !ctx.state.studioActiveRecord.opened_at) {
+          try {
+            const response = await fetch(ctx.dbManager.config.endpoints.recordById(ctx.state.studioActiveRecord.id), { headers: { Accept: 'application/json' } });
+            if (response.ok) Object.assign(ctx.state.studioActiveRecord, await response.json());
+          } catch (error) {}
+        }
         if (select) select.value = String(ctx.state.studioActiveRecord.id);
         ctx.api.renderStudioWorkbench(ctx.state.studioActiveRecord);
       } else {
@@ -288,9 +320,11 @@ export function initAdminPortal(ctx) {
 
       const term = (($('adminSearchInput')?.value || '')).toLowerCase();
       const status = $('adminStatusFilter')?.value || 'all';
+      const office = $('adminOfficeFilter')?.value || 'all';
       const filtered = records.filter(record => {
         const haystack = [record.id, record.fileName, record.docType, record.rawText].join(' ').toLowerCase();
-        return haystack.includes(term) && (status === 'all' || record.status === status || (status === 'Pending Review' && !record.status));
+        return haystack.includes(term) && (status === 'all' || record.status === status || (status === 'Pending Review' && !record.status))
+          && (office === 'all' || record.office_name === office);
       });
       const visible = new Set(filtered.map(r => String(r.id)));
       [...selectedRecordIds].forEach(id => { if (!visible.has(String(id))) selectedRecordIds.delete(id); });
@@ -298,7 +332,7 @@ export function initAdminPortal(ctx) {
     } catch (error) {
       console.error(error);
       if ($('adminRecordsTableBody')) {
-        $('adminRecordsTableBody').innerHTML = '<tr><td colspan="7">Please upload files to inspect scanner records.</td></tr>';
+        $('adminRecordsTableBody').innerHTML = '<tr><td colspan="8">Please upload files to inspect scanner records.</td></tr>';
       }
     }
   };
@@ -309,6 +343,41 @@ export function initAdminPortal(ctx) {
   $('adminClearSelection')?.addEventListener('click', () => { selectedRecordIds.clear(); bindSelection(); });
   $('adminSearchInput')?.addEventListener('input', () => ctx.api.renderAdminPortal());
   $('adminStatusFilter')?.addEventListener('change', () => ctx.api.renderAdminPortal());
+  $('adminOfficeFilter')?.addEventListener('change', () => ctx.api.renderAdminPortal());
+  document.addEventListener('iris:template-review-complete', () => ctx.api.renderAdminPortal());
+  document.addEventListener('iris:template-review-complete', () => ctx.api.renderAdminPortal());
+
+  let refreshTimer = null;
+  const refreshArchive = async () => {
+    if (document.visibilityState !== 'visible') return;
+    try {
+      const records = await ctx.dbManager.getAllRecords();
+      const term = (($('adminSearchInput')?.value || '')).toLowerCase();
+      const status = $('adminStatusFilter')?.value || 'all';
+      const office = $('adminOfficeFilter')?.value || 'all';
+      const officeFilter = $('adminOfficeFilter');
+      if (officeFilter) {
+        const offices = [...new Set(records.map(record => record.office_name).filter(Boolean))].sort((a, b) => a.localeCompare(b));
+        const selectedOffice = offices.includes(office) ? office : 'all';
+        officeFilter.innerHTML = '<option value="all">All offices</option>' + offices.map(name => `<option value="${escape(name)}">${escape(name)}</option>`).join('');
+        officeFilter.value = selectedOffice;
+      }
+      const filtered = records.filter(record => {
+        const haystack = [record.id, record.fileName, record.docType, record.rawText].join(' ').toLowerCase();
+        return haystack.includes(term) && (status === 'all' || record.status === status || (status === 'Pending Review' && !record.status))
+          && (office === 'all' || record.office_name === office);
+      });
+      renderRows(filtered);
+      if ($('statTotalDb')) $('statTotalDb').textContent = records.length;
+      if ($('statPendingDb')) $('statPendingDb').textContent = records.filter(record => record.status === 'Pending Review' || !record.status).length;
+      if ($('statVerifiedDb')) $('statVerifiedDb').textContent = records.filter(record => ['Approved', 'Verified & Approved'].includes(record.status)).length;
+      if ($('statTablesDb')) $('statTablesDb').textContent = records.reduce((sum, record) => sum + Object.keys(record.extractedData || {}).length, 0);
+    } catch (error) { console.warn('Archive refresh failed:', error); }
+  };
+  window.addEventListener('focus', refreshArchive);
+  document.addEventListener('visibilitychange', refreshArchive);
+  refreshTimer = window.setInterval(refreshArchive, 30000);
+  window.addEventListener('pagehide', () => window.clearInterval(refreshTimer), { once: true });
 
   ctx.api.renderAdminPortal();
 }

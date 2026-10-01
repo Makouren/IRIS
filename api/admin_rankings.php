@@ -1,5 +1,6 @@
 <?php
 require_once __DIR__ . '/../includes/functions.php';
+requireRole(['super_admin'], true);
 
 header('Content-Type: application/json; charset=utf-8');
 header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
@@ -11,9 +12,7 @@ function admin_rankings_bad(string $message, int $status = 400): never {
 }
 
 function admin_rankings_require_admin(): void {
-    if (empty($_SESSION['user_id']) || ($_SESSION['role'] ?? '') !== 'admin') {
-        admin_rankings_bad('Forbidden', 403);
-    }
+    requireRole(['super_admin'], true);
 }
 
 function admin_rankings_verify_csrf(): void {

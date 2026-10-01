@@ -1,12 +1,12 @@
 <?php
 require_once __DIR__ . '/../includes/functions.php';
-require_auth();
+requireRole(['super_admin', 'admin', 'user'], true);
 header('Content-Type: application/json; charset=utf-8');
 
 $pdo = db();
 
 function ensure_admin_for_mutation(): void {
-    if (($_SESSION['role'] ?? '') !== 'admin') {
+    if (($_SESSION['role'] ?? '') !== 'super_admin') {
         http_response_code(403);
         echo json_encode(['error' => 'Forbidden']);
         exit;
@@ -16,6 +16,16 @@ $resource = $_GET['resource'] ?? '';
 $action = $_GET['action'] ?? '';
 $id = $_GET['id'] ?? null;
 $recordId = $_GET['record_id'] ?? null;
+if (($_SERVER['REQUEST_METHOD'] ?? 'GET') !== 'GET') {
+    requireRole(['super_admin'], true);
+    ensure_json_csrf();
+}
+if (($_SESSION['role'] ?? '') !== 'super_admin'
+    && !in_array($resource, ['summary_cards', 'summary_card_categories', 'field_colors'], true)) {
+    http_response_code(403);
+    echo json_encode(['error' => 'Forbidden']);
+    exit;
+}
 
 function json_input(): array {
     $raw = file_get_contents('php://input');
@@ -197,7 +207,13 @@ try {
 
     if ($resource === 'summary_card_categories') {
         if ($_SERVER['REQUEST_METHOD'] === 'GET') {
-            $rows = $pdo->query('SELECT id, name, slug, sort_order FROM summary_card_categories ORDER BY sort_order ASC, name ASC')->fetchAll(PDO::FETCH_ASSOC);
+            $rows = ($_SESSION['role'] ?? '') === 'super_admin'
+                ? $pdo->query('SELECT id, name, slug, sort_order FROM summary_card_categories ORDER BY sort_order ASC, name ASC')->fetchAll(PDO::FETCH_ASSOC)
+                : $pdo->query("SELECT DISTINCT categories.id, categories.name, categories.slug, categories.sort_order
+                    FROM summary_card_categories categories
+                    INNER JOIN summary_card_category_map mapping ON mapping.category_id = categories.id
+                    INNER JOIN summary_cards cards ON cards.id = mapping.summary_card_id
+                    WHERE cards.is_published = 1 ORDER BY categories.sort_order ASC, categories.name ASC")->fetchAll(PDO::FETCH_ASSOC);
             echo json_encode($rows, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT);
             exit;
         }
@@ -261,7 +277,9 @@ try {
 
     if ($resource === 'summary_cards') {
         if ($_SERVER['REQUEST_METHOD'] === 'GET') {
-            $rows = $pdo->query('SELECT * FROM summary_cards ORDER BY display_order ASC, created_at DESC')->fetchAll(PDO::FETCH_ASSOC);
+            $rows = ($_SESSION['role'] ?? '') === 'super_admin'
+                ? $pdo->query('SELECT * FROM summary_cards ORDER BY display_order ASC, created_at DESC')->fetchAll(PDO::FETCH_ASSOC)
+                : $pdo->query('SELECT * FROM summary_cards WHERE is_published = 1 ORDER BY display_order ASC, created_at DESC')->fetchAll(PDO::FETCH_ASSOC);
             $rows = attach_summary_card_categories($pdo, $rows);
             echo json_encode(array_map(static function (array $card): array {
                 $card['display_precision'] = (int)($card['display_precision'] ?? 2);
@@ -382,11 +400,12 @@ try {
     if ($resource === 'records') {
         if ($_SERVER['REQUEST_METHOD'] === 'GET') {
             if ($id !== null) {
-                $q = $pdo->prepare('SELECT * FROM records WHERE id=?'); $q->execute([$id]);
+                $pdo->prepare('UPDATE records SET opened_at = COALESCE(opened_at, NOW()) WHERE id = ?')->execute([$id]);
+                $q = $pdo->prepare('SELECT records.*, templates.name AS template_name FROM records LEFT JOIN templates ON templates.id = records.template_id WHERE records.id=?'); $q->execute([$id]);
                 $r = $q->fetch(PDO::FETCH_ASSOC); if (!$r) bad('Record not found',404);
                 echo json_encode(output_record($r)); exit;
             }
-            $rows = $pdo->query('SELECT * FROM records ORDER BY scannedAt DESC, updatedAt DESC')->fetchAll(PDO::FETCH_ASSOC);
+            $rows = $pdo->query('SELECT records.*, templates.name AS template_name FROM records LEFT JOIN templates ON templates.id = records.template_id ORDER BY records.scannedAt DESC, records.updatedAt DESC')->fetchAll(PDO::FETCH_ASSOC);
             echo json_encode(array_map('output_record',$rows)); exit;
         }
         if ($_SERVER['REQUEST_METHOD'] === 'POST' && $action === 'bulk-approve') {
@@ -473,6 +492,7 @@ try {
         if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             ensure_admin_for_mutation();
             $id2=$data['id']??('rec_'.date('YmdHis').'_'.bin2hex(random_bytes(3)));
+            if (!ALLOW_SUPER_ADMIN_UPLOAD && ($data['fileType'] ?? $data['type'] ?? '') !== 'manual') bad('File uploads are disabled for Super Admin.', 403);
             $stmt=$pdo->prepare('INSERT INTO records (id,fileName,fileType,fileSize,scannedAt,status,docType,rawText,extractedData,graphDrafts,adminNotes,metadata,updatedAt) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)');
             $stmt->execute([$id2,$data['fileName']??$data['name']??'Untitled',$data['fileType']??$data['type']??'unknown',(int)($data['fileSize']??$data['size']??0),date('Y-m-d H:i:s',strtotime($data['scannedAt']??'now')),$data['status']??'Pending Review',$data['docType']??'General Institutional Data',$data['rawText']??'',json_encode($data['extractedData']??$data['sheetsData']??[]),json_encode($data['graphDrafts']??[]),$data['adminNotes']??'',json_encode($data['metadata']??[]),null]);
             $q=$pdo->prepare('SELECT * FROM records WHERE id=?');$q->execute([$id2]);echo json_encode(output_record($q->fetch(PDO::FETCH_ASSOC)));exit;

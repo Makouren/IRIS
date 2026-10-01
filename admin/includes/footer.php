@@ -19,6 +19,13 @@
         </div>
     </footer>
 
+    <?php if (($_SESSION['role'] ?? '') === 'super_admin'): ?>
+        <?php require __DIR__ . '/account_manager_modal.php'; ?>
+        <?php require __DIR__ . '/template_manager_modal.php'; ?>
+        <?php require __DIR__ . '/ranking_body_manager_modal.php'; ?>
+        <?php require __DIR__ . '/ranking_review_modal.php'; ?>
+    <?php endif; ?>
+
     <!-- Theme Toggle & Script Setup -->
     <script>
         (function () {
@@ -92,5 +99,11 @@
     <script src="<?= e(base_url('scanner/js/chartColors.js')) ?>?v=<?= (int) filemtime(__DIR__.'/../../scanner/js/chartColors.js') ?>"></script>
     <script src="<?= e(base_url('scanner/js/graphExport.js')) ?>?v=<?= (int) filemtime(__DIR__.'/../../scanner/js/graphExport.js') ?>"></script>
     <script type="module" src="<?= e(base_url('scanner/js/app.js')) ?>?v=<?= (int) filemtime(__DIR__.'/../../scanner/js/app.js') ?>"></script>
+    <?php if (($_SESSION['role'] ?? '') === 'super_admin'): ?>
+        <script src="<?= e(base_url('admin/js/accountManager.js')) ?>?v=<?= (int) filemtime(__DIR__.'/../js/accountManager.js') ?>" defer></script>
+        <script src="<?= e(base_url('admin/js/templateManager.js')) ?>?v=<?= (int) filemtime(__DIR__.'/../js/templateManager.js') ?>" defer></script>
+        <script src="<?= e(base_url('admin/js/rankingBodyManager.js')) ?>?v=<?= (int) filemtime(__DIR__.'/../js/rankingBodyManager.js') ?>" defer></script>
+        <script src="<?= e(base_url('admin/js/rankingReview.js')) ?>?v=<?= (int) filemtime(__DIR__.'/../js/rankingReview.js') ?>" defer></script>
+    <?php endif; ?>
 </body>
 </html>

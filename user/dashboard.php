@@ -1,6 +1,6 @@
 <?php
 require_once __DIR__.'/../includes/functions.php';
-require_auth();
+requireRole(['super_admin', 'admin', 'user']);
 $fieldColors = [];
 try {
     $storedFieldColors = db()->query('SELECT field_key, color FROM field_colors')->fetchAll(PDO::FETCH_KEY_PAIR);
@@ -27,6 +27,21 @@ try {
                 const isDark = saved ? saved === 'dark' : prefersDark;
                 document.documentElement.classList.toggle('dark', isDark);
             } catch (e) {}
+        })();
+    </script>
+    <meta name="csrf-token" content="<?= e(csrf_token()) ?>">
+    <script>
+        (function () {
+            const originalFetch = window.fetch.bind(window);
+            window.fetch = (input, init = {}) => {
+                const method = String(init.method || 'GET').toUpperCase();
+                if (['POST', 'PUT', 'PATCH', 'DELETE'].includes(method)) {
+                    const headers = new Headers(init.headers || {});
+                    if (!headers.has('X-CSRF-Token')) headers.set('X-CSRF-Token', document.querySelector('meta[name="csrf-token"]')?.content || '');
+                    init = { ...init, headers };
+                }
+                return originalFetch(input, init);
+            };
         })();
     </script>
     <!-- Tailwind CSS CDN -->
@@ -109,7 +124,7 @@ try {
         @keyframes spin{to{transform:rotate(360deg)}}
     </style>
 </head>
-<body class="bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-gray-100 min-h-screen flex flex-col">
+<body data-role="<?= e($_SESSION['role'] ?? 'user') ?>" class="bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-gray-100 min-h-screen flex flex-col">
     <div id="page-loader" aria-live="polite" aria-label="Loading page">
         <div class="iris-loader" aria-hidden="true"></div>
     </div>
@@ -132,7 +147,7 @@ try {
                 </a>
 
                 <div class="admin-nav-actions flex items-center gap-2">
-                    <?php if (($_SESSION['role'] ?? null) === 'admin'): ?>
+                    <?php if (($_SESSION['role'] ?? null) === 'super_admin'): ?>
                         <a href="<?= e(base_url('admin/review_editor.php')) ?>" class="admin-nav-link public-link" aria-label="Edit Observatory data" title="Edit Observatory data">
                             <i class="fa-solid fa-pen-to-square" aria-hidden="true"></i><span>Edit</span>
                         </a>
@@ -164,13 +179,14 @@ try {
                             <div class="px-4 py-3 border-b border-slate-700">
                                 <span class="dropdown-name block text-sm font-bold"><?= htmlspecialchars(($_SESSION['username'] ?? 'U')) ?></span>
                                 <span class="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold bg-amber-400 text-slate-900 mt-1">
-                                    <?= ($_SESSION['role'] ?? null) === 'admin' ? 'ADMINISTRATOR' : 'VIEWER' ?>
+                                    <?= ($_SESSION['role'] ?? null) === 'super_admin' ? 'SUPER ADMIN' : (($_SESSION['role'] ?? null) === 'admin' ? 'OFFICE ADMIN' : 'VIEWER') ?>
                                 </span>
                             </div>
                             <ul class="py-2" aria-labelledby="user-menu-button">
-                                <?php if (($_SESSION['role'] ?? null) === 'admin'): ?>
+                                <?php if (($_SESSION['role'] ?? null) === 'super_admin'): ?>
                                     <li><a href="<?= e(base_url('admin/dashboard.php')) ?>"><i class="fa-solid fa-shield-halved"></i> Admin Portal</a></li>
                                 <?php endif; ?>
+                                <li><a href="<?= e(base_url('auth/change_password.php')) ?>"><i class="fa-solid fa-key"></i> Change password</a></li>
                             </ul>
                             <div class="py-1 border-t border-slate-700">
                                 <form method="POST" action="<?= e(base_url('auth/logout.php')) ?>" class="w-full">
@@ -364,14 +380,14 @@ try {
                         <i class="fa-solid fa-chart-simple text-amber-500 mr-2"></i> Latest Performance Snapshot
                     </h2>
                 </div>
-                <?php if (($_SESSION['role'] ?? null) === 'admin'): ?>
+                <?php if (($_SESSION['role'] ?? null) === 'super_admin'): ?>
                     <button type="button" id="toggleSummaryCardForm" class="inline-flex items-center px-3 py-2 rounded-xl text-sm font-semibold bg-emerald-600 text-white hover:bg-emerald-500">
                         <i class="fa-solid fa-plus mr-2"></i> Add summary card
                     </button>
                 <?php endif; ?>
             </div>
 
-            <?php if (($_SESSION['role'] ?? null) === 'admin'): ?>
+            <?php if (($_SESSION['role'] ?? null) === 'super_admin'): ?>
                 <div id="summaryCardsAdminFormPanel" class="hidden rounded-2xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 p-5 shadow-sm">
                     <form id="summaryCardsAdminForm" class="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <input type="hidden" name="id" id="summaryCardId" />
@@ -756,7 +772,7 @@ try {
                 return;
             }
 
-            const isAdmin = <?= json_encode(($_SESSION['role'] ?? null) === 'admin') ?>;
+            const isAdmin = <?= json_encode(($_SESSION['role'] ?? null) === 'super_admin') ?>;
             grid.innerHTML = visibleCards
                 .slice()
                 .sort((a, b) => Number(a.display_order || 0) - Number(b.display_order || 0))
@@ -867,7 +883,7 @@ try {
             }
         }
 
-        <?php if (($_SESSION['role'] ?? null) === 'admin'): ?>
+        <?php if (($_SESSION['role'] ?? null) === 'super_admin'): ?>
             const summaryCardsAdminForm = document.getElementById('summaryCardsAdminForm');
             const summaryCardsAdminFormPanel = document.getElementById('summaryCardsAdminFormPanel');
             const toggleSummaryCardFormButton = document.getElementById('toggleSummaryCardForm');
@@ -1693,7 +1709,7 @@ try {
         }
 
         // Live Filters
-        const canManagePublishedGraphs = <?= json_encode(($_SESSION['role'] ?? null) === 'admin') ?>;
+        const canManagePublishedGraphs = <?= json_encode(($_SESSION['role'] ?? null) === 'super_admin') ?>;
 
         function renderPublishedScannerGraphs(graphs) {
             const grid = document.getElementById('scannerPublishedGraphsGrid');

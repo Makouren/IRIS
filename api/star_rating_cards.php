@@ -1,5 +1,6 @@
 <?php
 require_once __DIR__ . '/../includes/functions.php';
+requireRole(['super_admin', 'admin', 'user'], true);
 
 header('Content-Type: application/json; charset=utf-8');
 header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
@@ -11,9 +12,7 @@ function star_rating_bad(string $message, int $status = 400): never {
 }
 
 function star_rating_require_admin(): void {
-    if (empty($_SESSION['user_id']) || ($_SESSION['role'] ?? '') !== 'admin') {
-        star_rating_bad('Forbidden', 403);
-    }
+    requireRole(['super_admin'], true);
 }
 
 function star_rating_verify_csrf(): void {
@@ -173,7 +172,7 @@ try {
 
     if (($_GET['resource'] ?? '') === 'categories') {
         if ($method === 'GET') {
-            $isAdmin = !empty($_SESSION['user_id']) && ($_SESSION['role'] ?? '') === 'admin';
+            $isAdmin = !empty($_SESSION['user_id']) && ($_SESSION['role'] ?? '') === 'super_admin';
             $sql = 'SELECT categories.id, categories.name, categories.slug, categories.sort_order
                 FROM star_rating_categories categories ' . ($isAdmin ? '' : 'WHERE EXISTS (
                     SELECT 1 FROM star_rating_card_category_map mapping
@@ -254,7 +253,7 @@ try {
     }
 
     if ($method === 'GET') {
-        $isAdmin = !empty($_SESSION['user_id']) && ($_SESSION['role'] ?? '') === 'admin';
+        $isAdmin = !empty($_SESSION['user_id']) && ($_SESSION['role'] ?? '') === 'super_admin';
         $query = $pdo->prepare('SELECT id, title, logo_path, year, display_order, is_published, created_at, updated_at
             FROM star_rating_cards ' . ($isAdmin ? '' : 'WHERE is_published = 1 ') . 'ORDER BY display_order ASC, created_at DESC');
         $query->execute();

@@ -1,6 +1,7 @@
 <?php
 require_once __DIR__ . '/../includes/functions.php';
 require_admin();
+if (!ALLOW_SUPER_ADMIN_UPLOAD) redirect_to('admin/review_editor.php');
 $msg = flash('error');
 ?>
 
@@ -108,9 +109,9 @@ $msg = flash('error');
             </div>
 
             <!-- Upload Form -->
-            <form action="<?= e(base_url('admin/smart_upload_process.php')) ?>" method="POST" enctype="multipart/form-data" id="smartUploadForm" class="space-y-6">
+            <!-- UPLOAD MOVED TO ADMIN ROLE: retained former Super Admin CSV upload form. -->
+            <!-- <form action="<?= e(base_url('admin/smart_upload_process.php')) ?>" method="POST" enctype="multipart/form-data" id="smartUploadForm" class="space-y-6">
                 <?= csrf_field() ?>
-                <!-- Dropzone Area -->
                 <div class="flex items-center justify-center w-full">
                     <label for="upload_file" id="dropZone" class="flex flex-col items-center justify-center w-full h-56 border-2 border-dashed rounded-2xl cursor-pointer bg-gray-50 dark:hover:bg-gray-700/50 dark:bg-gray-750 hover:bg-gray-100 border-gray-300 dark:border-gray-600 hover:border-emerald-500 dark:hover:border-emerald-500 transition-all group">
                         <div class="flex flex-col items-center justify-center pt-5 pb-6 text-center px-4">
@@ -132,7 +133,7 @@ $msg = flash('error');
                 <button type="submit" id="submitBtn" class="w-full inline-flex items-center justify-center px-5 py-3 text-sm font-bold text-white bg-emerald-600 hover:bg-emerald-500 focus:ring-4 focus:ring-emerald-300 dark:focus:ring-emerald-800 rounded-xl shadow-md transition-all">
                     <i class="fa-solid fa-file-import mr-2"></i> Upload &amp; Map CSV Data
                 </button>
-            </form>
+            </form> -->
 
             <div class="p-4 bg-emerald-50/50 dark:bg-gray-750 rounded-xl border border-emerald-100 dark:border-gray-700 text-xs text-gray-600 dark:text-gray-300 flex items-start space-x-3">
                 <i class="fa-solid fa-shield-halved text-emerald-600 dark:text-emerald-400 text-base mt-0.5"></i>
@@ -144,7 +145,8 @@ $msg = flash('error');
 
     </main>
 
-    <script>
+    <!-- UPLOAD MOVED TO ADMIN ROLE: the former upload form bindings are retained but disabled. -->
+    <!-- <script>
         const dropZone = document.getElementById('dropZone');
         const fileInput = document.getElementById('upload_file');
         const filenameLabel = document.getElementById('dropZoneFilename');
@@ -173,7 +175,7 @@ $msg = flash('error');
                 fileInput.dispatchEvent(new Event('change'));
             }
         });
-    </script>
+    </script> -->
 </body>
 </html>
 

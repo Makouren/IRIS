@@ -9,7 +9,8 @@ require_once __DIR__.'/includes/header.php';
         <span><i class="fa-solid fa-chart-column" aria-hidden="true"></i></span> University-Wide Overview & Ingestion
     </div>
 
-    <div id="inlineUploadDropzone" class="dropzone-container upload-dropzone mx-auto w-full max-w-4xl text-center bg-white dark:bg-slate-800 border-2 border-dashed border-clsu-green dark:border-emerald-500/60 rounded-2xl p-6 sm:p-10 shadow-lg dark:shadow-2xl">
+    <!-- UPLOAD MOVED TO ADMIN ROLE: retain the former Super Admin upload interface for later re-enablement. -->
+    <!-- <div id="inlineUploadDropzone" class="dropzone-container upload-dropzone mx-auto w-full max-w-4xl text-center bg-white dark:bg-slate-800 border-2 border-dashed border-clsu-green dark:border-emerald-500/60 rounded-2xl p-6 sm:p-10 shadow-lg dark:shadow-2xl">
         <input type="file" id="adminInlineFileInput" multiple accept=".xlsx,.xls,.csv" style="display: none;">
         <div class="dropzone-icon mb-4 flex justify-center">
             <svg width="48" height="48" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" class="text-clsu-green dark:text-emerald-400">
@@ -42,7 +43,7 @@ require_once __DIR__.'/includes/header.php';
                 </button>
             </div>
         </div>
-    </div>
+    </div> -->
 
     <div id="progressCard" class="progress-card w-full max-w-4xl mx-auto mt-6">
         <div class="progress-header">
