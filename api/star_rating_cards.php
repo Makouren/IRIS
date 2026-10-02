@@ -195,11 +195,18 @@ try {
         if ($method === 'POST') {
             $name = trim((string)($data['name'] ?? ''));
             $slug = star_rating_category_slug($name);
+            $requestedSortOrder = null;
+            if (array_key_exists('sort_order', $data)) {
+                $requestedSortOrder = filter_var($data['sort_order'], FILTER_VALIDATE_INT);
+                if ($requestedSortOrder === false || $requestedSortOrder < 0) star_rating_bad('Category sort order must be a non-negative whole number.');
+            }
             $query = $pdo->prepare('SELECT category_id AS id, name, slug, sort_order FROM star_rating_categories WHERE slug = ? LIMIT 1');
             $query->execute([$slug]);
             $category = $query->fetch(PDO::FETCH_ASSOC);
             if (!$category) {
-                $sortOrder = isset($data['sort_order']) ? (int)$data['sort_order'] : (int)$pdo->query('SELECT COALESCE(MAX(sort_order), -1) + 1 FROM star_rating_categories')->fetchColumn();
+                $sortOrder = $requestedSortOrder !== null
+                    ? $requestedSortOrder
+                    : (int)$pdo->query('SELECT COALESCE(MAX(sort_order), -1) + 1 FROM star_rating_categories')->fetchColumn();
                 try {
                     $insert = $pdo->prepare('INSERT INTO star_rating_categories (name, slug, sort_order) VALUES (?, ?, ?)');
                     $insert->execute([$name, $slug, $sortOrder]);
@@ -229,8 +236,10 @@ try {
                 $values[] = star_rating_category_slug($name);
             }
             if (array_key_exists('sort_order', $data)) {
+                $sortOrder = filter_var($data['sort_order'], FILTER_VALIDATE_INT);
+                if ($sortOrder === false || $sortOrder < 0) star_rating_bad('Category sort order must be a non-negative whole number.');
                 $sets[] = 'sort_order = ?';
-                $values[] = (int)$data['sort_order'];
+                $values[] = $sortOrder;
             }
             if (!$sets) star_rating_bad('No category fields to update.');
             $values[] = $categoryId;
@@ -301,7 +310,7 @@ try {
         $isPublished = $publishValue === '1' ? 1 : 0;
         if ($isPublished && !$rows) star_rating_bad('Add at least one rating row before publishing.');
         $displayOrder = filter_var($_POST['display_order'] ?? 0, FILTER_VALIDATE_INT);
-        if ($displayOrder === false) star_rating_bad('Display order must be a whole number.');
+        if ($displayOrder === false || $displayOrder < 0) star_rating_bad('Display order must be a non-negative whole number.');
 
         $existing = null;
         if ($id !== null) {

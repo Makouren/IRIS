@@ -121,6 +121,10 @@
 
   form.addEventListener('submit', async event => {
     event.preventDefault();
+    if (!form.reportValidity()) return;
+    const submitButton = form.querySelector('button[type="submit"]');
+    if (submitButton?.disabled) return;
+    if (submitButton) submitButton.disabled = true;
     const wasEditing = Boolean(form.elements.ranking_body_id.value);
     const data = new FormData(form);
     data.set('action', 'save-ranking-body');
@@ -134,5 +138,6 @@
       await load();
       document.dispatchEvent(new Event('iris:ranking-bodies-changed'));
     } catch (error) { showNotice(error.message, true); }
+    finally { if (submitButton) submitButton.disabled = false; }
   });
 })();

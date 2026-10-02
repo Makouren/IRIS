@@ -3,6 +3,7 @@ require_once __DIR__ . '/../../includes/functions.php';
 require_once __DIR__ . '/../../includes/helpers/RankBoundsParser.php';
 require_once __DIR__ . '/../../includes/helpers/TemplateImportSupport.php';
 require_once __DIR__ . '/../../includes/helpers/ImportBatchAudit.php';
+require_once __DIR__ . '/../../includes/helpers/CustomImportFields.php';
 requireRole(['super_admin'], true);
 header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
 
@@ -63,7 +64,8 @@ function ranking_import_row(PDO $pdo, array $data, array $defaults, int $rowNumb
         'rank_high' => $high,
         'rank_value' => $value,
         'ph_rank_input' => $optional('ph_rank', 50),
-        'source_input' => $optional('source', 500)
+        'source_input' => $optional('source', 500),
+        'custom_fields' => CustomImportFields::merge([], $data['custom_fields'] ?? [])
     ];
 }
 
@@ -78,10 +80,11 @@ function ranking_import_key(array $row): string
 
 function ranking_import_find(PDO $pdo, array $identity, bool $lock): array
 {
+    $customFieldsColumn = CustomImportFields::columnExists($pdo, 'rankings') ? 'rankings.custom_fields' : 'NULL AS custom_fields';
     $sql = 'SELECT rankings.ranking_id AS id, rankings.ranking_body_id, rankings.ranking_type_id,
             ranking_types.name AS ranking_type, rankings.year, rankings.global_rank, rankings.global_rank_display, rankings.rank_low,
             rankings.rank_high, rankings.rank_value, rankings.ph_rank, rankings.ph_rank_display, rankings.ph_rank_value,
-            rankings.source, rankings.seed_managed
+            rankings.source, ' . $customFieldsColumn . ', rankings.seed_managed
         FROM rankings
         INNER JOIN ranking_types ON ranking_types.ranking_type_id = rankings.ranking_type_id
         WHERE rankings.ranking_body_id = ? AND LOWER(ranking_types.name) = LOWER(?) AND rankings.year = ?
@@ -110,7 +113,7 @@ function ranking_import_values_match(array $existing, array $incoming): bool
             return false;
         }
     }
-    return true;
+    return CustomImportFields::decode($existing['custom_fields'] ?? []) === CustomImportFields::decode($incoming['custom_fields'] ?? []);
 }
 
 function ranking_import_preview(PDO $pdo, array $parsed, bool $lock = false, bool $includeRankBounds = false): array
@@ -145,6 +148,7 @@ function ranking_import_preview(PDO $pdo, array $parsed, bool $lock = false, boo
             continue;
         }
         $existing = $matches[0] ?? null;
+        $incoming['custom_fields'] = CustomImportFields::merge($existing['custom_fields'] ?? [], $incoming['custom_fields'] ?? []);
         foreach (['ph_rank', 'source'] as $field) {
             $inputKey = $field . '_input';
             $existingValue = $field === 'ph_rank'
@@ -172,6 +176,7 @@ function ranking_import_preview(PDO $pdo, array $parsed, bool $lock = false, boo
             'ph_rank_display' => $incoming['ph_rank_display'],
             'ph_rank_value' => $incoming['ph_rank_value'],
             'source' => $incoming['source'],
+            'custom_fields' => $incoming['custom_fields'],
             'seed_managed' => 0
         ];
         $same = $existing !== null && ranking_import_values_match($existing, $identity);
@@ -244,6 +249,7 @@ TemplateImportSupport::response(static function () use ($data): array {
         $updated = count($work) - $inserted;
         $batchId = ImportBatchAudit::create($pdo, $parsed['record'], 'ranking_history', (int)$_SESSION['user_id'], $inserted, $updated);
         $columns = ['ranking_body_id', 'ranking_type_id', 'year', 'global_rank', 'global_rank_display', 'rank_low', 'rank_high', 'rank_value', 'ph_rank', 'ph_rank_display', 'ph_rank_value', 'source'];
+        if (CustomImportFields::columnExists($pdo, 'rankings')) $columns[] = 'custom_fields';
         $insert = $pdo->prepare('INSERT INTO rankings (' . implode(', ', $columns) . ', seed_managed) VALUES (' . implode(', ', array_fill(0, count($columns), '?')) . ', 0)');
         $set = implode(', ', array_map(static fn(string $column): string => '`' . $column . '` = ?', $columns));
         $update = $pdo->prepare('UPDATE rankings SET ' . $set . ', seed_managed = 0 WHERE ranking_id = ?');
@@ -257,6 +263,7 @@ TemplateImportSupport::response(static function () use ($data): array {
                 $typeId = (int)$pdo->lastInsertId();
             }
             $identity['ranking_type_id'] = (int)$typeId;
+            $identity['custom_fields'] = CustomImportFields::encode($identity['custom_fields'] ?? []);
             $values = array_map(static fn(string $column) => $identity[$column] ?? null, $columns);
             $before = $row['existing'];
             if ($row['kind'] === 'insert') {
@@ -266,7 +273,8 @@ TemplateImportSupport::response(static function () use ($data): array {
                 $id = (int)$row['existing_id'];
                 $update->execute([...$values, $id]);
             }
-            $savedQuery = $pdo->prepare('SELECT ranking_id AS id, ranking_body_id, ranking_type_id, year, global_rank, global_rank_display, rank_low, rank_high, rank_value, ph_rank, ph_rank_display, ph_rank_value, source, seed_managed FROM rankings WHERE ranking_id = ?');
+            $customFieldsColumn = in_array('custom_fields', $columns, true) ? 'custom_fields' : 'NULL AS custom_fields';
+            $savedQuery = $pdo->prepare('SELECT ranking_id AS id, ranking_body_id, ranking_type_id, year, global_rank, global_rank_display, rank_low, rank_high, rank_value, ph_rank, ph_rank_display, ph_rank_value, source, ' . $customFieldsColumn . ', seed_managed FROM rankings WHERE ranking_id = ?');
             $savedQuery->execute([$id]);
             $after = $savedQuery->fetch(PDO::FETCH_ASSOC);
             ImportBatchAudit::row($pdo, $batchId, 'ranking', (string)$id, $row['sheet_name'], $row['row_number'], $before, $after);

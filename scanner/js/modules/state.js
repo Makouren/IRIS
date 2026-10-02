@@ -6,6 +6,7 @@ export function createState() {
     studioActiveRecord: null,
     studioActiveGraphId: null,
     studioActiveGraphPublished: false,
+    studioActiveGraphUpdatedAt: null,
     studioChartInstance: null,
     studioFilterPreviousQuery: '',
     studioFilterPreviousResults: null,

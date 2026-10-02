@@ -5,11 +5,15 @@ const { DEFAULT_CHART_COLORS, buildColoredSeriesData, isValidChartColor, normali
 
 export function initStudioColorCustomizer(ctx) {
   let persistedFieldColors = {};
-  ctx.api.fieldColorsReady = ctx.dbManager.getFieldColors()
-    .then(colors => {
-      persistedFieldColors = { ...colors };
-      globalThis.IRISFieldColors = Object.assign(Object.create(null), colors);
-      return colors;
+  let persistedFieldColorUpdatedAt = {};
+  const colorSaveStates = new Map();
+  ctx.api.fieldColorsReady = ctx.dbManager.getFieldColorRows()
+    .then(rows => {
+      persistedFieldColors = Object.fromEntries(rows.map(row => [row.field_key, row.color]));
+      persistedFieldColorUpdatedAt = Object.fromEntries(rows.filter(row => row.updated_at).map(row => [row.field_key, row.updated_at]));
+      globalThis.IRISFieldColors = Object.assign(Object.create(null), persistedFieldColors);
+      globalThis.IRISFieldColorUpdatedAt = Object.assign(Object.create(null), persistedFieldColorUpdatedAt);
+      return persistedFieldColors;
     })
     .catch(error => {
       console.warn('Field colors are temporarily unavailable:', error);
@@ -20,6 +24,9 @@ export function initStudioColorCustomizer(ctx) {
   if (!root) return;
 
   const swatches = document.getElementById('studioColorSwatches');
+  const sectionToggle = document.getElementById('studioColorSectionToggle');
+  const colorContent = document.getElementById('studioColorContent');
+  const colorCount = document.getElementById('studioColorCount');
   const pickerPanel = document.getElementById('studioColorPickerPanel');
   const picker = document.getElementById('studioColorPicker');
   const hexInput = document.getElementById('studioColorHex');
@@ -34,12 +41,23 @@ export function initStudioColorCustomizer(ctx) {
   let currentFieldKeys = [];
   let currentType = 'bar';
   let selectedIndex = 0;
+  let colorSectionExpanded = false;
   let editingManagedField = null;
-  const changedFields = new Map();
-  const deletedFields = new Set();
   const restorePersistedFieldColors = () => {
     globalThis.IRISFieldColors = Object.assign(Object.create(null), persistedFieldColors);
+    globalThis.IRISFieldColorUpdatedAt = Object.assign(Object.create(null), persistedFieldColorUpdatedAt);
   };
+  const updateSectionState = () => {
+    const multiple = currentColors.length > 1;
+    colorCount.textContent = `(${currentColors.length})`;
+    sectionToggle.hidden = !multiple;
+    sectionToggle.setAttribute('aria-expanded', String(multiple ? colorSectionExpanded : true));
+    colorContent.hidden = multiple && !colorSectionExpanded;
+  };
+  sectionToggle.addEventListener('click', () => {
+    colorSectionExpanded = !colorSectionExpanded;
+    updateSectionState();
+  });
 
   const isPie = () => ['pie', 'doughnut', 'nestedPie'].includes(currentType);
   const legacyColors = () => isPie()
@@ -99,6 +117,26 @@ export function initStudioColorCustomizer(ctx) {
       const name = document.createElement('span');
       name.className = 'studio-color-field-label';
       name.textContent = label;
+      const fieldKey = normalizeFieldKey(currentFieldKeys[index] || label);
+      const savedState = colorSaveStates.get(fieldKey);
+      const isSaved = persistedFieldColors[fieldKey] === color.toUpperCase();
+      const state = savedState?.color === color.toUpperCase()
+        ? savedState.state
+        : isSaved ? 'saved' : 'unsaved';
+      const status = document.createElement('span');
+      status.className = 'studio-color-field-status';
+      status.dataset.state = state;
+      status.setAttribute('role', 'status');
+      status.setAttribute('aria-live', 'polite');
+      status.textContent = ({ unsaved: 'Unsaved', saving: 'Saving…', saved: 'Saved', failed: 'Failed — retry' })[state] || 'Unsaved';
+      if (savedState?.error && state === 'failed') status.title = savedState.error;
+      const save = document.createElement('button');
+      save.type = 'button';
+      save.className = 'studio-color-field-save';
+      save.textContent = 'Save';
+      save.setAttribute('aria-label', `Save color for ${label}`);
+      save.disabled = state === 'saving' || state === 'saved';
+      save.addEventListener('click', () => saveFieldColor(index));
       button.addEventListener('click', () => {
         if (selectedIndex === index && !editingManagedField && !pickerPanel.hidden) {
           pickerPanel.hidden = true;
@@ -113,7 +151,7 @@ export function initStudioColorCustomizer(ctx) {
         syncInputs(currentColors[index]);
         renderSwatches();
       });
-      row.append(button, name);
+      row.append(button, name, status, save);
       swatches.appendChild(row);
     });
   };
@@ -137,18 +175,43 @@ export function initStudioColorCustomizer(ctx) {
     currentColors[index] = normalized;
     ctx.state.studioChartColors = [...currentColors];
     const fieldKey = normalizeFieldKey(currentFieldKeys[index] || currentFields[index]);
-    if (applyAllToggle.checked) {
-      deletedFields.delete(fieldKey);
-      changedFields.set(fieldKey, { label: currentFieldKeys[index] || currentFields[index], color: normalized });
-      globalThis.IRISFieldColors = Object.assign(Object.create(null), globalThis.IRISFieldColors || {}, { [fieldKey]: normalized });
-      ctx.state.studioChartOverrides = null;
-    } else {
-      ctx.state.studioChartOverrides = [...currentColors];
-    }
+    colorSaveStates.set(fieldKey, { state: 'unsaved', color: normalized });
+    ctx.state.studioChartOverrides = [...currentColors];
     syncInputs(currentColors[index]);
     renderSwatches();
     applyColors();
   };
+
+  async function saveFieldColor(index) {
+    if (index < 0 || index >= currentColors.length) return;
+    const fieldKey = normalizeFieldKey(currentFieldKeys[index] || currentFields[index]);
+    const label = currentFieldKeys[index] || currentFields[index];
+    const color = currentColors[index].toUpperCase();
+    colorSaveStates.set(fieldKey, { state: 'saving', color });
+    renderSwatches();
+    try {
+      const saved = await ctx.dbManager.saveFieldColor(fieldKey, label, color);
+      persistedFieldColors[fieldKey] = color;
+      if (saved.updated_at) persistedFieldColorUpdatedAt[fieldKey] = saved.updated_at;
+      restorePersistedFieldColors();
+      colorSaveStates.set(fieldKey, { state: 'saved', color });
+      const allCurrentColorsSaved = currentColors.every((currentColor, currentIndex) => {
+        const currentKey = normalizeFieldKey(currentFieldKeys[currentIndex] || currentFields[currentIndex]);
+        return persistedFieldColors[currentKey] === currentColor.toUpperCase();
+      });
+      if (applyAllToggle.checked && allCurrentColorsSaved) ctx.state.studioChartOverrides = null;
+      try {
+        ctx.api.updateStudioChart();
+      } catch (error) {
+        alert(`Color saved, but the chart preview could not refresh: ${error.message || error}`);
+      }
+    } catch (error) {
+      colorSaveStates.set(fieldKey, { state: 'failed', color, error: error.message || String(error) });
+      alert(`Unable to save color for "${label}": ${error.message || error}. The color is unchanged; use Save to retry.`);
+    } finally {
+      renderSwatches();
+    }
+  }
 
   const renderPresets = () => {
     presets.replaceChildren();
@@ -171,32 +234,28 @@ export function initStudioColorCustomizer(ctx) {
     currentColors = resolveFieldColors(currentFieldKeys, {
       chartColors: overrides,
       fieldColors: globalThis.IRISFieldColors || {},
+      fieldColorUpdatedAt: globalThis.IRISFieldColorUpdatedAt || {},
+      chartUpdatedAt: ctx.state.studioActiveGraphUpdatedAt,
+      chartColorsOverrideShared: Array.isArray(overrides),
       legacyColors: legacyColors(),
       defaultColors: DEFAULT_CHART_COLORS
     });
     ctx.state.studioChartColors = [...currentColors];
     selectedIndex = Math.min(selectedIndex, currentColors.length - 1);
     root.hidden = currentColors.length === 0;
+    updateSectionState();
     if (!currentColors.length) return;
     renderSwatches();
     renderPresets();
     if (!pickerPanel.hidden) syncInputs(currentColors[selectedIndex]);
   };
 
-  ctx.api.persistStudioFieldColors = async () => {
-    for (const fieldKey of deletedFields) await ctx.dbManager.deleteFieldColor(fieldKey);
-    for (const [fieldKey, field] of changedFields) await ctx.dbManager.saveFieldColor(fieldKey, field.label, field.color);
-    globalThis.IRISFieldColors = await ctx.dbManager.getFieldColors();
-    persistedFieldColors = { ...globalThis.IRISFieldColors };
-    changedFields.clear();
-    deletedFields.clear();
-  };
   ctx.api.resetStudioColorChanges = () => {
-    changedFields.clear();
-    deletedFields.clear();
     restorePersistedFieldColors();
+    colorSaveStates.clear();
     editingManagedField = null;
     saveFieldButton.hidden = true;
+    ctx.state.studioChartOverrides = null;
   };
 
   const renderManagerList = async () => {
@@ -249,10 +308,18 @@ export function initStudioColorCustomizer(ctx) {
       remove.textContent = 'Delete / Reset';
       remove.addEventListener('click', async () => {
         if (!confirm(`Remove the shared color for "${field.label}"?`)) return;
-        await ctx.dbManager.deleteFieldColor(field.field_key);
-        globalThis.IRISFieldColors = await ctx.dbManager.getFieldColors();
-        await renderManagerList();
-        ctx.api.updateStudioChart();
+        remove.disabled = true;
+        try {
+          await ctx.dbManager.deleteFieldColor(field.field_key);
+          delete persistedFieldColors[field.field_key];
+          delete persistedFieldColorUpdatedAt[field.field_key];
+          restorePersistedFieldColors();
+          await renderManagerList();
+          ctx.api.updateStudioChart();
+        } catch (error) {
+          alert(`Unable to remove field color: ${error.message || error}`);
+          remove.disabled = false;
+        }
       });
       row.append(swatch, details, edit, remove);
       managerList.appendChild(row);
@@ -280,10 +347,13 @@ export function initStudioColorCustomizer(ctx) {
   });
   saveFieldButton.addEventListener('click', async () => {
     if (!editingManagedField || !isValidChartColor(editingManagedField.color)) return;
+    if (saveFieldButton.disabled) return;
+    saveFieldButton.disabled = true;
     try {
-      await ctx.dbManager.saveFieldColor(editingManagedField.field_key, editingManagedField.label, editingManagedField.color);
-      globalThis.IRISFieldColors = await ctx.dbManager.getFieldColors();
-      persistedFieldColors = { ...globalThis.IRISFieldColors };
+      const saved = await ctx.dbManager.saveFieldColor(editingManagedField.field_key, editingManagedField.label, editingManagedField.color);
+      persistedFieldColors[editingManagedField.field_key] = editingManagedField.color.toUpperCase();
+      if (saved.updated_at) persistedFieldColorUpdatedAt[editingManagedField.field_key] = saved.updated_at;
+      restorePersistedFieldColors();
       editingManagedField = null;
       saveFieldButton.hidden = true;
       ctx.state.studioChartOverrides = null;
@@ -291,6 +361,8 @@ export function initStudioColorCustomizer(ctx) {
       await renderManagerList();
     } catch (error) {
       alert(`Unable to save field color: ${error.message}`);
+    } finally {
+      saveFieldButton.disabled = false;
     }
   });
 
@@ -298,21 +370,11 @@ export function initStudioColorCustomizer(ctx) {
     editingManagedField = null;
     saveFieldButton.hidden = true;
     if (applyAllToggle.checked) {
-      changedFields.clear();
-      deletedFields.clear();
-      ctx.state.studioChartOverrides = null;
-      currentFields.forEach((label, index) => {
-        const fieldLabel = currentFieldKeys[index] || label;
-        const fieldKey = normalizeFieldKey(fieldLabel);
-        deletedFields.delete(fieldKey);
-        changedFields.set(fieldKey, { label: fieldLabel, color: currentColors[index] });
-        globalThis.IRISFieldColors = Object.assign(Object.create(null), globalThis.IRISFieldColors || {}, { [fieldKey]: currentColors[index] });
+      const allColorsSaved = currentColors.every((color, index) => {
+        const fieldKey = normalizeFieldKey(currentFieldKeys[index] || currentFields[index]);
+        return persistedFieldColors[fieldKey] === color.toUpperCase();
       });
-    } else {
-      changedFields.clear();
-      deletedFields.clear();
-      restorePersistedFieldColors();
-      ctx.state.studioChartOverrides = [...currentColors];
+      if (allColorsSaved) ctx.state.studioChartOverrides = null;
     }
   });
 
@@ -331,21 +393,32 @@ export function initStudioColorCustomizer(ctx) {
     if (values.some(value => !Number.isInteger(value) || value < 0 || value > 255)) return;
     applyColor(selectedIndex, `#${values.map(value => value.toString(16).padStart(2, '0')).join('')}`);
   }));
-  document.getElementById('studioColorReset').addEventListener('click', () => {
-    if (applyAllToggle.checked) {
-      currentFields.forEach(label => {
-        const fieldKey = normalizeFieldKey(label);
-        changedFields.delete(fieldKey);
-        deletedFields.add(fieldKey);
-      });
-      restorePersistedFieldColors();
-      for (const fieldKey of deletedFields) delete globalThis.IRISFieldColors[fieldKey];
-      ctx.state.studioChartOverrides = null;
-    } else {
-      ctx.state.studioChartOverrides = null;
+  document.getElementById('studioColorReset').addEventListener('click', async () => {
+    if (!confirm('Reset these fields to default colors and remove their saved shared colors? This affects all charts using them.')) return;
+    const failed = [];
+    for (let index = 0; index < currentFields.length; index += 1) {
+      const fieldKey = normalizeFieldKey(currentFieldKeys[index] || currentFields[index]);
+      if (!Object.prototype.hasOwnProperty.call(persistedFieldColors, fieldKey)) continue;
+      try {
+        await ctx.dbManager.deleteFieldColor(fieldKey);
+        delete persistedFieldColors[fieldKey];
+        delete persistedFieldColorUpdatedAt[fieldKey];
+        colorSaveStates.delete(fieldKey);
+      } catch (error) {
+        failed.push(`${currentFields[index]}: ${error.message || error}`);
+        colorSaveStates.set(fieldKey, { state: 'failed', color: currentColors[index], error: error.message || String(error) });
+      }
     }
-    currentColors = resolveFieldColors(currentFields, {
+    restorePersistedFieldColors();
+    if (failed.length) alert(`Some saved colors could not be reset:\n${failed.join('\n')}`);
+    ctx.state.studioChartOverrides = applyAllToggle.checked
+      ? null
+      : currentFields.map((_, index) => legacyColors()[index] || DEFAULT_CHART_COLORS[index % DEFAULT_CHART_COLORS.length]);
+    currentColors = resolveFieldColors(currentFieldKeys, {
+      chartColors: ctx.state.studioChartOverrides,
       fieldColors: globalThis.IRISFieldColors || {},
+      fieldColorUpdatedAt: globalThis.IRISFieldColorUpdatedAt || {},
+      chartUpdatedAt: ctx.state.studioActiveGraphUpdatedAt,
       legacyColors: legacyColors(),
       defaultColors: DEFAULT_CHART_COLORS
     });

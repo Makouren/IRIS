@@ -144,6 +144,78 @@
     return stats;
   }
 
+  function resolveMergeConflicts(existing, incoming, options = {}) {
+    const keyColumns = Array.isArray(options.keyColumns)
+      ? [...new Set(options.keyColumns)]
+      : defaultKeyColumns(existing?.headers, existing?.rows);
+    const merged = mergeSheet(existing, incoming, { ...options, keyColumns });
+    if (merged.error) return { ...merged, sheet: null, conflicts: [], unresolved: 0 };
+
+    const oldHeaders = existing.headers;
+    const newHeaderIndex = headerIndex(incoming.headers);
+    const existingMatches = new Map();
+    const keyForRow = (row, columns) => {
+      const values = columns.map(column => row?.[column]);
+      if (values.some(isBlank)) return null;
+      return JSON.stringify(values.map(normalizedComparable));
+    };
+    existing.rows.forEach((row, rowIndex) => {
+      const key = keyForRow(row, keyColumns);
+      if (key === null) return;
+      if (!existingMatches.has(key)) existingMatches.set(key, []);
+      existingMatches.get(key).push(rowIndex);
+    });
+
+    const keyIndexes = keyColumns.map(column => newHeaderIndex.get(normalizeHeader(oldHeaders[column])));
+    const lastIncomingIndex = new Map();
+    incoming.rows.forEach((row, rowIndex) => {
+      const key = keyForRow(row, keyIndexes);
+      if (key !== null) lastIncomingIndex.set(key, rowIndex);
+    });
+
+    const resolutions = options.resolutions && typeof options.resolutions === 'object' ? options.resolutions : {};
+    const conflicts = [];
+    incoming.rows.forEach((row, rowIndex) => {
+      const key = keyForRow(row, keyIndexes);
+      if (key === null || lastIncomingIndex.get(key) !== rowIndex) return;
+      const matches = existingMatches.get(key) || [];
+      if (!matches.length) return;
+
+      const targetRowIndex = matches[0];
+      oldHeaders.forEach((header, column) => {
+        if (keyColumns.includes(column)) return;
+        const incomingColumn = newHeaderIndex.get(normalizeHeader(header));
+        if (incomingColumn === undefined) return;
+        const sourceValue = row?.[incomingColumn];
+        const targetValue = existing.rows[targetRowIndex]?.[column];
+        if (isBlank(sourceValue) || sameValue(targetValue, sourceValue)) return;
+
+        const id = JSON.stringify([key, normalizeHeader(header)]);
+        const resolution = resolutions[id];
+        conflicts.push({
+          id,
+          key: JSON.parse(key),
+          rowIndex,
+          targetRowIndex,
+          column,
+          columnName: header,
+          targetValue,
+          sourceValue,
+          resolution: resolution === 'source' || resolution === 'target' ? resolution : null
+        });
+        if (resolution === 'target') merged.sheet.rows[targetRowIndex][column] = targetValue ?? '';
+      });
+    });
+
+    const unresolved = conflicts.filter(conflict => conflict.resolution === null).length;
+    return {
+      sheet: unresolved === 0 ? merged.sheet : null,
+      conflicts,
+      unresolved,
+      stats: merged.stats
+    };
+  }
+
   function mergeSheet(existing, incoming, options = {}) {
     const existingCheck = validateSheet(existing);
     if (!existingCheck.ok) return { error: existingCheck.problems[0], problems: existingCheck.problems };
@@ -260,5 +332,5 @@
     return Number.isFinite(mergedTime) && Number.isFinite(currentTime) && age >= 0 && age <= 7 * 24 * 60 * 60 * 1000;
   }
 
-  return { mergeSheet, defaultKeyColumns, validateSheet, isRecentMerge };
+  return { mergeSheet, resolveMergeConflicts, defaultKeyColumns, validateSheet, isRecentMerge };
 });

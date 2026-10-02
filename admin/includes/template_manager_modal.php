@@ -11,7 +11,7 @@
                 <div class="space-y-3">
                     <label class="block text-sm font-semibold">Available Summary Card profiles<select data-summary-profile-select class="mt-1 block w-full rounded-lg border border-gray-300 bg-white p-2.5 text-sm dark:border-slate-700 dark:bg-slate-800"><option value="">Loading profiles…</option></select></label>
                     <button type="button" data-summary-profile-activate class="rounded-md border border-emerald-700 px-3 py-2 text-sm font-bold text-emerald-900 hover:bg-emerald-100 dark:text-emerald-200 dark:hover:bg-emerald-950">Set as active profile</button>
-                    <label class="block text-sm font-semibold">Profile name<input data-summary-profile-name type="text" maxlength="150" class="mt-1 block w-full rounded-lg border border-gray-300 bg-white p-2.5 text-sm dark:border-slate-700 dark:bg-slate-800"></label>
+                    <label class="block text-sm font-semibold">Profile name<input data-summary-profile-name type="text" maxlength="150" required class="mt-1 block w-full rounded-lg border border-gray-300 bg-white p-2.5 text-sm dark:border-slate-700 dark:bg-slate-800"></label>
                     <button type="button" data-summary-profile-save class="rounded-md bg-emerald-700 px-3 py-2 text-sm font-bold text-white hover:bg-emerald-800">Save profile settings</button>
                 </div>
                 <div>
@@ -25,6 +25,7 @@
                             <button type="button" data-mapper-preview class="rounded-md bg-emerald-700 px-3 py-2 text-sm font-bold text-white">Preview mappings</button>
                         </div>
                         <div data-mapper-preview-panel class="mt-3 hidden">
+                            <button type="button" data-mapper-add-field class="mb-2 rounded-md border border-emerald-800 px-3 py-2 text-sm font-bold text-emerald-900 hover:bg-emerald-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-emerald-300 dark:text-emerald-200 dark:hover:bg-emerald-950">Add custom field</button>
                             <div data-mapper-columns-status class="mb-2 text-xs text-gray-600 dark:text-slate-300"></div>
                             <div class="overflow-x-auto rounded-md border border-gray-200 dark:border-slate-700"><table class="min-w-[700px] w-full text-left text-xs"><thead class="bg-gray-100 dark:bg-slate-800"><tr><th class="p-2">Target field</th><th class="p-2">Excel column</th><th class="p-2">Match</th><th class="p-2">First 3 values</th></tr></thead><tbody data-mapper-rows class="divide-y divide-gray-200 dark:divide-slate-700"></tbody></table></div>
                             <button type="button" data-mapper-confirm class="mt-3 rounded-md bg-emerald-700 px-3 py-2 text-sm font-bold text-white disabled:cursor-not-allowed disabled:opacity-50" disabled>Confirm mappings</button>
@@ -39,7 +40,7 @@
                 <div class="space-y-3">
                     <label class="block text-sm font-semibold">Available Ranking History profiles<select data-ranking-profile-select class="mt-1 block w-full rounded-lg border border-gray-300 bg-white p-2.5 text-sm dark:border-slate-700 dark:bg-slate-800"><option value="">Loading profiles…</option></select></label>
                     <button type="button" data-ranking-profile-activate class="rounded-md border border-sky-700 px-3 py-2 text-sm font-bold text-sky-900 hover:bg-sky-100 dark:text-sky-200 dark:hover:bg-sky-950">Set as active profile</button>
-                    <label class="block text-sm font-semibold">Profile name<input data-ranking-profile-name type="text" maxlength="150" class="mt-1 block w-full rounded-lg border border-gray-300 bg-white p-2.5 text-sm dark:border-slate-700 dark:bg-slate-800"></label>
+                    <label class="block text-sm font-semibold">Profile name<input data-ranking-profile-name type="text" maxlength="150" required class="mt-1 block w-full rounded-lg border border-gray-300 bg-white p-2.5 text-sm dark:border-slate-700 dark:bg-slate-800"></label>
                     <button type="button" data-ranking-profile-save class="rounded-md bg-sky-700 px-3 py-2 text-sm font-bold text-white hover:bg-sky-800">Save profile settings</button>
                 </div>
                 <div>
@@ -53,6 +54,7 @@
                             <button type="button" data-mapper-preview class="rounded-md bg-sky-700 px-3 py-2 text-sm font-bold text-white">Preview mappings</button>
                         </div>
                         <div data-mapper-preview-panel class="mt-3 hidden">
+                            <button type="button" data-mapper-add-field class="mb-2 rounded-md border border-sky-800 px-3 py-2 text-sm font-bold text-sky-900 hover:bg-sky-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-sky-300 dark:text-sky-200 dark:hover:bg-sky-950">Add custom field</button>
                             <div data-mapper-columns-status class="mb-2 text-xs text-gray-600 dark:text-slate-300"></div>
                             <div class="overflow-x-auto rounded-md border border-gray-200 dark:border-slate-700"><table class="min-w-[700px] w-full text-left text-xs"><thead class="bg-gray-100 dark:bg-slate-800"><tr><th class="p-2">Target field</th><th class="p-2">Excel column</th><th class="p-2">Match</th><th class="p-2">First 3 values</th></tr></thead><tbody data-mapper-rows class="divide-y divide-gray-200 dark:divide-slate-700"></tbody></table></div>
                             <button type="button" data-mapper-confirm class="mt-3 rounded-md bg-sky-700 px-3 py-2 text-sm font-bold text-white disabled:cursor-not-allowed disabled:opacity-50" disabled>Confirm mappings</button>

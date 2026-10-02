@@ -1,6 +1,6 @@
 # Graph Generation and Chart Data
 
-V5.3.0 adds grouped public visualizations and graph scopes through the shared chart/data modules. It does not introduce a remote AI service or change the chart-recommendation boundary described here.
+V5.7.0 adds saved-graph editing and standalone chart-color persistence through the shared chart/data modules. It does not introduce a remote AI service or change the chart-recommendation boundary described here.
 
 This folder contains browser-side chart recommendations. It does not call an external AI service. The `AI` label describes the recommendation logic, not a remote model dependency.
 

@@ -74,7 +74,7 @@ $error = flash('error');
     <main class="dashboard-container office-upload-layout">
         <section class="studio-left-card office-upload-form-card h-fit">
             <h2 class="mb-1 text-lg font-bold">Upload a file</h2>
-            <p class="mb-5 text-sm text-gray-500 dark:text-slate-400">Files are sent to the Super Admin for review.</p>
+            <p class="mb-5 text-sm text-gray-700 dark:text-slate-300">Files are sent to the Super Admin for review.</p>
             <?php if ($success): ?><div class="mb-4 rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-900 dark:border-emerald-900 dark:bg-emerald-950 dark:text-emerald-200" role="status"><?= e($success) ?></div><?php endif; ?>
             <?php if ($error): ?><div class="mb-4 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-900 dark:border-red-900 dark:bg-red-950 dark:text-red-200" role="alert"><?= e($error) ?></div><?php endif; ?>
             <form method="POST" action="<?= e(base_url('admin/upload_process.php')) ?>" enctype="multipart/form-data" class="space-y-4">
@@ -126,7 +126,7 @@ $error = flash('error');
         </section>
         <section class="studio-right-card office-templates-section">
             <div class="mb-3 flex flex-wrap items-end justify-between gap-3">
-                <div><h2 class="text-lg font-bold">Active templates</h2><p class="text-sm text-gray-500 dark:text-slate-400">Templates provided by the Super Admin for office use.</p></div>
+                <div><h2 class="text-lg font-bold">Active templates</h2><p class="text-sm text-gray-700 dark:text-slate-300">Templates and destination workbooks provided by the Super Admin for office use.</p></div>
                 <label for="activeTemplateDestination" class="grid gap-1 text-sm font-semibold">Template category
                     <select id="activeTemplateDestination" class="form-input min-w-64">
                         <option value="analytics">Data &amp; Report Visualization</option>
@@ -136,7 +136,7 @@ $error = flash('error');
                 </label>
             </div>
             <div id="activeTemplatesList" data-api="<?= e(base_url('api/templates.php')) ?>" data-download-base="<?= e(base_url('admin/template_download.php')) ?>" class="office-active-templates">
-                <p class="py-4 text-sm text-gray-500 dark:text-slate-400">Loading active templates…</p>
+                <p class="py-4 text-sm text-gray-700 dark:text-slate-300">Loading active templates…</p>
             </div>
         </section>
     </main>

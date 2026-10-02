@@ -26,6 +26,7 @@ final class ProfileWorkbookService
             'profile_exists' => false,
             'built_in_profile_exists' => false,
             'schema_ready' => false,
+            'custom_fields_ready' => CustomImportFields::storageReady($pdo),
             'ready' => false,
             'message' => 'Run the pending migrations.'
         ];
@@ -42,6 +43,7 @@ final class ProfileWorkbookService
             'profile_exists' => $builtInId !== false && $exists,
             'built_in_profile_exists' => $builtInId !== false,
             'schema_ready' => $schemaReady,
+            'custom_fields_ready' => CustomImportFields::storageReady($pdo),
             'ready' => $builtInId !== false && $exists && $schemaReady,
             'message' => !$schemaReady ? 'Run the pending migrations.' : ($builtInId === false ? 'No built-in profile is configured.' : ($exists ? '' : 'Choose an available profile.'))
         ];
@@ -197,12 +199,14 @@ final class ProfileWorkbookService
         $profile = SummaryCardImportProfiles::get($pdo, $profileId, false, $destination);
         if ($destination === 'ranking_history') $profile = TemplateImportSupport::normalizeRankingProfile($profile);
         $targets = array_values(array_unique(array_merge(array_keys($profile['mapping_rules']), array_keys($profile['header_aliases']))));
+        foreach (array_keys($profile['custom_fields'] ?? []) as $key) $targets[] = 'custom_fields.' . $key;
+        $targets = array_values(array_unique($targets));
         if ($destination === 'ranking_history') {
             $allowed = ['organization', 'ranking_type', 'year', 'global_rank', 'ph_rank', 'source'];
-            $targets = array_values(array_filter($targets, static fn(string $field): bool => in_array($field, $allowed, true)));
+            $targets = array_values(array_filter($targets, static fn(string $field): bool => in_array($field, $allowed, true) || preg_match('/^custom_fields\\.[a-z][a-z0-9_]{0,47}$/', $field) === 1));
         } else {
             $allowed = array_values(array_unique(array_merge(['import_key', 'card_title', 'period_key', 'main_value', 'main_label', 'year_date', 'secondary_label', 'secondary_value', 'description', 'secondary_description', 'info_text', 'source_info', 'category_names', 'display_precision'], $profile['identity_fields'] ?? [])));
-            $targets = array_values(array_filter($targets, static fn(string $field): bool => in_array($field, $allowed, true)));
+            $targets = array_values(array_filter($targets, static fn(string $field): bool => in_array($field, $allowed, true) || preg_match('/^custom_fields\\.[a-z][a-z0-9_]{0,47}$/', $field) === 1));
         }
         $required = $destination === 'ranking_history'
             ? ['organization', 'ranking_type', 'year', 'global_rank']

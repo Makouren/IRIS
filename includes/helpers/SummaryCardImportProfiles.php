@@ -1,6 +1,8 @@
 <?php
 declare(strict_types=1);
 
+require_once __DIR__ . '/CustomImportFields.php';
+
 final class SummaryCardImportProfiles
 {
     private static function ensureDefaultProfiles(PDO $pdo): void
@@ -88,6 +90,7 @@ final class SummaryCardImportProfiles
             if (!is_array($value)) throw new RuntimeException('The Summary Card import profile contains invalid configuration.');
             $profile[$field] = $value;
         }
+        $profile['custom_fields'] = CustomImportFields::definitions(json_decode((string)($profile['custom_fields'] ?? '{}'), true) ?? []);
             if (array_key_exists('workbook_headers', $profile) && is_string($profile['workbook_headers'])) {
                 $headers = json_decode($profile['workbook_headers'], true);
                 $profile['workbook_headers'] = is_array($headers) ? $headers : [];
@@ -144,7 +147,8 @@ final class SummaryCardImportProfiles
         $activeId = self::activeId($pdo, $destination);
         $query = $pdo->query('SELECT profiles.import_profile_id AS id, profiles.template_id,
                 COALESCE(NULLIF(profiles.profile_name, \'\'), templates.name) AS profile_name,
-                templates.original_filename,
+                COALESCE(profiles.workbook_original_filename, templates.original_filename) AS original_filename,
+                profiles.workbook_original_filename,
                 profiles.destination
             FROM template_import_profiles profiles
             LEFT JOIN templates ON templates.template_id = profiles.template_id

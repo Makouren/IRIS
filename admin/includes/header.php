@@ -261,7 +261,7 @@ $pageTitle = $pageTitle ?? 'IRIS Admin Control Panel';
                         <div class="flex items-center gap-2">
                             <span class="admin-brand-title text-xl font-extrabold tracking-tight">IRIS Admin</span>
                             <span class="text-[10px] px-2 py-1 font-extrabold rounded-full bg-[#FFD700] text-[#1E6031] border border-[#E0A70D]">
-                                <?= $activeNav === 'ingestion' ? 'FILE INGESTION' : ($activeNav === 'review' ? 'REVIEW EDITOR' : 'SAVED GRAPHS') ?>
+                                <?= $activeNav === 'ingestion' ? 'FILE INGESTION' : ($activeNav === 'review' ? 'REVIEW EDITOR' : ($activeNav === 'archives' ? 'FILE ARCHIVES' : 'SAVED GRAPHS')) ?>
                             </span>
                         </div>
                         <p class="admin-brand-sub text-[11px] font-semibold uppercase tracking-wider">International Affairs Office Control Panel</p>
@@ -291,6 +291,7 @@ $pageTitle = $pageTitle ?? 'IRIS Admin Control Panel';
                             </div>
                             <ul class="py-2" aria-labelledby="user-menu-button">
                                 <li><a href="<?= e(base_url('admin/review_editor.php')) ?>" class="block px-4 py-2 text-sm"><i class="fa-solid fa-pen-to-square mr-2"></i> Review Editor</a></li>
+                                <li><a href="<?= e(base_url('admin/file_archives.php')) ?>" class="block px-4 py-2 text-sm"><i class="fa-solid fa-box-archive mr-2"></i> File Archives</a></li>
                                 <li><a href="<?= e(base_url('admin/saved_graphs.php')) ?>" class="block px-4 py-2 text-sm"><i class="fa-solid fa-chart-line mr-2"></i> Saved Graphs</a></li>
                                 <li><a href="<?= e(base_url('user/dashboard.php')) ?>" class="block px-4 py-2 text-sm"><i class="fa-solid fa-globe mr-2"></i> Observatory View</a></li>
                                 <li><button type="button" data-account-manager-open class="block w-full px-4 py-2 text-left text-sm"><i class="fa-solid fa-users-gear mr-2"></i> Manage accounts</button></li>

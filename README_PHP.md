@@ -2,7 +2,7 @@
 
 This repository is the framework-free PHP application. Pages and APIs are served by Apache/PHP and use PDO to access the shared MySQL database. Tailwind CSS, Flowbite, Font Awesome, Apache ECharts, and browser parsing libraries are loaded by the frontend pages.
 
-For the current V5.3.0 release changes and schema migrations, see [`README_V5.3.0.md`](README_V5.3.0.md).
+For the current V5.7.0 release changes and required schema migrations, see [`README_V5.7.0.md`](README_V5.7.0.md).
 
 ## Local XAMPP
 
@@ -21,6 +21,7 @@ The Scanner uses browser-side JavaScript for spreadsheet ingestion and charting.
 - `config/db.php` centralizes PDO setup and change tracking; it does not create or alter schema objects.
 - `api/templates.php` and `api/imports/` provide Super Admin template-driven import profiles, previews, guarded applies, audit batches, and recovery.
 - `api/change_signal.php` exposes the authenticated shared write version used by active-page refresh polling.
+- `api/iris.php` also handles Super Admin record-merge previews/applies and authenticated File History listing, download, and restore.
 
 ## Template-Driven Imports
 
@@ -29,6 +30,10 @@ Office uploads are parsed server-side as CSV, TSV, or XLSX by the existing nativ
 Historical migrations in this repository target the retired `iris_db` schema and must not be run against `iris_db_3nf`. Apply only reviewed additive migrations explicitly targeting `iris_db_3nf`. Unified Summary Card imports need a stable Global Label column or a configured profile default. Equal period end dates sort by granularity (day, month, quarter, year).
 
 The shared refresh client watches successful data changes on open pages. Super Admin tabs synchronize promptly; other roles poll every five seconds. A page with unsaved form or Studio edits defers the reload and displays a refresh prompt.
+
+## File History Storage
+
+Record merge and restore depend on the `record_file_history` table created by `migrations/20261003_create_record_file_history.sql`. The application stores supported workbook copies in a private `history` directory under the configured upload storage root. Keep that directory outside public web access, preserve it in backups, and ensure the PHP process can write to it. Restore also requires the referenced archived file to remain present.
 
 ## Publish and Unpublish
 

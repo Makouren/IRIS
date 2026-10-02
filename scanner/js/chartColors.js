@@ -16,18 +16,30 @@
     return String(value ?? '').trim().toLowerCase().replace(/\s+/g, ' ');
   }
 
+  function sharedColorIsNewer(fieldKey, fieldColorUpdatedAt, chartUpdatedAt) {
+    const fieldUpdated = Date.parse(fieldColorUpdatedAt?.[fieldKey] || '');
+    if (!Number.isFinite(fieldUpdated)) return false;
+    const chartUpdated = Date.parse(chartUpdatedAt || '');
+    return !Number.isFinite(chartUpdated) || fieldUpdated >= chartUpdated;
+  }
+
   function resolveFieldColors(fields, {
     chartColors = null,
-    fieldColors = root.IRISFieldColors || {},
+    fieldColors = globalThis.IRISFieldColors || {},
+    fieldColorUpdatedAt = globalThis.IRISFieldColorUpdatedAt || {},
+    chartUpdatedAt = null,
+    chartColorsOverrideShared = false,
     legacyColors = null,
     defaultColors = DEFAULT_CHART_COLORS
   } = {}) {
     return fields.map((field, index) => {
-      if (isValidChartColor(chartColors?.[index])) return chartColors[index].toUpperCase();
       const key = normalizeFieldKey(field);
       const fieldColor = fieldColors instanceof Map
         ? fieldColors.get(key)
         : Object.prototype.hasOwnProperty.call(fieldColors, key) ? fieldColors[key] : null;
+      if (chartColorsOverrideShared && isValidChartColor(chartColors?.[index])) return chartColors[index].toUpperCase();
+      if (isValidChartColor(fieldColor) && sharedColorIsNewer(key, fieldColorUpdatedAt, chartUpdatedAt)) return fieldColor.toUpperCase();
+      if (isValidChartColor(chartColors?.[index])) return chartColors[index].toUpperCase();
       if (isValidChartColor(fieldColor)) return fieldColor.toUpperCase();
       if (isValidChartColor(legacyColors?.[index])) return legacyColors[index].toUpperCase();
       return defaultColors[index % defaultColors.length];

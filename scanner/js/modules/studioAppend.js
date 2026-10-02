@@ -2,10 +2,6 @@ import { $, escapeHtml } from '../utils/helpers.js';
 
 const MAX_PREVIEW_ROWS = 200;
 
-function clone(value) {
-  return JSON.parse(JSON.stringify(value));
-}
-
 function statusLabel(status) {
   return status === 'inserted' ? 'INSERTED' : status === 'updated' ? 'UPDATED' : status === 'unchanged' ? 'UNCHANGED' : 'SKIPPED';
 }
@@ -51,28 +47,6 @@ function previewTable(sheet, rowStatuses = null) {
     return `<tr>${marker}${cells}</tr>`;
   }).join('');
   return `<div style="max-height:360px;overflow:auto;border:1px solid #cbd5e1;border-radius:6px"><table style="border-collapse:collapse;min-width:100%;font-size:.78rem"><thead><tr>${rowStatuses ? '<th style="position:sticky;top:0;background:#f1f5f9;padding:.4rem .55rem">Merge</th>' : ''}${head}</tr></thead><tbody>${body}</tbody></table></div><p style="margin:.4rem 0 0;color:#64748b;font-size:.75rem">${visible.length} of ${rows.length} rows shown${rows.length > MAX_PREVIEW_ROWS ? ` (preview capped at ${MAX_PREVIEW_ROWS})` : ''}</p>`;
-}
-
-function downloadRecordBackup(record) {
-  const backup = { id: record.id, fileName: record.fileName, extractedData: record.extractedData, metadata: record.metadata };
-  const payload = [
-    'IRIS RECORD BACKUP - BEFORE OFFICE MERGE',
-    `Created: ${new Date().toISOString()}`,
-    `Record ID: ${record.id}`,
-    `File name: ${record.fileName || ''}`,
-    '',
-    'Record data (JSON-formatted text):',
-    JSON.stringify(backup, null, 2)
-  ].join('\n');
-  const url = URL.createObjectURL(new Blob([payload], { type: 'text/plain;charset=utf-8' }));
-  const link = document.createElement('a');
-  const safeName = String(record.fileName || record.id).replace(/[^a-z0-9._-]+/gi, '_');
-  link.href = url;
-  link.download = `${safeName}.before-office-merge.txt`;
-  document.body.appendChild(link);
-  link.click();
-  link.remove();
-  URL.revokeObjectURL(url);
 }
 
 export function initStudioAppend(ctx) {
@@ -125,45 +99,75 @@ export function initStudioAppend(ctx) {
 
   const openSourcePicker = candidates => {
     const modal = showModal(`<div class="modal-card" style="max-width:720px;max-height:calc(100vh - 2rem);overflow:auto">
-      <div class="modal-header"><h3 class="modal-title">Choose office upload</h3><button type="button" class="export-cancel-button" data-cancel>Cancel</button></div>
-      <p style="margin:.5rem 0 1rem">Choose a Pending Review office upload on the same template and worksheet.</p>
-      <div style="display:grid;gap:.5rem">${candidates.map(item => `<button type="button" class="archive-load-button" data-source="${escapeHtml(item.record.id)}" style="display:flex;justify-content:space-between;gap:1rem;text-align:left"><span><strong>${escapeHtml(item.record.fileName || 'Untitled')}</strong><br><small>${escapeHtml(item.record.office_name || 'Office')} · ${escapeHtml(item.record.uploaded_at || '')} · ${escapeHtml(item.sheet.name)}</small></span><span>${item.sheet.sheet.rows.length} rows</span></button>`).join('')}</div>
+      <div class="modal-header"><h3 class="modal-title">Choose merge direction and record</h3><button type="button" class="export-cancel-button" data-cancel>Cancel</button></div>
+      <p style="margin:.5rem 0 1rem">Choose a direction first, then select the other record. Source data is merged into the target; target-only rows stay. Conflicts must be resolved before anything changes.</p>
+      <fieldset style="display:grid;gap:.75rem;margin:0 0 1rem;padding:.75rem;border:1px solid #cbd5e1;border-radius:6px">
+        <legend>Merge direction</legend>
+        <label style="display:grid;grid-template-columns:auto 1fr;gap:.5rem;align-items:start">
+          <input type="radio" name="merge-direction" value="active-target" style="margin-top:.25rem">
+          <span><strong>Merge the selected record (A) into the active record (B)</strong><br><small>IRIS applies A’s changes and new rows to B; B remains as the updated record, including its existing-only rows. A is kept by default. If you select “Delete the source record after merging” on the next screen, A is deleted from the records list, while its archived version remains in File History.</small></span>
+        </label>
+        <label style="display:grid;grid-template-columns:auto 1fr;gap:.5rem;align-items:start">
+          <input type="radio" name="merge-direction" value="active-source" style="margin-top:.25rem">
+          <span><strong>Merge the active record (A) into the selected record (B)</strong><br><small>IRIS applies A’s changes and new rows to B; B remains as the updated record, including its existing-only rows. A is kept by default. If you select “Delete the source record after merging” on the next screen, A is deleted from the records list, while its archived version remains in File History.</small></span>
+        </label>
+      </fieldset>
+      <p style="margin:.5rem 0;font-weight:700">Select the record to use as the other side of the merge:</p>
+      <p data-picker-error role="alert" aria-live="assertive" style="color:#b91c1c"></p>
+      <div style="display:grid;gap:.5rem">${candidates.map(item => `<button type="button" class="archive-load-button" data-source="${escapeHtml(item.record.id)}" style="display:flex;justify-content:space-between;gap:1rem;text-align:left"><span><strong>${escapeHtml(item.record.fileName || 'Untitled')}</strong><br><small>${escapeHtml(item.record.office_name || 'Record')} · ${escapeHtml(item.record.status || '')} · ${escapeHtml(item.sheet.name)}</small></span><span>${item.sheet.sheet.rows.length} rows</span></button>`).join('')}</div>
       </div>`);
-    modal.querySelector('[data-cancel]').onclick = () => modal.remove();
+    modal.querySelectorAll('[data-cancel]').forEach(button => button.onclick = () => modal.remove());
     modal.addEventListener('click', event => {
       const button = event.target.closest('[data-source]');
       if (!button) return;
+      const direction = modal.querySelector('[name="merge-direction"]:checked')?.value;
+      if (!direction) {
+        const error = modal.querySelector('[data-picker-error]');
+        error.textContent = 'Select a merge direction before choosing a record.';
+        modal.querySelector('[name="merge-direction"]')?.focus();
+        return;
+      }
       const selected = candidates.find(item => String(item.record.id) === button.dataset.source);
       modal.remove();
-      if (selected) openMergeReview(selected);
+      if (selected) openMergeReview(selected, direction);
     });
   };
 
-  const openMergeReview = selected => {
-    const oldRecord = activeRecord();
-    const oldInfo = activeSheet();
-    if (!oldRecord || !oldInfo) return;
-    let keyColumns = window.SheetMerge.defaultKeyColumns(oldInfo.data.headers, oldInfo.data.rows);
-    let latestResult = null;
-    let latestValidation = null;
+  const openMergeReview = (selected, direction) => {
+    const active = activeRecord();
+    const activeInfo = activeSheet();
+    if (!active || !activeInfo) return;
+    const activeIsTarget = direction === 'active-target';
+    const source = activeIsTarget ? selected.record : active;
+    const target = activeIsTarget ? active : selected.record;
+    const sourceInfo = activeIsTarget ? selected.sheet : { name: activeInfo.name, sheet: activeInfo.data };
+    const targetInfo = activeIsTarget ? { name: activeInfo.name, sheet: activeInfo.data } : selected.sheet;
+    let keyColumns = window.SheetMerge.defaultKeyColumns(targetInfo.sheet.headers, targetInfo.sheet.rows);
+    let latestPreview = null;
+    let previewSequence = 0;
+    let previewError = '';
+    let resolutions = {};
     let confirmed = false;
     const modal = showModal(`<div class="modal-card" style="max-width:1200px;max-height:calc(100vh - 2rem);overflow:auto">
-      <div class="modal-header"><h3 class="modal-title">Review office upload merge</h3><button type="button" class="export-cancel-button" data-cancel>Cancel</button></div>
+      <div class="modal-header"><h3 class="modal-title">Review record merge</h3><button type="button" class="export-cancel-button" data-cancel>Cancel</button></div>
       <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(340px,1fr));gap:1rem">
-        <section><h4 style="font-weight:800;margin:.35rem 0">Current file (old)</h4><p>${escapeHtml(oldRecord.fileName || 'Untitled')} · ${escapeHtml(oldInfo.name)} · ${oldInfo.data.rows.length} rows</p><div data-old-preview></div></section>
-        <section><h4 style="font-weight:800;margin:.35rem 0">Office upload (new)</h4><p>${escapeHtml(selected.record.fileName || 'Untitled')} · ${escapeHtml(selected.record.office_name || 'Office')} · ${escapeHtml(selected.sheet.name)} · ${selected.sheet.sheet.rows.length} rows</p><div data-new-preview></div></section>
+        <section><h4 style="font-weight:800;margin:.35rem 0">SOURCE — changes come from this record</h4><p>${escapeHtml(source.fileName || 'Untitled')} · Record ${escapeHtml(source.id)} · ${escapeHtml(sourceInfo.name)} · ${sourceInfo.sheet.rows.length} rows</p><p>Its matching-row changes and new rows are applied to the target below.</p><div data-source-preview></div></section>
+        <section style="padding:.65rem;border:2px solid #16a34a;border-radius:6px;background:#f0fdf4"><h4 style="font-weight:800;margin:.35rem 0;color:#166534">TARGET — THIS BECOMES THE UPDATED RECORD</h4><p><strong>${escapeHtml(target.fileName || 'Untitled')}</strong> · Record ${escapeHtml(target.id)} · ${escapeHtml(targetInfo.name)} · ${targetInfo.sheet.rows.length} rows</p><p>This record remains under its current ID and contains the merged result. The source is not made into the new record.</p><div data-target-preview></div></section>
       </div>
       <section style="margin-top:1rem"><h4 style="font-weight:800">Key columns</h4><div data-key-list style="display:flex;flex-wrap:wrap;gap:.5rem;margin:.5rem 0"></div></section>
-      <section data-validation style="margin:.75rem 0;padding:.75rem;background:#f8fafc;border:1px solid #cbd5e1;border-radius:6px"></section>
-      <label style="display:flex;gap:.5rem;align-items:flex-start;margin:1rem 0"><input type="checkbox" data-reviewed><span>I reviewed the new file and it is correct.</span></label>
+      <section data-conflicts style="margin:.75rem 0"></section>
+      <section data-validation role="status" aria-live="polite" style="margin:.75rem 0;padding:.75rem;background:#f8fafc;border:1px solid #cbd5e1;border-radius:6px"></section>
+      <section data-merged-preview style="margin:.75rem 0"></section>
+      <label style="display:flex;gap:.5rem;align-items:flex-start;margin:1rem 0"><input type="checkbox" data-consume-source><span>Delete the source record after merging (off by default; the source version remains in File History).</span></label>
+      <label style="display:flex;gap:.5rem;align-items:flex-start;margin:1rem 0"><input type="checkbox" data-reviewed><span>I reviewed the source, target, and merge result.</span></label>
       <div style="display:flex;justify-content:flex-end;gap:.5rem"><button type="button" class="export-cancel-button" data-cancel>Cancel</button><button type="button" class="btn-save-modal" data-merge disabled>Merge</button></div>
     </div>`);
 
-    modal.querySelector('[data-cancel]').onclick = () => modal.remove();
-    modal.querySelector('[data-old-preview]').innerHTML = previewTable(oldInfo.data);
-    modal.querySelector('[data-new-preview]').innerHTML = previewTable(selected.sheet.sheet);
+    modal.querySelectorAll('[data-cancel]').forEach(button => button.onclick = () => modal.remove());
+    modal.querySelector('[data-source-preview]').innerHTML = previewTable(sourceInfo.sheet);
+    modal.querySelector('[data-target-preview]').innerHTML = previewTable(targetInfo.sheet);
     const keyList = modal.querySelector('[data-key-list]');
-    oldInfo.data.headers.forEach((header, index) => {
+    targetInfo.sheet.headers.forEach((header, index) => {
       const label = document.createElement('label');
       label.style.cssText = 'display:inline-flex;align-items:center;gap:.35rem;padding:.25rem .45rem;border:1px solid #cbd5e1;border-radius:4px';
       const checkbox = document.createElement('input');
@@ -176,157 +180,113 @@ export function initStudioAppend(ctx) {
       keyList.appendChild(label);
     });
 
-    const refreshReview = () => {
+    const refreshReview = async () => {
       keyColumns = [...modal.querySelectorAll('[data-key-column]:checked')].map(input => Number(input.dataset.keyColumn));
-      latestValidation = window.SheetMerge.validateSheet(selected.sheet.sheet, oldInfo.data, keyColumns);
-      latestResult = keyColumns.length ? window.SheetMerge.mergeSheet(oldInfo.data, selected.sheet.sheet, { keyColumns }) : { error: 'Select at least one key column.' };
+      const sequence = ++previewSequence;
       const validation = modal.querySelector('[data-validation]');
-      if (latestValidation.ok && !latestResult.error) {
-        const stats = latestResult.stats;
-        const updateSummary = Object.entries(stats.updatedByColumn).map(([name, count]) => `${escapeHtml(name)}: ${count}`).join(', ') || 'none';
-        validation.innerHTML = `<strong style="color:#166534">Validation passed</strong><p>Inserted ${stats.inserted}; updated ${stats.updated}; unchanged ${stats.unchanged}; skipped ${stats.skipped}; duplicate incoming ${stats.duplicateIncoming}; duplicate existing ${stats.duplicateExisting}.</p><p>Updated by column: ${updateSummary}</p><p>Ignored new columns: ${stats.ignoredColumns.map(escapeHtml).join(', ') || 'none'}</p><p>Rows are marked in the 200-row preview. New rows append in existing column order; existing row order and columns are preserved.</p>`;
-        modal.querySelector('[data-new-preview]').innerHTML = previewTable(selected.sheet.sheet, stats.rowStatus);
-      } else {
-        const problems = latestValidation.problems.length ? latestValidation.problems : [latestResult.error];
-        validation.innerHTML = `<strong style="color:#b91c1c">Merge is blocked</strong><ul style="margin:.4rem 0;color:#b91c1c">${problems.map(problem => `<li>${escapeHtml(problem)}</li>`).join('')}</ul>`;
+      const conflictSection = modal.querySelector('[data-conflicts]');
+      const mergeButton = modal.querySelector('[data-merge]');
+      const mergedPreview = modal.querySelector('[data-merged-preview]');
+      latestPreview = null;
+      mergeButton.disabled = true;
+      mergedPreview.innerHTML = '';
+      if (!keyColumns.length) {
+        validation.textContent = 'Select at least one key column.';
+        conflictSection.innerHTML = '';
+        return;
       }
-      modal.querySelector('[data-merge]').disabled = !(latestValidation.ok && latestResult.sheet && confirmed);
+      validation.textContent = 'Checking for conflicts...';
+      try {
+        const preview = await ctx.dbManager.previewRecordMerge({
+          source_id: source.id,
+          target_id: target.id,
+          source_sheet_name: sourceInfo.name,
+          target_sheet_name: targetInfo.name,
+          key_columns: keyColumns,
+          resolutions,
+          method: 'merge'
+        });
+        if (!modal.isConnected || sequence !== previewSequence) return;
+        latestPreview = preview;
+        previewError = '';
+        if (preview.conflicts.length) {
+          conflictSection.innerHTML = `<h4 style="font-weight:800">Conflicts</h4><p>Every differing value for a matching key must be explicitly resolved. No target changes have been made.</p>${preview.conflicts.map(conflict => `<fieldset style="margin:.5rem 0;padding:.65rem;border:1px solid #f59e0b;border-radius:5px"><legend>Row ${conflict.rowIndex + 1} · ${escapeHtml(conflict.columnName)}</legend><p>Target: ${escapeHtml(conflict.targetValue ?? '')}<br>Source: ${escapeHtml(conflict.sourceValue ?? '')}</p><label><input type="radio" name="conflict-${escapeHtml(conflict.id)}" data-conflict="${escapeHtml(conflict.id)}" value="target" ${resolutions[conflict.id] === 'target' ? 'checked' : ''}> Keep target</label> <label><input type="radio" name="conflict-${escapeHtml(conflict.id)}" data-conflict="${escapeHtml(conflict.id)}" value="source" ${resolutions[conflict.id] === 'source' ? 'checked' : ''}> Take source</label></fieldset>`).join('')}`;
+          validation.textContent = preview.unresolved ? `${preview.unresolved} conflict(s) still need a choice.` : 'All conflicts are resolved.';
+        } else {
+          conflictSection.innerHTML = '';
+          validation.innerHTML = `<strong style="color:#166534">No conflicts found.</strong><p>Inserted ${preview.stats.inserted}; updated ${preview.stats.updated}; unchanged ${preview.stats.unchanged}; skipped ${preview.stats.skipped}; duplicate incoming ${preview.stats.duplicateIncoming}; duplicate existing ${preview.stats.duplicateExisting}.</p><p>Ignored source-only columns: ${(preview.stats.ignoredColumns || []).map(escapeHtml).join(', ') || 'none'}</p>`;
+        }
+        if (preview.sheet) {
+          mergedPreview.innerHTML = `<h4 style="font-weight:800">Proposed target result</h4>${previewTable(preview.sheet, preview.stats?.rowStatus)}`;
+        }
+        mergeButton.disabled = !(preview.sheet && preview.unresolved === 0 && confirmed);
+      } catch (error) {
+        if (!modal.isConnected || sequence !== previewSequence) return;
+        previewError = error.message || String(error);
+        validation.textContent = previewError;
+        conflictSection.innerHTML = '';
+      }
     };
 
-    keyList.addEventListener('change', refreshReview);
+    keyList.addEventListener('change', () => {
+      resolutions = {};
+      refreshReview();
+    });
+    modal.querySelector('[data-conflicts]').addEventListener('change', event => {
+      const choice = event.target.closest('[data-conflict]');
+      if (!choice) return;
+      resolutions[choice.dataset.conflict] = choice.value;
+      refreshReview();
+    });
     modal.querySelector('[data-reviewed]').addEventListener('change', event => {
       confirmed = event.currentTarget.checked;
       refreshReview();
     });
     modal.querySelector('[data-merge]').onclick = async event => {
-      if (!latestResult?.sheet || !latestValidation?.ok || !confirmed) return;
-      event.currentTarget.disabled = true;
+      if (!latestPreview?.sheet || latestPreview.unresolved || !confirmed || previewError) return;
+      const button = event.currentTarget;
+      button.disabled = true;
+      button.textContent = 'Merging...';
+      let result;
+      try {
+        result = await ctx.dbManager.mergeRecords({
+          source_id: source.id,
+          target_id: target.id,
+          source_sheet_name: sourceInfo.name,
+          target_sheet_name: targetInfo.name,
+          key_columns: keyColumns,
+          resolutions,
+          source_digest: latestPreview.source_digest,
+          target_digest: latestPreview.target_digest,
+          method: 'merge',
+          consume_source: modal.querySelector('[data-consume-source]').checked
+        });
+      } catch (error) {
+        button.disabled = false;
+        button.textContent = 'Merge';
+        const detail = error.payload?.conflicts?.length ? ' Conflicts changed since preview; refresh and resolve them again.' : '';
+        alert(`Merge was not applied: ${error.message}${detail}`);
+        await refreshReview();
+        return;
+      }
       modal.remove();
-      await commitMerge(oldRecord, oldInfo, selected, latestResult);
+      try {
+        const records = await ctx.dbManager.getAllRecords();
+        const mergedRecord = records.find(record => String(record.id) === String(target.id));
+        if (!mergedRecord) throw new Error('The target record could not be reloaded.');
+        ctx.state.studioActiveRecord = mergedRecord;
+        ctx.state.docWindowActiveSheetKey = targetInfo.name;
+        window.IRIS_STUDIO_DIRTY = false;
+        ctx.api.renderStudioTableGrid(mergedRecord);
+        ctx.api.updateStudioChart();
+        syncStudioHeader();
+        await ctx.api.renderAdminPortal();
+        alert(`Merge complete. File History contains the pre-merge target, source-at-merge, and post-merge result.${result.source_deleted ? ' The source record was deleted; its archived version remains restorable.' : ''}`);
+      } catch (error) {
+        alert(`The merge succeeded and is archived in File History, but the page could not refresh: ${error.message}`);
+      }
     };
     refreshReview();
-  };
-
-  const commitMerge = async (oldRecord, oldInfo, selected, mergeResult) => {
-    const officeRecord = selected.record;
-    const mergeDate = new Date().toISOString();
-    const oldFileName = oldRecord.fileName || 'previous file';
-    const rollback = {
-      fileName: oldRecord.fileName,
-      fileType: oldRecord.fileType,
-      fileSize: oldRecord.fileSize,
-      extractedData: clone(oldRecord.extractedData || {}),
-      metadata: clone(oldRecord.metadata || {}),
-      adminNotes: oldRecord.adminNotes || ''
-    };
-    downloadRecordBackup(oldRecord);
-
-    let staged;
-    try {
-      staged = await ctx.dbManager.stageRestore(oldRecord.id, officeRecord.id);
-    } catch (error) {
-      alert(`Merge was not started. Recovery staging failed: ${error.message}`);
-      return;
-    }
-
-    const extractedData = clone(oldRecord.extractedData || {});
-    extractedData[oldInfo.name] = mergeResult.sheet;
-    const adminNotes = [oldRecord.adminNotes, `Merged from ${officeRecord.fileName || 'office upload'} on ${mergeDate}`].filter(Boolean).join('\n');
-    const metadata = {
-      ...(officeRecord.metadata || {}),
-      merge: {
-        merged_at: mergeDate,
-        replaced_file: oldFileName,
-        source_record_id: officeRecord.id,
-        source_office: officeRecord.office_name || '',
-        trash_id: staged.trash_id
-      }
-    };
-    let updatedRecord;
-    try {
-      updatedRecord = await ctx.dbManager.updateRecord(oldRecord.id, {
-        fileName: officeRecord.fileName,
-        fileType: officeRecord.fileType,
-        fileSize: officeRecord.fileSize,
-        extractedData,
-        metadata,
-        adminNotes
-      });
-    } catch (error) {
-      try {
-        await ctx.dbManager.updateRecord(oldRecord.id, rollback);
-      } catch (rollbackError) {
-        alert(`Merge update failed and rollback also failed. The recovery snapshot remains staged: ${rollbackError.message}`);
-        return;
-      }
-      alert(`Merge was not applied. The existing record was restored: ${error.message}`);
-      return;
-    }
-
-    const records = await ctx.dbManager.getAllRecords();
-    const verified = records.find(record => String(record.id) === String(oldRecord.id));
-    const actualSheet = verified?.extractedData?.[oldInfo.name];
-    const matches = actualSheet
-      && JSON.stringify(actualSheet.headers) === JSON.stringify(oldInfo.data.headers)
-      && actualSheet.rowCount === mergeResult.sheet.rowCount
-      && JSON.stringify(actualSheet.numericStats) === JSON.stringify(mergeResult.sheet.numericStats)
-      && JSON.stringify(actualSheet.rows) === JSON.stringify(mergeResult.sheet.rows);
-    if (!matches) {
-      try {
-        await ctx.dbManager.updateRecord(oldRecord.id, rollback);
-        alert('Merge verification failed. The previous record data was restored; the office upload remains in the review queue.');
-      } catch (error) {
-        alert(`Merge verification failed and automatic rollback also failed. The recovery snapshot remains staged: ${error.message}`);
-      }
-      return;
-    }
-
-    try {
-      await ctx.dbManager.deleteRecord(officeRecord.id);
-    } catch (error) {
-      let restored = false;
-      try {
-        const afterFailure = await ctx.dbManager.getAllRecords();
-        const officeRemains = afterFailure.some(item => String(item.id) === String(officeRecord.id));
-        if (officeRemains) {
-          await ctx.dbManager.updateRecord(oldRecord.id, rollback);
-          restored = true;
-        } else {
-          await ctx.dbManager.restoreMerge(oldRecord.id, staged.trash_id);
-          restored = true;
-        }
-        const refreshed = await ctx.dbManager.getAllRecords();
-        const currentOld = refreshed.find(item => String(item.id) === String(oldRecord.id));
-        if (currentOld) {
-          ctx.state.studioActiveRecord = currentOld;
-          ctx.api.renderStudioTableGrid(currentOld);
-          ctx.api.updateStudioChart();
-          syncStudioHeader();
-        }
-        await ctx.api.renderAdminPortal();
-      } catch (rollbackError) {
-        alert(`The office record delete failed. Recovery data is retained under ${staged.trash_id}. ${rollbackError.message}`);
-        return;
-      }
-      alert(`${restored ? 'The merge was rolled back and both records were retained.' : 'Both records remain available.'} Office record deletion failed: ${error.message}`);
-      return;
-    }
-
-    let trashWarning = '';
-    try {
-      await ctx.dbManager.trashStoredFile(oldRecord.id, staged.trash_id);
-    } catch (error) {
-      trashWarning = ` The merge succeeded, but the old file could not be moved to trash: ${error.message}`;
-    }
-
-    ctx.state.studioActiveRecord = verified;
-    ctx.state.docWindowActiveSheetKey = oldInfo.name;
-    window.IRIS_STUDIO_DIRTY = false;
-    ctx.api.renderStudioTableGrid(verified);
-    ctx.api.updateStudioChart();
-    syncStudioHeader();
-    await ctx.api.renderAdminPortal();
-    alert(`Merge complete. Click Save Dashboard Changes to update the saved graph.${trashWarning}`);
   };
 
   async function restorePreviousFile() {
@@ -338,7 +298,7 @@ export function initStudioAppend(ctx) {
     }
     const merge = record.metadata?.merge;
     if (!merge?.trash_id) return;
-    if (!confirm(`Restore ${merge.replaced_file || 'the previous file'}? The record returns to its pre-merge data, the office upload goes back to the Pending Review queue, and any edits made since the merge are lost. The saved graph is not reverted; click Save Dashboard Changes afterwards.`)) return;
+    if (!confirm(`Restore ${merge.replaced_file || 'the previous file'}? The record returns to its pre-merge data, the office upload goes back to the Pending Review queue, and any edits made since the merge are lost. The saved graph is not reverted; click Save Graph afterwards.`)) return;
     const button = $('studioRestorePreviousFile');
     if (button) button.disabled = true;
     try {
@@ -354,7 +314,7 @@ export function initStudioAppend(ctx) {
       await ctx.api.renderAdminPortal();
       alert(result.file_restored === false
         ? 'Record data was restored, but the previous source file could not be moved back. The saved graph was not reverted.'
-        : 'Previous file and record data restored. The saved graph was not reverted; click Save Dashboard Changes afterwards.');
+        : 'Previous file and record data restored. The saved graph was not reverted; click Save Graph afterwards.');
     } catch (error) {
       if (button) button.disabled = false;
       alert(`Unable to restore the previous file: ${error.message || error}`);
@@ -374,28 +334,25 @@ export function initStudioAppend(ctx) {
       return;
     }
     if (record.template_id === null || record.template_id === undefined || record.template_id === '') {
-      alert('This record has no linked template. Assign a template in Diff & approve before merging an office upload.');
+      alert('This record has no linked template. Assign a template before merging.');
       return;
     }
     let records;
     try {
       records = await ctx.dbManager.getAllRecords();
     } catch (error) {
-      alert(`Unable to load office uploads: ${error.message || error}`);
+      alert(`Unable to load records: ${error.message || error}`);
       return;
     }
     const candidates = records.flatMap(candidate => {
       if (String(candidate.id) === String(record.id)
         || String(candidate.template_id ?? '') !== String(record.template_id)
-        || String(candidate.status || '').toLowerCase() !== 'pending review'
-        || !candidate.uploaded_by
-        || !candidate.office_name
         || !['xlsx', 'csv', 'tsv'].includes(String(candidate.fileType || '').toLowerCase())) return [];
       const sheet = bestSheetFor(candidate, info.name, info.data.headers);
       return sheet ? [{ record: candidate, sheet }] : [];
     });
     if (!candidates.length) {
-      alert('No Pending Review office upload with the same linked template and a compatible worksheet was found.');
+      alert('No other record with the same linked template and a compatible worksheet was found.');
       return;
     }
     openSourcePicker(candidates);

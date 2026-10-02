@@ -1,6 +1,15 @@
 import '../chartColors.js?v=iris-chart-builder-20261001';
 const { DEFAULT_CHART_COLORS, resolveFieldColors } = globalThis.IRISChartColors;
 
+function sharedFieldColorIsNewer(field, irisConfig) {
+  if (irisConfig.chartColorsOverrideShared) return false;
+  const key = String(field ?? '').trim().toLowerCase().replace(/\s+/g, ' ');
+  const fieldTimestamp = Date.parse(irisConfig.fieldColorUpdatedAt?.[key] || '');
+  if (!Number.isFinite(fieldTimestamp)) return false;
+  const graphTimestamp = Date.parse(irisConfig.chartUpdatedAt || '');
+  return !Number.isFinite(graphTimestamp) || fieldTimestamp >= graphTimestamp;
+}
+
 export function formatChartValueForDisplay(value, precision = 2) {
   const raw = String(value ?? '').trim();
   if (raw === '') return '';
@@ -80,14 +89,23 @@ export function buildChartOption({ type, labels = [], values = [], rawValues = v
   if (type === 'nestedPie') {
     const groups = Array.isArray(irisConfig.nestedGroups) ? irisConfig.nestedGroups : [];
     if (!groups.length) return { ...option, title: { ...(option.title || {}), text: 'Choose a Group (inner ring) field to render this chart', left: 'center', top: 'middle', textStyle: { color: textColor, fontSize: 14 } }, series: [] };
-    const groupColors = irisConfig.groupColors || resolvedColors.slice(0, groups.length);
+    const groupColors = groups.map((group, index) => {
+      if (sharedFieldColorIsNewer(group.label, irisConfig)) return resolvedColors[index];
+      const fieldKey = String(group.label).trim().toLowerCase().replace(/\s+/g, ' ');
+      return irisConfig.groupColors?.[index]
+        || irisConfig.colors?.[index]
+        || irisConfig.fieldColors?.[fieldKey]
+        || resolvedColors[index];
+    });
     const childLabels = groups.flatMap(group => (group.children || []).map(child => child.label));
     const childColors = groups.flatMap((group, groupIndex) => (group.children || []).map((child, childIndex) => {
       const sliceIndex = groups.slice(0, groupIndex).reduce((count, item) => count + (item.children || []).length, 0) + childIndex;
       const fieldKey = String(child.label).trim().toLowerCase().replace(/\s+/g, ' ');
-      const explicit = irisConfig.sliceColors?.[`${group.label}::${child.label}`]
-        || irisConfig.colors?.[groups.length + sliceIndex]
-        || irisConfig.fieldColors?.[fieldKey];
+      const explicit = sharedFieldColorIsNewer(fieldKey, irisConfig)
+        ? resolvedColors[groups.length + sliceIndex]
+        : irisConfig.sliceColors?.[`${group.label}::${child.label}`]
+          || irisConfig.colors?.[groups.length + sliceIndex]
+          || irisConfig.fieldColors?.[fieldKey];
       return explicit || shadeColor(groupColors[groupIndex], (childIndex % 2 ? -1 : 1) * (0.12 + (childIndex % 4) * 0.06));
     }));
     const crowded = Number(context.width) < 560 || childLabels.length > 8;
@@ -155,12 +173,21 @@ export function buildSavedGraphOption(graphData, { width = 0, theme = null, colo
   const colorFields = type === 'nestedPie'
     ? [...(config.nestedGroups || []).map(group => group.label), ...(config.nestedGroups || []).flatMap(group => (group.children || []).map(child => child.label))]
     : type === 'line' && legacyData.series?.length > 1 ? legacyData.series.map(item => item.name || 'Series') : labels;
-  const resolvedColors = resolveFieldColors(colorFields, { chartColors: customColors || source.colors, fieldColors: globalThis.IRISFieldColors || {}, legacyColors: DEFAULT_CHART_COLORS, defaultColors: DEFAULT_CHART_COLORS });
+  const graphUpdatedAt = source.updated_at || source.updatedAt || null;
+  const fieldColorUpdatedAt = globalThis.IRISFieldColorUpdatedAt || {};
+  const resolvedColors = resolveFieldColors(colorFields, {
+    chartColors: customColors || source.colors || config.colors,
+    fieldColors: globalThis.IRISFieldColors || {},
+    fieldColorUpdatedAt,
+    chartUpdatedAt: graphUpdatedAt,
+    legacyColors: DEFAULT_CHART_COLORS,
+    defaultColors: DEFAULT_CHART_COLORS
+  });
   const legacySeries = !config.type && !source.irisConfig && !source.chart_data?.irisConfig && !source.chartData?.irisConfig ? legacyData.series || [] : [];
   const graphConfig = {
     ...source,
     ...config,
-    irisConfig: { ...config, colors: customColors || source.colors, fieldColors: globalThis.IRISFieldColors || {} },
+    irisConfig: { ...config, colors: customColors || source.colors || config.colors, fieldColors: globalThis.IRISFieldColors || {}, fieldColorUpdatedAt, chartUpdatedAt: graphUpdatedAt },
     orientation: source.orientation || config.orientation,
     rankSemantic: source.rank_semantic ?? source.rankSemantic ?? config.rankSemantic,
     valueAxisMin: source.value_axis_min ?? config.valueAxisMin,
@@ -172,7 +199,8 @@ export function buildSavedGraphOption(graphData, { width = 0, theme = null, colo
     title: source.title,
     seriesName: source.title || legacyData.series?.[0]?.name || 'Value',
     fieldColors: globalThis.IRISFieldColors || {},
-    colors: customColors || source.colors
+    colors: customColors || source.colors || config.colors,
+    updated_at: graphUpdatedAt
   };
   return buildChartOption({ type, labels, values, rawValues: values, series: config.series || legacySeries, config: graphConfig, colors: resolvedColors, theme: theme || { dark: document.documentElement.classList.contains('dark') }, precision: config.precision ?? 2, context: { width }, showTitle: false });
 }
@@ -359,6 +387,9 @@ export function renderStudioChart(arg1, arg2, arg3 = {}) {
   const chartColors = resolveFieldColors(colorFields, {
     chartColors: state.studioChartOverrides,
     fieldColors: globalThis.IRISFieldColors || {},
+    fieldColorUpdatedAt: globalThis.IRISFieldColorUpdatedAt || {},
+    chartUpdatedAt: state.studioActiveGraphUpdatedAt,
+    chartColorsOverrideShared: Array.isArray(state.studioChartOverrides),
     legacyColors: DEFAULT_CHART_COLORS,
     defaultColors: DEFAULT_CHART_COLORS
   });
@@ -389,7 +420,7 @@ export function renderStudioChart(arg1, arg2, arg3 = {}) {
     reverseOrder: Boolean(rankedMode ? reverseOrder : false)
   };
   show();
-  const chartConfig = { ...state.studioChartConfig, type, title: titleInput?.value || `${headerName} — ${info.name}`, seriesName: headerName, valueLabel: headerName, rankSemantic, nestedGroups: nested?.groups || [], colors: state.studioChartOverrides, fieldColors: globalThis.IRISFieldColors || {} };
+  const chartConfig = { ...state.studioChartConfig, type, title: titleInput?.value || `${headerName} — ${info.name}`, seriesName: headerName, valueLabel: headerName, rankSemantic, nestedGroups: nested?.groups || [], colors: state.studioChartOverrides, fieldColors: globalThis.IRISFieldColors || {}, fieldColorUpdatedAt: globalThis.IRISFieldColorUpdatedAt || {}, chartUpdatedAt: state.studioActiveGraphUpdatedAt, chartColorsOverrideShared: Array.isArray(state.studioChartOverrides) };
   state.studioChartInstance = window.echarts.init(canvas);
   state.studioChartInstance.setOption(buildChartOption({ type, labels, values, rawValues, config: chartConfig, colors: chartColors, theme: { dark: document.documentElement.classList.contains('dark') }, precision: displayPrecision, context: { width: canvas.clientWidth }, showTitle: true }));
   ctx?.api?.renderStudioColorCustomizer?.({ chartType: type, labels: colorLabels, colorKeys: colorFields, colors: chartColors, overrides: state.studioChartOverrides });

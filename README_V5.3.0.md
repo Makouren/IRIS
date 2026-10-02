@@ -37,7 +37,7 @@ V5.3.0 schema changes include:
 - `migrations/20261004_add_normalized_ranking_display_values.sql`
 - `migrations/20261004_add_ranking_body_order_and_graph_scope.sql`
 
-The final migration adds `ranking_bodies.sort_order` and `saved_graphs.scope`; the application expects both columns. Apply it only to the configured database after confirming it has the corresponding tables and current columns.
+The final V5.3.0 migration adds `ranking_bodies.sort_order` and `saved_graphs.scope`; the application expects both columns. Apply it only to the configured database after confirming it has the corresponding tables and current columns.
 
 ## Verification
 

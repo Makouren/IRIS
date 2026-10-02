@@ -3,6 +3,7 @@ declare(strict_types=1);
 
 require_once __DIR__ . '/ImportSheetReader.php';
 require_once __DIR__ . '/SummaryCardImportProfiles.php';
+require_once __DIR__ . '/CustomImportFields.php';
 
 final class TemplateImportSupport
 {
@@ -41,6 +42,8 @@ final class TemplateImportSupport
             if (!is_array($value)) throw new RuntimeException('The template import profile contains invalid configuration.');
             $profile[$field] = $value;
         }
+        $customFields = json_decode((string)($profile['custom_fields'] ?? '{}'), true);
+        $profile['custom_fields'] = CustomImportFields::definitions($customFields ?? []);
         $identityFields = json_decode((string)($profile['identity_fields'] ?? ''), true);
         if ($identityFields === null) $identityFields = $destination === 'summary_cards' ? ['import_key'] : ['organization', 'ranking_type', 'year'];
         if (!is_array($identityFields) || !array_is_list($identityFields) || array_filter($identityFields, static fn($field): bool => !is_string($field))) {
@@ -332,6 +335,10 @@ final class TemplateImportSupport
         if (in_array(strtolower((string)$record['fileType']), ['csv', 'tsv'], true)) $sheets[0]['name'] = (string)$record['fileName'];
         $identityFields = $profile['identity_fields'] ?? ['import_key'];
         $required = array_values(array_unique(array_merge($profile['required_columns'], $identityFields)));
+        foreach (array_keys($profile['custom_fields'] ?? []) as $key) {
+            $field = 'custom_fields.' . $key;
+            if (isset($profile['mapping_rules'][$field])) $profile['header_aliases'][$field] ??= [];
+        }
         $requiredAliases = [];
         foreach ($required as $field) {
             $aliases = $profile['header_aliases'][$field] ?? [];
@@ -387,6 +394,12 @@ final class TemplateImportSupport
                 if ($field === 'display_precision') {
                     $displayPrecision = self::normalizeDisplayPrecision($rawValue);
                     if ($displayPrecision !== null) $mapped[$field] = $displayPrecision;
+                    continue;
+                }
+                if (str_starts_with($field, 'custom_fields.')) {
+                    $key = substr($field, strlen('custom_fields.'));
+                    $label = $profile['custom_fields'][$key] ?? null;
+                    if (is_string($label)) $mapped['custom_fields'][$key] = ['label' => $label, 'value' => trim($rawValue)];
                     continue;
                 }
                 $mapped[$field] = $field === 'import_key' ? $rawValue : trim($rawValue);

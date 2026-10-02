@@ -12,6 +12,7 @@
   const chartDefaultList = document.getElementById('rankingHistoryChartDefaultList');
   const chartDefaultsStatus = document.getElementById('rankingHistoryChartDefaultsStatus');
   const saveChartDefaults = document.getElementById('saveRankingHistoryChartDefaults');
+  const formNotice = document.getElementById('rankingHistoryAdminNotice');
   if (!api || !panel || !manager || !form || !list || !yearFilter) return;
 
   let rankings = [];
@@ -102,9 +103,16 @@
     list.querySelectorAll('[data-delete-ranking]').forEach(button => button.addEventListener('click', async () => {
       const row = rankings.find(item => String(item.id) === button.dataset.deleteRanking);
       if (!window.confirm(`Delete ${row?.organization || 'this'} ${row?.year || ''} ranking row?`)) return;
-      const response = await fetch(`${api}?id=${encodeURIComponent(button.dataset.deleteRanking)}`, { method: 'DELETE', headers: { 'X-CSRF-Token': token, Accept: 'application/json' } });
-      if (!response.ok) { window.alert('Unable to delete ranking.'); return; }
-      await refresh();
+      button.disabled = true;
+      try {
+        const response = await fetch(`${api}?id=${encodeURIComponent(button.dataset.deleteRanking)}`, { method: 'DELETE', headers: { 'X-CSRF-Token': token, Accept: 'application/json' } });
+        const result = await response.json().catch(() => ({}));
+        if (!response.ok) throw new Error(result.error || 'Unable to delete ranking.');
+        await refresh();
+      } catch (error) {
+        window.alert(error.message || 'Unable to delete ranking.');
+        button.disabled = false;
+      }
     }));
   }
 
@@ -128,11 +136,19 @@
       const ids = [...list.querySelectorAll('.bulk-delete-checkbox:checked')].map(checkbox => checkbox.dataset.id);
       if (!ids.length || !window.confirm(`Delete ${ids.length} selected ranking history row(s)?`)) return;
       button.disabled = true;
-      for (const id of ids) {
-        const response = await fetch(`${api}?id=${encodeURIComponent(id)}`, { method: 'DELETE', headers: { 'X-CSRF-Token': token, Accept: 'application/json' } });
-        if (!response.ok) window.alert('Some ranking history rows could not be deleted.');
+      try {
+        let failed = 0;
+        for (const id of ids) {
+          const response = await fetch(`${api}?id=${encodeURIComponent(id)}`, { method: 'DELETE', headers: { 'X-CSRF-Token': token, Accept: 'application/json' } });
+          if (!response.ok) failed += 1;
+        }
+        if (failed) window.alert(`${failed} of ${ids.length} ranking history row(s) could not be deleted.`);
+        await refresh();
+      } catch (error) {
+        window.alert(error.message || 'Unable to delete selected rankings.');
+      } finally {
+        button.disabled = false;
       }
-      await refresh();
     });
     updateBulkButton();
   }
@@ -140,7 +156,10 @@
   function updateBulkButton() {
     const button = document.getElementById('bulkDeleteRankingHistory');
     const count = list.querySelectorAll('.bulk-delete-checkbox:checked').length;
-    if (button) button.style.display = count ? 'inline-flex' : 'none';
+    if (button) {
+      button.style.display = count ? 'inline-flex' : 'none';
+      button.disabled = count === 0;
+    }
     const countLabel = document.getElementById('bulkDeleteCount');
     if (countLabel) countLabel.textContent = String(count);
     const selectAll = document.getElementById('selectAllRanking');
@@ -225,6 +244,14 @@
   });
   form.addEventListener('submit', async event => {
     event.preventDefault();
+    if (!form.reportValidity()) return;
+    const submitButton = form.querySelector('button[type="submit"]');
+    if (submitButton?.disabled) return;
+    if (submitButton) submitButton.disabled = true;
+    if (formNotice) {
+      formNotice.hidden = true;
+      formNotice.textContent = '';
+    }
     const id = document.getElementById('rankingHistoryAdminId').value;
     const payload = {
       organization: document.getElementById('rankingHistoryAdminBody').value.trim(),
@@ -233,25 +260,35 @@
       global_rank: document.getElementById('rankingHistoryAdminGlobalRank').value.trim(),
       info_text: document.getElementById('rankingHistoryAdminInfoText').value.trim()
     };
-    const response = await fetch(`${api}${id ? `?id=${encodeURIComponent(id)}` : ''}`, {
-      method: id ? 'PUT' : 'POST',
-      headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': token, Accept: 'application/json' },
-      body: JSON.stringify(payload)
-    });
-    const result = await response.json().catch(() => ({}));
-    if (!response.ok) {
-      if (response.status === 409 && result.duplicate_id) {
-        document.getElementById('editDuplicateLink').onclick = () => {
-          const duplicate = rankings.find(row => Number(row.id) === Number(result.duplicate_id));
-          if (duplicate) loadRankingIntoForm(duplicate);
-        };
-        document.getElementById('formDuplicateError').style.display = 'block';
-      } else window.alert(result.error || 'Unable to save ranking.');
-      return;
+    try {
+      const response = await fetch(`${api}${id ? `?id=${encodeURIComponent(id)}` : ''}`, {
+        method: id ? 'PUT' : 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': token, Accept: 'application/json' },
+        body: JSON.stringify(payload)
+      });
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        if (response.status === 409 && result.duplicate_id) {
+          document.getElementById('editDuplicateLink').onclick = () => {
+            const duplicate = rankings.find(row => Number(row.id) === Number(result.duplicate_id));
+            if (duplicate) loadRankingIntoForm(duplicate);
+          };
+          document.getElementById('formDuplicateError').style.display = 'block';
+          return;
+        }
+        throw new Error(result.error || 'Unable to save ranking.');
+      }
+      form.reset();
+      showList();
+      await refresh();
+    } catch (error) {
+      if (formNotice) {
+        formNotice.textContent = error.message || 'Unable to save ranking.';
+        formNotice.hidden = false;
+      } else window.alert(error.message || 'Unable to save ranking.');
+    } finally {
+      if (submitButton) submitButton.disabled = false;
     }
-    form.reset();
-    showList();
-    await refresh();
   });
   document.getElementById('cancelRankingHistoryAdminForm')?.addEventListener('click', () => { form.reset(); showList(); });
   const close = () => { panel.classList.remove('active'); panel.setAttribute('aria-hidden', 'true'); };

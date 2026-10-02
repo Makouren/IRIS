@@ -68,7 +68,9 @@ try {
         }
         if ($audit['entity_type'] === 'ranking') {
             $id = (int)$audit['entity_id'];
-            $fields = ['ranking_body_id', 'ranking_type_id', 'category_id', 'year', 'global_rank', 'global_rank_display', 'rank_low', 'rank_high', 'rank_value', 'ph_rank', 'ph_rank_display', 'ph_rank_value', 'source', 'seed_managed'];
+            $fields = ['ranking_body_id', 'ranking_type_id', 'category_id', 'year', 'global_rank', 'global_rank_display', 'rank_low', 'rank_high', 'rank_value', 'ph_rank', 'ph_rank_display', 'ph_rank_value', 'source'];
+            if (CustomImportFields::columnExists($pdo, 'rankings')) $fields[] = 'custom_fields';
+            $fields[] = 'seed_managed';
             $query = $pdo->prepare('SELECT ranking_id AS id, ' . implode(', ', array_map(static fn(string $field): string => '`' . $field . '`', $fields)) . ' FROM rankings WHERE ranking_id = ? FOR UPDATE');
             $query->execute([$id]);
             $current = $query->fetch(PDO::FETCH_ASSOC);
@@ -98,20 +100,29 @@ try {
                 $pdo->prepare('DELETE FROM summary_card_snapshots WHERE snapshot_id = ?')->execute([$snapshotId]);
                 $pdo->prepare('DELETE FROM summary_card_periods WHERE card_id = ? AND period_key = ?')->execute([$current['card_id'], $current['period_key']]);
             } else {
-                $fields = ['title', 'period_label', 'period_sort', 'period_precision', 'is_published', 'main_value', 'main_label', 'secondary_label', 'secondary_value', 'year_date', 'description', 'secondary_description', 'info_text', 'source_info', 'source_record_id', 'batch_id', 'last_source_record_id', 'last_batch_id'];
+                $fields = ['title', 'period_label', 'period_sort', 'period_precision', 'is_published', 'main_value', 'main_label', 'secondary_label', 'secondary_value', 'year_date', 'description', 'secondary_description', 'info_text', 'source_info'];
+                if (CustomImportFields::columnExists($pdo, 'summary_card_snapshots')) $fields[] = 'custom_fields';
+                $fields = array_merge($fields, ['source_record_id', 'batch_id', 'last_source_record_id', 'last_batch_id']);
                 $sets = implode(', ', array_map(static fn(string $field): string => '`' . $field . '` = ?', $fields));
                 $values = array_map(static fn(string $field) => $before[$field] ?? null, $fields);
                 $pdo->prepare('UPDATE summary_card_snapshots SET ' . $sets . ' WHERE snapshot_id = ?')->execute([...$values, $snapshotId]);
-                $pdo->prepare('INSERT INTO summary_card_periods (card_id, period_key, period_label, period_sort, period_precision, main_value, main_label, secondary_label, secondary_value, year_date, description, secondary_description, info_text, source_info, is_published)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                    ON DUPLICATE KEY UPDATE period_label = VALUES(period_label), period_sort = VALUES(period_sort), period_precision = VALUES(period_precision),
-                        main_value = VALUES(main_value), main_label = VALUES(main_label), secondary_label = VALUES(secondary_label), secondary_value = VALUES(secondary_value),
-                        year_date = VALUES(year_date), description = VALUES(description), secondary_description = VALUES(secondary_description), info_text = VALUES(info_text),
-                        source_info = VALUES(source_info), is_published = VALUES(is_published)')->execute([
+                $periodColumns = ['card_id', 'period_key', 'period_label', 'period_sort', 'period_precision', 'main_value', 'main_label', 'secondary_label', 'secondary_value', 'year_date', 'description', 'secondary_description', 'info_text', 'source_info'];
+                $periodValues = [
                     $before['card_id'], $before['period_key'], $before['period_label'], $before['period_sort'], $before['period_precision'], $before['main_value'],
                     $before['main_label'], $before['secondary_label'], $before['secondary_value'], $before['year_date'], $before['description'],
-                    $before['secondary_description'], $before['info_text'], $before['source_info'], $before['is_published']
-                ]);
+                    $before['secondary_description'], $before['info_text'], $before['source_info']
+                ];
+                if (CustomImportFields::columnExists($pdo, 'summary_card_periods')) {
+                    $periodColumns[] = 'custom_fields';
+                    $periodValues[] = $before['custom_fields'] ?? null;
+                }
+                $periodColumns[] = 'is_published';
+                $periodValues[] = $before['is_published'];
+                $periodUpdates = array_values(array_filter($periodColumns, static fn(string $field): bool => !in_array($field, ['card_id', 'period_key'], true)));
+                $periodSql = 'INSERT INTO summary_card_periods (' . implode(', ', array_map(static fn(string $field): string => '`' . $field . '`', $periodColumns)) . ')
+                    VALUES (' . implode(', ', array_fill(0, count($periodColumns), '?')) . ')
+                    ON DUPLICATE KEY UPDATE ' . implode(', ', array_map(static fn(string $field): string => '`' . $field . '` = VALUES(`' . $field . '`)', $periodUpdates));
+                $pdo->prepare($periodSql)->execute($periodValues);
             }
             SummaryCardHistory::syncLive($pdo, (string)$current['card_id']);
             continue;

@@ -1,14 +1,14 @@
 # Scanner Frontend Modules
 
-V5.3.0 adds destination-aware office uploads, a Super Admin File Archives workspace, editable saved-graph scopes, ranking-body display order, and public visualization grouping. `changeRefresh.js` provides role-aware refresh signaling across open IRIS pages.
+V5.7.0 adds explicit saved-graph editing, independent chart-color persistence, Summary Card category/default management, and Super Admin record merge/File History workflows. `changeRefresh.js` provides role-aware refresh signaling across open IRIS pages.
 
 [`../app.js`](../app.js) initializes the browser application and creates a shared context with scanner, database manager, state, and module APIs. Modules exchange callbacks through `ctx.api`; DOM queries stay with the module that owns the UI.
 
 ## State and rendering
 
-[`state.js`](state.js) stores the active scan/record, queues, filters, and chart instances. [`chartEngine.js`](chartEngine.js) handles Studio row filtering, sorting, grouping, limits, and ECharts options. [`studioWorkbench.js`](studioWorkbench.js) connects Studio controls and persists selected chart settings; Studio Publish approves the active record and publishes only its active chart.
+[`state.js`](state.js) stores the active scan/record, queues, filters, and chart instances. [`chartEngine.js`](chartEngine.js) handles Studio row filtering, sorting, grouping, limits, and ECharts options. [`studioWorkbench.js`](studioWorkbench.js) saves the active chart and its configuration to Saved Graphs; editing a saved graph restores its field mappings, filters, sorting, limits, grouping, and chart-specific settings. Studio Publish approves the active record and publishes only its active chart.
 
-`chartEngine.js` builds the ECharts option used by Studio, Saved Graphs, and the public Observatory. Draft and saved graph cards mount options through `createChart()`, which also adapts legacy saved label/value payloads. Supported chart types are Bar, Line, Pie, Doughnut, Ranked Bar, and Nested Pie.
+`chartEngine.js` builds the ECharts option used by Studio, Saved Graphs, and the public Observatory. Draft and saved graph cards mount options through `createChart()`, which also adapts legacy saved label/value payloads. Studio can reopen saved graph configuration for editing; shared field colors are saved independently from a chart. Supported chart types are Bar, Line, Pie, Doughnut, Ranked Bar, and Nested Pie.
 
 ## Module responsibilities
 
@@ -22,8 +22,8 @@ V5.3.0 adds destination-aware office uploads, a Super Admin File Archives worksp
 | `viewerTab.js` | Basic scan viewer |
 | `graphsTab.js` | Draft chart cards and print actions |
 | `savedGraphsTab.js` | Saved graph cards, filtering, selection, explicit per-graph publish, exports, print, and deletion |
-| `adminPortal.js` | Record archive, search, statistics, and status actions |
-| `studioWorkbench.js` | Studio record setup, field mapping, save, and publish of the active chart |
+| `adminPortal.js` | Record archive, search, statistics, status actions, and record merge/File History workflows |
+| `studioWorkbench.js` | Studio record setup, field mapping, Save Graph, and publish of the active chart |
 | `documentViewer.js` | Document viewing, paging, zoom, and copy behavior |
 | `tableGrid.js` | Editable Studio table and row/column operations |
 | `chartEngine.js` | ECharts rendering and Studio data transformations |

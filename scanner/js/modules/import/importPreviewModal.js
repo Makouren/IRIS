@@ -31,6 +31,7 @@ if (modal) {
   const selectionCount = modal.querySelector('[data-import-selection-count]');
   const pageSize = 200;
   let state = null;
+  let previewPending = false;
 
   function addDestinationImportButton(anchorId, destination, label) {
     const anchor = document.getElementById(anchorId);
@@ -40,8 +41,20 @@ if (modal) {
     button.type = 'button';
     button.className = 'btn-save-modal';
     button.dataset.importDestination = destination;
-    button.innerHTML = '<i class="fa-solid fa-file-import" aria-hidden="true"></i> ';
-    button.append(document.createTextNode(label));
+    if (destination === 'summary_cards') {
+      button.innerHTML = '<i class="fa-solid fa-file-import" aria-hidden="true"></i> ';
+      button.append(document.createTextNode(label));
+      button.className = 'summary-card-manager-menu-item';
+      const menu = document.getElementById('summaryCardManagerActionMenu');
+      if (menu) {
+        menu.append(button);
+        return;
+      }
+    }
+    if (!button.textContent) {
+      button.innerHTML = '<i class="fa-solid fa-file-import" aria-hidden="true"></i> ';
+      button.append(document.createTextNode(label));
+    }
     anchor.before(button);
   }
 
@@ -213,6 +226,10 @@ if (modal) {
   }
 
   async function previewRecord(recordId, destination, sheetName = null) {
+    if (previewPending) return;
+    previewPending = true;
+    loadSourceButton.disabled = true;
+    sheetChooseButton.disabled = true;
     state = { recordId, page: 0, rows: [], selected: new Set(), destination, rowVersions: {}, sheetName };
     summarySelection.classList.add('hidden');
     summarySelection.classList.remove('flex');
@@ -268,6 +285,10 @@ if (modal) {
       sheetPicker.classList.add('hidden');
       sheetPicker.classList.remove('flex');
       setNotice(error.message || 'Unable to preview this import.', true);
+    } finally {
+      previewPending = false;
+      loadSourceButton.disabled = !sourceSelect.value;
+      sheetChooseButton.disabled = !sheetSelect.value;
     }
   }
 
@@ -376,7 +397,10 @@ if (modal) {
       deleteUploadButton.disabled = !sourceSelect.value;
     }
   });
+  sheetChooseButton.disabled = true;
+  sheetSelect.addEventListener('change', () => { sheetChooseButton.disabled = !sheetSelect.value || previewPending; });
   sheetChooseButton.addEventListener('click', () => {
+    if (previewPending || !state?.recordId || !state?.destination) return;
     if (!sheetSelect.value) {
       setNotice('Choose a worksheet before continuing.', true);
       return;
@@ -385,7 +409,7 @@ if (modal) {
   });
 
   applyButton.addEventListener('click', async () => {
-    if (!state || !reviewedCheckbox.checked) return;
+    if (applyButton.disabled || !state || !reviewedCheckbox.checked) return;
     const selectedSummaryRows = state.destination === 'summary_cards'
       ? state.rows.filter(row => state.selected.has(row.key) && ['new_period', 'updated_period'].includes(row.kind))
       : [];

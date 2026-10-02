@@ -2,14 +2,21 @@
 require_once __DIR__.'/../includes/functions.php';
 requireRole(['super_admin', 'admin', 'user']);
 $fieldColors = [];
+$fieldColorUpdatedAt = [];
 try {
-    $storedFieldColors = db()->query('SELECT field_key, color FROM field_colors')->fetchAll(PDO::FETCH_KEY_PAIR);
-    foreach ($storedFieldColors as $fieldKey => $color) {
+    $storedFieldColors = db()->query('SELECT field_name AS field_key, color, updated_at FROM field_colors')->fetchAll(PDO::FETCH_ASSOC);
+    foreach ($storedFieldColors as $fieldColor) {
+        $fieldKey = $fieldColor['field_key'];
+        $color = $fieldColor['color'];
         $key = strtolower(preg_replace('/\s+/', ' ', trim((string)$fieldKey)) ?? '');
-        if ($key !== '' && is_string($color) && preg_match('/^#[0-9A-Fa-f]{6}$/', $color) === 1) $fieldColors[$key] = strtoupper($color);
+        if ($key !== '' && is_string($color) && preg_match('/^#[0-9A-Fa-f]{6}$/', $color) === 1) {
+            $fieldColors[$key] = strtoupper($color);
+            $fieldColorUpdatedAt[$key] = $fieldColor['updated_at'];
+        }
     }
 } catch (Throwable $e) {
     $fieldColors = [];
+    $fieldColorUpdatedAt = [];
 }
 ?>
 
@@ -75,7 +82,7 @@ try {
     <script src="<?= e(base_url('scanner/js/chartConfig.js')) ?>"></script>
     <script src="<?= e(base_url('scanner/js/chartMapping.js')) ?>"></script>
     <script src="<?= e(base_url('scanner/js/chartColors.js')) ?>?v=<?= (int) filemtime(__DIR__.'/../scanner/js/chartColors.js') ?>"></script>
-    <script>window.IRISFieldColors = <?= json_encode($fieldColors, JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>;</script>
+    <script>window.IRISFieldColors = <?= json_encode($fieldColors, JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>; window.IRISFieldColorUpdatedAt = <?= json_encode($fieldColorUpdatedAt, JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>;</script>
     <script src="<?= e(base_url('scanner/js/graphExport.js')) ?>?v=<?= (int) filemtime(__DIR__.'/../scanner/js/graphExport.js') ?>"></script>
     <script type="module">
         import * as IRISChartBuilder from '../scanner/js/modules/chartEngine.js?v=remove-rose-20261001';
@@ -640,6 +647,7 @@ try {
         let summaryCardsData = [];
         let summaryCardCategories = [];
         let activeSummaryCategorySlug = '';
+        let summaryCardDefaultCategorySlug = '';
 
         function updateSummaryCategoryUrl(slug, replace = false) {
             const url = new URL(window.location.href);
@@ -676,9 +684,11 @@ try {
 
         function restoreSummaryCategoryFromUrl(replaceUnknown = false) {
             const requested = new URL(window.location.href).searchParams.get('category') || '';
-            const category = summaryCardCategories.find(item => item.slug === requested);
+            const initialSlug = requested || summaryCardDefaultCategorySlug;
+            const category = summaryCardCategories.find(item => item.slug === initialSlug);
             activeSummaryCategorySlug = category ? category.slug : '';
             if (requested && !category && replaceUnknown) updateSummaryCategoryUrl('', true);
+            else if (!requested && activeSummaryCategorySlug && replaceUnknown) updateSummaryCategoryUrl(activeSummaryCategorySlug, true);
             renderSummaryCategoryChips();
             renderSummaryCards(summaryCardsData);
         }
@@ -708,13 +718,16 @@ try {
                     const description = card.description ? escapeHtmlDashboard(card.description) : '';
                     const secondaryDescription = card.secondary_description ? escapeHtmlDashboard(card.secondary_description) : '';
                     const infoText = card.info_text ? escapeHtmlDashboard(card.info_text) : '';
+                    const customFields = Object.values(card.custom_fields || {}).filter(field => field && field.value).map(field =>
+                        `<p class="mt-2 text-sm text-gray-700 dark:text-gray-200"><span class="font-semibold">${escapeHtmlDashboard(field.label)}:</span> ${escapeHtmlDashboard(field.value)}</p>`
+                    ).join('');
                     const mainLabel = escapeHtmlDashboard(card.main_label || 'Current snapshot');
                     const yearDate = escapeHtmlDashboard(card.year_date || '');
                     const infoLabel = escapeHtmlDashboard(`Information about ${card.title || 'this card'}`);
                     const historyControl = Number(card.history_count || 0) > 1 ? `
                         <div class="mt-3">
                             <button type="button" class="summary-card-history-toggle text-xs font-semibold text-emerald-700 hover:underline dark:text-emerald-300" data-id="${escapeHtmlDashboard(card.id)}" aria-expanded="false">View Historical Data</button>
-                            <div class="summary-card-history-panel mt-2 hidden rounded-lg border border-gray-200 p-3 dark:border-gray-700" data-id="${escapeHtmlDashboard(card.id)}"></div>
+                            <div class="summary-card-history-panel mt-2 hidden rounded-lg border border-gray-200 p-3 dark:border-gray-700" data-id="${escapeHtmlDashboard(card.id)}" role="status" aria-live="polite"></div>
                         </div>` : '';
                     return `
                         <article class="summary-card-shell relative overflow-visible rounded-2xl p-5 shadow-sm">
@@ -735,6 +748,7 @@ try {
                             </div>` : ''}
                             ${secondaryDescription ? `<p class="mt-2 text-sm italic text-gray-500 dark:text-gray-400">${secondaryDescription}</p>` : ''}
                             ${description ? `<p class="mt-3 text-sm text-gray-600 dark:text-gray-300">${description}</p>` : ''}
+                            ${customFields}
                             ${historyControl}
                         </article>`;
                 }).join('');
@@ -765,6 +779,7 @@ try {
 
             document.querySelectorAll('.summary-card-history-toggle').forEach(button => {
                 button.addEventListener('click', async () => {
+                    if (button.disabled) return;
                     const panel = [...document.querySelectorAll('.summary-card-history-panel')].find(item => item.dataset.id === button.dataset.id);
                     if (!panel) return;
                     if (!panel.classList.contains('hidden')) {
@@ -776,6 +791,7 @@ try {
                     button.setAttribute('aria-expanded', 'true');
                     if (panel.dataset.loaded === 'true') return;
                     panel.textContent = 'Loading published history...';
+                    button.disabled = true;
                     try {
                         const response = await fetch('<?= e(base_url('api/iris.php')) ?>?resource=summary_card_history&id=' + encodeURIComponent(button.dataset.id), { headers: { Accept: 'application/json' }, cache: 'no-store' });
                         const result = await response.json();
@@ -808,6 +824,12 @@ try {
                                 line.textContent = `${name}: ${value}`;
                                 detail.append(line);
                             }
+                            for (const field of Object.values(period?.custom_fields || {})) {
+                                if (!field?.value) continue;
+                                const line = document.createElement('p');
+                                line.textContent = `${field.label}: ${field.value}`;
+                                detail.append(line);
+                            }
                         };
                         select.addEventListener('change', renderPeriod);
                         label.append(select);
@@ -816,6 +838,8 @@ try {
                         panel.dataset.loaded = 'true';
                     } catch (error) {
                         panel.textContent = error.message;
+                    } finally {
+                        button.disabled = false;
                     }
                 });
             });
@@ -829,6 +853,7 @@ try {
                 const payload = await response.json();
                 summaryCardsData = payload.cards || [];
                 summaryCardCategories = payload.categories || [];
+                summaryCardDefaultCategorySlug = payload.summary_cards_default_category || '';
                 restoreSummaryCategoryFromUrl(true);
                 starRatingCardsData = payload.star_rating_cards || [];
                 starRatingCategories = payload.star_rating_categories || [];
@@ -956,6 +981,7 @@ try {
                 })
                 .then(data => {
                     window.IRISFieldColors = data.field_colors || window.IRISFieldColors || {};
+                    window.IRISFieldColorUpdatedAt = data.field_color_updated_at || window.IRISFieldColorUpdatedAt || {};
                     renderPublishedScannerGraphs(data.graphs || []);
                 })
                 .catch(() => {

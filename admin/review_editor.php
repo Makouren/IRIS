@@ -25,7 +25,7 @@ require_once __DIR__.'/includes/header.php';
             </div>
         </div>
         <div id="summaryCardEditorPanel" class="modal-overlay" aria-hidden="true">
-            <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="summaryCardEditorTitleHeading" style="max-width: 720px; max-height: calc(100vh - 2rem); overflow-y: auto;">
+            <div class="modal-card summary-card-editor-modal" role="dialog" aria-modal="true" aria-labelledby="summaryCardEditorTitleHeading">
                 <div class="modal-header">
                     <h3 id="summaryCardEditorTitleHeading" class="modal-title">Manage summary cards</h3>
                     <button type="button" id="closeSummaryCardEditor" class="export-cancel-button" aria-label="Close">&times;</button>
@@ -41,7 +41,7 @@ require_once __DIR__.'/includes/header.php';
                                 <option value="uncategorized">Uncategorized</option>
                             </select>
                         </label>
-                        <div style="display:flex; gap:0.5rem; align-items:center;">
+                        <div class="summary-card-manager-actions">
                             <label id="selectAllSummaryCardsLabel" style="display:inline-flex; align-items:center; gap:0.4rem; font-size:0.8rem; font-weight:700; cursor:pointer; color:var(--text-muted);">
                                 <input type="checkbox" id="selectAllSummaryCards" style="width:1rem;height:1rem; cursor:pointer;"> Select all
                             </label>
@@ -57,12 +57,48 @@ require_once __DIR__.'/includes/header.php';
                             <button id="bulkUnpublishSummaryCards" type="button" class="export-cancel-button" style="display:none;">
                                 <i class="fa-solid fa-circle-minus" aria-hidden="true"></i> Unpublish Selected (<span id="bulkUnpublishSummaryCardsCount">0</span>)
                             </button>
-                            <button id="addSummaryCardFromManager" type="button" class="btn-save-modal"><i class="fa-solid fa-plus" aria-hidden="true"></i> Add summary card</button>
+                            <details class="summary-card-manager-actions-menu">
+                                <summary class="summary-card-manager-menu-toggle">
+                                    <i class="fa-solid fa-ellipsis" aria-hidden="true"></i> Actions
+                                </summary>
+                                <div id="summaryCardManagerActionMenu" class="summary-card-manager-menu" aria-label="Summary card actions">
+                                <button id="addSummaryCardFromManager" type="button"><i class="fa-solid fa-plus" aria-hidden="true"></i> Add summary card</button>
+                                <?php if (($_SESSION['role'] ?? '') === 'super_admin'): ?>
+                                    <button id="summaryCardManagerShowCategory" type="button"><i class="fa-solid fa-folder-plus" aria-hidden="true"></i> Add category</button>
+                                <?php endif; ?>
+                                </div>
+                            </details>
                         </div>
                     </div>
+                    <section id="summaryCardManagerCategoryAction" class="summary-card-manager-category-action" hidden aria-labelledby="summaryCardManagerCategoryHeading">
+                        <label id="summaryCardManagerCategoryHeading" for="summaryCardManagerNewCategory">New category name</label>
+                        <input id="summaryCardManagerNewCategory" type="text" class="form-input" maxlength="40" placeholder="Category name" aria-describedby="summaryCardManagerCategoryStatus">
+                        <div class="summary-card-manager-category-buttons">
+                            <button id="summaryCardManagerAddCategory" type="button" class="btn-save-modal">Confirm add</button>
+                            <button id="summaryCardManagerCancelCategory" type="button" class="export-cancel-button">Cancel</button>
+                        </div>
+                    </section>
+                    <span id="summaryCardManagerCategoryStatus" role="status" aria-live="polite" style="display:block; margin:-0.35rem 0 0.75rem; color:var(--text-muted); font-size:0.78rem;"></span>
+                    <?php if (($_SESSION['role'] ?? '') === 'super_admin'): ?>
+                        <section class="summary-card-public-default" aria-labelledby="summaryCardPublicDefaultHeading">
+                            <div>
+                                <h4 id="summaryCardPublicDefaultHeading">Public summary-card default</h4>
+                                <p>Choose which category visitors see first. They can still switch categories.</p>
+                            </div>
+                            <label for="summaryCardPublicDefaultCategory">Default category
+                                <select id="summaryCardPublicDefaultCategory" class="form-input">
+                                    <option value="">All categories</option>
+                                </select>
+                            </label>
+                            <button id="saveSummaryCardPublicDefault" type="button" class="btn-save-modal">Save default</button>
+                            <span id="summaryCardPublicDefaultStatus" role="status" aria-live="polite"></span>
+                        </section>
+                    <?php endif; ?>
                     <div id="summaryCardEditorList" style="display:grid; gap:0.75rem;"></div>
                     <section style="margin-top:1.25rem; border-top:1px solid var(--border-light); padding-top:1rem;">
-                        <h4 style="font-size:0.9rem; font-weight:800; color:var(--text-main); margin-bottom:0.6rem;">Manage categories</h4>
+                        <div style="display:flex; flex-wrap:wrap; align-items:center; gap:0.5rem; margin-bottom:0.6rem;">
+                            <h4 style="font-size:0.9rem; font-weight:800; color:var(--text-main);">Manage categories</h4>
+                        </div>
                         <div id="summaryCardCategoryList" style="display:grid; gap:0.5rem;"></div>
                     </section>
                 </div>
@@ -70,16 +106,16 @@ require_once __DIR__.'/includes/header.php';
                     <input type="hidden" id="summaryCardEditorId">
                     <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem;">
                         <div><label class="form-label" for="summaryCardEditorImportKey">Global Label</label><input type="text" id="summaryCardEditorImportKey" class="form-input" maxlength="100" required></div>
-                        <div><label class="form-label" for="summaryCardEditorTitle">Title</label><input type="text" id="summaryCardEditorTitle" class="form-input" required></div>
-                        <div><label class="form-label" for="summaryCardEditorMainValue">Main Value</label><input type="text" id="summaryCardEditorMainValue" class="form-input" required></div>
-                        <div><label class="form-label" for="summaryCardEditorMainLabel">Main Label</label><input type="text" id="summaryCardEditorMainLabel" class="form-input" required></div>
-                        <div><label class="form-label" for="summaryCardEditorYearDate">Year / Date</label><input type="text" id="summaryCardEditorYearDate" class="form-input"></div>
-                        <div><label class="form-label" for="summaryCardEditorSecondaryLabel">Secondary Label</label><input type="text" id="summaryCardEditorSecondaryLabel" class="form-input"></div>
-                        <div><label class="form-label" for="summaryCardEditorSecondaryValue">Secondary Value</label><input type="text" id="summaryCardEditorSecondaryValue" class="form-input"></div>
-                        <div style="grid-column: 1 / -1;"><label class="form-label" for="summaryCardEditorDescription">Description</label><textarea id="summaryCardEditorDescription" class="form-input" rows="2"></textarea></div>
-                        <div style="grid-column: 1 / -1;"><label class="form-label" for="summaryCardEditorSecondaryDescription">Italic Supporting Text</label><textarea id="summaryCardEditorSecondaryDescription" class="form-input" rows="2"></textarea></div>
-                        <div style="grid-column: 1 / -1;"><label class="form-label" for="summaryCardEditorInfoText">ⓘ Information</label><textarea id="summaryCardEditorInfoText" class="form-input" rows="2"></textarea></div>
-                        <div><label class="form-label" for="summaryCardEditorDisplayOrder">Display Order</label><input type="number" id="summaryCardEditorDisplayOrder" class="form-input" value="0" min="0"></div>
+                        <div><label class="form-label" for="summaryCardEditorTitle">Title</label><input type="text" id="summaryCardEditorTitle" class="form-input" maxlength="255" required></div>
+                        <div><label class="form-label" for="summaryCardEditorMainValue">Main Value</label><input type="text" id="summaryCardEditorMainValue" class="form-input" maxlength="255" required></div>
+                        <div><label class="form-label" for="summaryCardEditorMainLabel">Main Label</label><input type="text" id="summaryCardEditorMainLabel" class="form-input" maxlength="255" required></div>
+                        <div><label class="form-label" for="summaryCardEditorYearDate">Year / Date</label><input type="text" id="summaryCardEditorYearDate" class="form-input" maxlength="255"></div>
+                        <div><label class="form-label" for="summaryCardEditorSecondaryLabel">Secondary Label</label><input type="text" id="summaryCardEditorSecondaryLabel" class="form-input" maxlength="255"></div>
+                        <div><label class="form-label" for="summaryCardEditorSecondaryValue">Secondary Value</label><input type="text" id="summaryCardEditorSecondaryValue" class="form-input" maxlength="255"></div>
+                        <div style="grid-column: 1 / -1;"><label class="form-label" for="summaryCardEditorDescription">Description</label><textarea id="summaryCardEditorDescription" class="form-input" rows="2" maxlength="65535"></textarea></div>
+                        <div style="grid-column: 1 / -1;"><label class="form-label" for="summaryCardEditorSecondaryDescription">Italic Supporting Text</label><textarea id="summaryCardEditorSecondaryDescription" class="form-input" rows="2" maxlength="65535"></textarea></div>
+                        <div style="grid-column: 1 / -1;"><label class="form-label" for="summaryCardEditorInfoText">ⓘ Information</label><textarea id="summaryCardEditorInfoText" class="form-input" rows="2" maxlength="65535"></textarea></div>
+                        <div><label class="form-label" for="summaryCardEditorDisplayOrder">Display Order</label><input type="number" id="summaryCardEditorDisplayOrder" class="form-input" value="0" min="0" step="1"></div>
                         <div><label class="form-label" for="summaryCardEditorCategory">Categories</label><select id="summaryCardEditorCategory" class="form-input" multiple size="3" aria-describedby="summaryCardEditorCategoryHelp"></select><span id="summaryCardEditorCategoryHelp" class="text-xs" style="color:var(--text-muted);">Select one or more; leave empty for Uncategorized.</span><div style="display:flex; gap:0.5rem; margin-top:0.5rem;"><button type="button" id="summaryCardEditorAddCategory" class="btn-studio-action">+ New category</button><input type="text" id="summaryCardEditorNewCategory" class="form-input" maxlength="40" placeholder="Category name" style="display:none;"></div></div>
                         <div><label class="form-label" for="summaryCardEditorPrecision">Display Precision</label><select id="summaryCardEditorPrecision" class="form-input"><option value="0">No decimals</option><option value="1">1 decimal</option><option value="2" selected>2 decimals</option></select></div>
                         <label style="display:flex; align-items:center; gap:0.5rem; margin-top:0.6rem; font-size:0.8rem; font-weight:700; color: var(--text-muted);"><input type="checkbox" id="summaryCardEditorPublished"> Publish card</label>
@@ -129,7 +165,7 @@ require_once __DIR__.'/includes/header.php';
                     <label class="form-label">Title<input type="text" id="starRatingTitle" name="title" class="form-input" maxlength="255" required></label>
                     <div><label class="form-label" for="starRatingCategorySelect">Categories</label><select id="starRatingCategorySelect" class="form-input" multiple size="3" aria-describedby="starRatingCategoryHelp"></select><span id="starRatingCategoryHelp" class="text-xs" style="color:var(--text-muted);">Select one or more; leave empty for Uncategorized.</span><div style="display:flex; gap:0.5rem; margin-top:0.5rem;"><button type="button" id="starRatingAddCategory" class="btn-studio-action">+ New category</button><input type="text" id="starRatingNewCategory" class="form-input" maxlength="40" placeholder="Category name" style="display:none;"></div></div>
                     <label class="form-label">Year / Date<input type="text" id="starRatingYear" name="year" class="form-input" maxlength="10" placeholder="2026"></label>
-                    <label class="form-label">Display Order<input type="number" id="starRatingDisplayOrder" name="display_order" class="form-input" value="0" step="1"></label>
+                    <label class="form-label">Display Order<input type="number" id="starRatingDisplayOrder" name="display_order" class="form-input" value="0" min="0" step="1"></label>
                     <label class="form-label">Logo (PNG, JPG, WebP, SVG; max 1 MB)<input type="file" id="starRatingLogo" name="logo" class="form-input" accept=".png,.jpg,.jpeg,.webp,.svg,image/png,image/jpeg,image/webp,image/svg+xml"></label>
                     <div id="starRatingCurrentLogo" style="display:none; grid-column:1/-1; align-items:center; gap:0.75rem;">
                         <img id="starRatingCurrentLogoImage" alt="Current star card logo" style="max-width:150px; max-height:72px; object-fit:contain;">
@@ -179,6 +215,11 @@ require_once __DIR__.'/includes/header.php';
                         <span id="rankingHistoryChartDefaultsStatus" class="text-xs" role="status" aria-live="polite"></span>
                     </div>
                     <div style="display:flex; gap:0.5rem; align-items:center;">
+                        <?php if (($_SESSION['role'] ?? '') === 'super_admin'): ?>
+                            <button type="button" data-ranking-body-manager-open class="export-cancel-button" aria-haspopup="dialog" aria-controls="rankingBodyManagerModal">
+                                <i class="fa-solid fa-building-columns" aria-hidden="true"></i> Manage ranking bodies
+                            </button>
+                        <?php endif; ?>
                         <label id="selectAllRankingLabel" style="display:inline-flex; align-items:center; gap:0.4rem; font-size:0.8rem; font-weight:700; cursor:pointer; color:var(--text-muted);">
                             <input type="checkbox" id="selectAllRanking" style="width:1rem;height:1rem; cursor:pointer;"> Select all
                         </label>
@@ -192,9 +233,10 @@ require_once __DIR__.'/includes/header.php';
             </div>
             <form id="rankingHistoryAdminForm" style="display:none;">
                 <input type="hidden" id="rankingHistoryAdminId">
+                <p id="rankingHistoryAdminNotice" role="status" aria-live="polite" hidden></p>
                 <div style="display:grid; grid-template-columns:repeat(auto-fit,minmax(190px,1fr)); gap:1rem;">
-                    <label class="form-label">Organization<input type="text" id="rankingHistoryAdminBody" list="rankingBodySuggestions" class="form-input bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 border-gray-300 dark:border-gray-600 rounded-lg" placeholder="Select or type organization..." required><datalist id="rankingBodySuggestions"></datalist></label>
-                    <label class="form-label">Ranking type<input type="text" id="rankingHistoryAdminType" list="rankingTypeSuggestions" class="form-input bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 border-gray-300 dark:border-gray-600 rounded-lg" maxlength="320" placeholder="QS Asia"><datalist id="rankingTypeSuggestions"></datalist></label>
+                    <label class="form-label">Organization<input type="text" id="rankingHistoryAdminBody" list="rankingBodySuggestions" class="form-input bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 border-gray-300 dark:border-gray-600 rounded-lg" maxlength="100" placeholder="Select or type organization..." required><datalist id="rankingBodySuggestions"></datalist></label>
+                    <label class="form-label">Ranking type<input type="text" id="rankingHistoryAdminType" list="rankingTypeSuggestions" class="form-input bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 border-gray-300 dark:border-gray-600 rounded-lg" maxlength="320" placeholder="QS Asia" required><datalist id="rankingTypeSuggestions"></datalist></label>
                     <label class="form-label">Year<input type="number" id="rankingHistoryAdminYear" class="form-input" min="1900" max="2200" step="1" required></label>
                     <label class="form-label">Rank display<input type="text" id="rankingHistoryAdminGlobalRank" class="form-input" maxlength="50" placeholder="161, 601-650, or 601+" required></label>
                     <label class="form-label" style="grid-column:1/-1;">Information<textarea id="rankingHistoryAdminInfoText" class="form-input" rows="3" maxlength="65535" placeholder="Additional context shown from the information icon"></textarea></label>
@@ -208,7 +250,7 @@ require_once __DIR__.'/includes/header.php';
         </div>
     </div>
 
-    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem; margin-bottom: 1.5rem;">
+    <div class="review-editor-stats">
         <div style="background: var(--bg-card); border: 1px solid var(--border-light); padding: 1.1rem 1.25rem; border-radius: var(--radius-md); box-shadow: var(--card-shadow);">
             <div style="font-size: 0.75rem; color: var(--text-muted); font-weight: 800; text-transform: uppercase;">TOTAL SCANNED FILES</div>
             <div id="statTotalDb" style="font-size: 1.6rem; font-weight: 800; font-family: var(--font-mono); color: var(--clsu-green);">0</div>
@@ -311,9 +353,9 @@ require_once __DIR__.'/includes/header.php';
                             <p id="studioChartSubtitleDisplay" style="font-size: 0.78rem; color: var(--text-muted);">Live interactive rendering from data fields below</p>
                         </div>
 
-                        <div style="display: flex; align-items: center; gap: 0.5rem; margin-left: auto; flex-shrink: 0;">
-                            <label style="font-size: 0.78rem; font-weight: 800; color: var(--text-muted); text-transform: uppercase; white-space: nowrap;">Chart Type:</label>
-                            <select id="studioChartTypeSelect" class="form-input" style="width: auto; min-width: 150px; padding: 0.35rem 0.75rem; font-size: 0.82rem; font-weight: 700; color: var(--text-main);">
+                        <div class="studio-chart-type-group">
+                            <label class="studio-field-mapping-label">Chart Type:</label>
+                            <select id="studioChartTypeSelect" class="form-input studio-chart-type-select" style="font-size: 0.82rem; font-weight: 700; color: var(--text-main);">
                                 <option value="bar">Bar Chart</option>
                                 <option value="line">Line Chart</option>
                                 <option value="pie">Pie Chart</option>
@@ -324,48 +366,52 @@ require_once __DIR__.'/includes/header.php';
                         </div>
                     </div>
 
-                    <div id="studioFieldMappingRow" style="background: rgba(59,130,246,0.08); border: 1px solid rgba(147,197,253,0.45); border-radius: var(--radius-sm); padding: 0.65rem 1rem; margin-bottom: 0.75rem; display: flex; flex-wrap: wrap; align-items: center; gap: 0.65rem;">
-                        <span style="font-size: 0.78rem; font-weight: 800; color: var(--text-brand); text-transform: uppercase;"><i class="fa-solid fa-ruler-combined" aria-hidden="true"></i> Field Mapping:</span>
-                        <div style="display: flex; align-items: center; gap: 0.35rem;">
-                            <label style="font-size: 0.75rem; font-weight: 700; color: var(--text-muted); white-space: nowrap;" id="studioCategoryLabel">Category (X-axis):</label>
-                            <select id="studioCategoryCol" class="form-input" style="width: auto; padding: 0.3rem 0.55rem; font-size: 0.78rem;" aria-label="Category column"></select>
+                    <div id="studioFieldMappingRow" class="studio-field-mapping">
+                        <span class="studio-field-mapping-title"><i class="fa-solid fa-ruler-combined" aria-hidden="true"></i> Field Mapping:</span>
+                        <div class="studio-field-mapping-group">
+                            <label class="studio-field-mapping-label" id="studioCategoryLabel">Category (X-axis):</label>
+                            <select id="studioCategoryCol" class="form-input studio-field-mapping-select" aria-label="Category column"></select>
                         </div>
-                        <div style="display: flex; align-items: center; gap: 0.35rem;">
-                            <label style="font-size: 0.75rem; font-weight: 700; color: var(--text-muted); white-space: nowrap;" id="studioValueLabel">Value (Y-axis):</label>
-                            <select id="studioValueCol" class="form-input" style="width: auto; padding: 0.3rem 0.55rem; font-size: 0.78rem;" aria-label="Value column"></select>
+                        <div class="studio-field-mapping-group">
+                            <label class="studio-field-mapping-label" id="studioValueLabel">Value (Y-axis):</label>
+                            <select id="studioValueCol" class="form-input studio-field-mapping-select" aria-label="Value column"></select>
                         </div>
-                        <div id="studioGroupFieldWrapper" style="display: none; align-items: center; gap: 0.35rem;">
-                            <label for="studioGroupField" style="font-size: 0.75rem; font-weight: 700; color: var(--text-muted); white-space: nowrap;">Group (inner ring):</label>
-                            <select id="studioGroupField" class="form-input" style="width: auto; padding: 0.3rem 0.55rem; font-size: 0.78rem;"></select>
+                        <div id="studioGroupFieldWrapper" class="studio-field-mapping-group" style="display: none;">
+                            <label for="studioGroupField" class="studio-field-mapping-label">Group (inner ring):</label>
+                            <select id="studioGroupField" class="form-input studio-field-mapping-select"></select>
                         </div>
-                        <div style="display: flex; align-items: center; gap: 0.35rem;">
-                            <label style="font-size: 0.75rem; font-weight: 700; color: var(--text-muted); white-space: nowrap;" id="studioValuePrecisionLabel">Display Precision:</label>
-                            <select id="studioValuePrecisionSelect" class="form-input" style="width: auto; padding: 0.3rem 0.55rem; font-size: 0.78rem;" aria-label="Display precision">
+                        <div class="studio-field-mapping-group">
+                            <label class="studio-field-mapping-label" id="studioValuePrecisionLabel">Display Precision:</label>
+                            <select id="studioValuePrecisionSelect" class="form-input studio-field-mapping-select" aria-label="Display precision">
                                 <option value="0">No decimals</option>
                                 <option value="1">1 decimal</option>
                                 <option value="2" selected>2 decimals</option>
                             </select>
                         </div>
-                        <div id="studioRankedYearWrapper" style="display: none; align-items: center; gap: 0.35rem;">
-                            <label style="font-size: 0.75rem; font-weight: 700; color: var(--text-muted); white-space: nowrap;" id="studioRankedYearLabel">Year:</label>
-                            <select id="studioRankedYearSelect" class="form-input" style="width: auto; padding: 0.3rem 0.55rem; font-size: 0.78rem;" aria-label="Year for Ranked Bar Chart"></select>
+                        <div id="studioRankedYearWrapper" class="studio-field-mapping-group" style="display: none;">
+                            <label class="studio-field-mapping-label" id="studioRankedYearLabel">Year:</label>
+                            <select id="studioRankedYearSelect" class="form-input studio-field-mapping-select" aria-label="Year for Ranked Bar Chart"></select>
                         </div>
-                        <div id="studioRankedReverseOrderWrapper" style="display: none; align-items: center; gap: 0.35rem;">
-                            <label style="font-size: 0.75rem; font-weight: 700; color: var(--text-muted); white-space: nowrap;" id="studioRankedReverseOrderLabel">
-                                <input id="studioRankedReverseOrder" type="checkbox" style="accent-color: var(--clsu-green); margin-right: 0.25rem;" aria-label="Reverse ranked bar display order">Reverse order
+                        <div id="studioRankedReverseOrderWrapper" class="studio-field-mapping-group" style="display: none;">
+                            <label class="studio-field-mapping-label" id="studioRankedReverseOrderLabel">
+                                <input id="studioRankedReverseOrder" type="checkbox" aria-label="Reverse ranked bar display order">Reverse order
                             </label>
                         </div>
                         <div id="studioFieldWarning" style="display:none; font-size: 0.75rem; color: #DC2626; font-weight: 700; background: rgba(254,242,242,0.9); border: 1px solid #FECACA; border-radius: 4px; padding: 0.2rem 0.6rem;"></div>
                     </div>
 
                         <div id="studioColorCustomizer" class="studio-color-customizer" hidden>
-                            <div class="studio-color-heading">
-                                <strong>Chart colors</strong>
-                                <button id="studioColorReset" type="button" class="export-cancel-button">Reset to default</button>
+                            <div class="studio-color-section-header">
+                                <button id="studioColorSectionToggle" type="button" class="studio-color-section-toggle" aria-expanded="false" aria-controls="studioColorContent">
+                                    <span>Chart colors</span><span id="studioColorCount" class="studio-color-section-count"></span>
+                                    <i class="fa-solid fa-chevron-down studio-color-section-chevron" aria-hidden="true"></i>
+                                </button>
                             </div>
-                            <div class="studio-color-heading" style="margin-top:.65rem;">
+                            <div id="studioColorContent" class="studio-color-section-content">
+                            <div class="studio-color-heading">
                                 <label style="display:flex;align-items:center;gap:.45rem;font-size:.78rem;font-weight:700;color:var(--text-muted);"><input id="studioColorApplyAll" type="checkbox" checked> Apply to all charts</label>
                                 <button id="studioManageFieldColors" type="button" class="export-cancel-button">Field colors</button>
+                                <button id="studioColorReset" type="button" class="export-cancel-button">Reset to default</button>
                             </div>
                             <div id="studioColorSwatches" class="studio-color-swatches" aria-label="Chart series and category colors"></div>
                             <div id="studioColorPickerPanel" class="studio-color-picker-panel" hidden>
@@ -381,6 +427,7 @@ require_once __DIR__.'/includes/header.php';
                                     <div id="studioColorPresets" class="studio-color-presets"></div>
                                 </div>
                                 <button id="studioColorSaveField" type="button" class="btn-save-modal" hidden>Save field color</button>
+                            </div>
                             </div>
                         </div>
                         <div id="studioFieldColorsModal" class="modal-overlay" aria-hidden="true">
@@ -459,12 +506,12 @@ require_once __DIR__.'/includes/header.php';
 
                     <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem; margin-bottom: 1.25rem; background: var(--bg-highlight); padding: 1.25rem; border-radius: var(--radius-md); border: 1px solid var(--border-light);">
                         <div>
-                            <label class="form-label" style="font-weight: 800; font-size: 0.78rem; color: var(--text-muted); text-transform: uppercase; margin-bottom: 0.35rem; display: block;">Classification Category</label>
-                            <input type="text" id="studioDocTypeInput" class="form-input" style="font-weight: 600; color: var(--text-main);">
+                            <label class="form-label" for="studioDocTypeInput" style="font-weight: 800; font-size: 0.78rem; color: var(--text-muted); text-transform: uppercase; margin-bottom: 0.35rem; display: block;">Classification Category</label>
+                            <input type="text" id="studioDocTypeInput" class="form-input" required style="font-weight: 600; color: var(--text-main);">
                         </div>
                         <div>
-                            <label class="form-label" style="font-weight: 800; font-size: 0.78rem; color: var(--text-muted); text-transform: uppercase; margin-bottom: 0.35rem; display: block;">Publication Status</label>
-                            <select id="studioStatusSelect" class="form-input" style="font-weight: 600; color: var(--text-main);">
+                            <label class="form-label" for="studioStatusSelect" style="font-weight: 800; font-size: 0.78rem; color: var(--text-muted); text-transform: uppercase; margin-bottom: 0.35rem; display: block;">Publication Status</label>
+                            <select id="studioStatusSelect" class="form-input" required style="font-weight: 600; color: var(--text-main);">
                                 <option value="Pending Review">Pending Review</option>
                                 <option value="Approved">Published</option>
                                 <option value="Needs Revision">Needs Revision</option>
@@ -477,8 +524,8 @@ require_once __DIR__.'/includes/header.php';
                     </div>
 
                     <div style="display: flex; justify-content: flex-end; gap: 0.85rem; padding-top: 1rem; border-top: 1px solid var(--border-light);">
-                        <button id="studioBtnSave" type="button" class="btn-save-modal">
-                            <i class="fa-solid fa-floppy-disk" aria-hidden="true"></i> Save Dashboard Changes
+                        <button id="studioBtnSave" type="button" class="btn-save-modal" title="Save this chart to Saved Graphs and save dataset changes">
+                            <i class="fa-solid fa-floppy-disk" aria-hidden="true"></i> Save Graph
                         </button>
                         <button id="studioBtnApprove" type="button" class="btn-approve-modal">
                             <i class="fa-solid fa-circle-check" aria-hidden="true"></i> Publish
@@ -502,46 +549,6 @@ require_once __DIR__.'/includes/header.php';
                 <button id="submitManualDataset" type="submit" class="btn-save-modal">Create Dataset</button>
             </div>
         </form>
-    </div>
-
-    <div class="clsu-section-title" style="margin-top: 2rem;">
-        <span><i class="fa-solid fa-folder" aria-hidden="true"></i></span> Scanned Records Archive & Ingestion Logs
-    </div>
-
-    <div style="display: flex; gap: 1rem; margin-bottom: 1rem; flex-wrap: wrap;">
-        <input type="text" id="adminSearchInput" class="form-input" placeholder="Search records by filename, category, or values..." style="flex: 1; min-width: 250px;">
-        <select id="adminOfficeFilter" class="form-input" style="width: auto; min-width: 180px;"><option value="all">All offices</option></select>
-        <select id="adminStatusFilter" class="form-input" style="width: auto;">
-            <option value="all">All Statuses</option>
-            <option value="Pending Review">Pending Review</option>
-            <option value="Approved">Published</option>
-            <option value="Needs Revision">Needs Revision</option>
-        </select>
-    </div>
-
-    <div class="table-container" style="box-shadow: var(--card-shadow);">
-        <div id="adminBulkActions" class="admin-bulk-actions" hidden>
-            <span id="adminBulkSelectionCount">0 records selected</span>
-            <button id="adminBulkPublish" type="button" class="archive-load-button" disabled><i class="fa-solid fa-circle-check" aria-hidden="true"></i> Publish</button>
-            <button id="adminBulkUnpublish" type="button" class="export-cancel-button" disabled><i class="fa-solid fa-eye-slash" aria-hidden="true"></i> Unpublish</button>
-            <button id="adminBulkDelete" type="button" class="archive-delete-button" disabled><i class="fa-solid fa-trash" aria-hidden="true"></i> Bulk Delete</button>
-            <button id="adminClearSelection" type="button" class="export-cancel-button">Clear selection</button>
-        </div>
-        <table class="data-table">
-            <thead>
-                <tr>
-                    <th><input id="adminSelectAll" type="checkbox" aria-label="Select all visible records"></th>
-                    <th>Record ID</th>
-                    <th>File Name</th>
-                    <th>Uploaded By</th>
-                    <th>Format</th>
-                    <th>Review Status</th>
-                    <th>Scanned Date</th>
-                    <th>Actions</th>
-                </tr>
-            </thead>
-            <tbody id="adminRecordsTableBody"></tbody>
-        </table>
     </div>
 
     <div id="recordEditModal" class="modal-overlay">
@@ -568,12 +575,26 @@ require_once __DIR__.'/includes/header.php';
             const editorHeading = document.getElementById('summaryCardEditorTitleHeading');
             const categorySelect = document.getElementById('summaryCardEditorCategory');
             const newCategoryInput = document.getElementById('summaryCardEditorNewCategory');
+            const managerNewCategoryInput = document.getElementById('summaryCardManagerNewCategory');
+            const managerCategoryAction = document.getElementById('summaryCardManagerCategoryAction');
+            const managerCategoryMenuButton = document.getElementById('summaryCardManagerShowCategory');
+            const managerAddCategoryButton = document.getElementById('summaryCardManagerAddCategory');
+            const managerCancelCategoryButton = document.getElementById('summaryCardManagerCancelCategory');
+            const managerActionsMenu = document.querySelector('.summary-card-manager-actions-menu');
+            const managerCategoryStatus = document.getElementById('summaryCardManagerCategoryStatus');
             const categoryFilter = document.getElementById('summaryCardCategoryFilter');
+            const publicDefaultCategory = document.getElementById('summaryCardPublicDefaultCategory');
+            const publicDefaultStatus = document.getElementById('summaryCardPublicDefaultStatus');
+            const savePublicDefaultButton = document.getElementById('saveSummaryCardPublicDefault');
             const cardSearch = document.getElementById('summaryCardSearch');
             let cards = [];
             let categories = [];
+            let publicDefaultCategorySlug = '';
             const escapeHtml = value => String(value ?? '').replace(/[&<>"']/g, character => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[character]));
             const mutationHeaders = () => ({ 'Accept': 'application/json', 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken });
+            managerActionsMenu.addEventListener('click', event => {
+                if (event.target.closest('button')) managerActionsMenu.open = false;
+            });
             const closeEditor = () => {
                 editorPanel.classList.remove('active');
                 editorPanel.setAttribute('aria-hidden', 'true');
@@ -607,6 +628,32 @@ require_once __DIR__.'/includes/header.php';
                 if ([...categoryFilter.options].some(option => option.value === filterValue)) categoryFilter.value = filterValue;
             }
 
+            function renderPublicDefaultCategory() {
+                if (!publicDefaultCategory) return;
+                const publishedCategoryIds = new Set(cards
+                    .filter(card => card.is_published === true || card.is_published === 1 || card.is_published === '1')
+                    .flatMap(card => card.category_ids || (card.category_id ? [card.category_id] : []))
+                    .map(String));
+                publicDefaultCategory.replaceChildren(
+                    new Option('All categories', ''),
+                    ...categories.map(category => {
+                        const hasPublishedCards = publishedCategoryIds.has(String(category.id));
+                        const option = new Option(
+                            hasPublishedCards ? category.name : `${category.name} (no published cards)`,
+                            category.slug
+                        );
+                        option.disabled = !hasPublishedCards;
+                        return option;
+                    })
+                );
+                publicDefaultCategory.value = categories.some(category =>
+                    category.slug === publicDefaultCategorySlug
+                    && publishedCategoryIds.has(String(category.id))
+                )
+                    ? publicDefaultCategorySlug
+                    : '';
+            }
+
             function renderCategoryList() {
                 if (!categories.length) {
                     categoryList.innerHTML = '<div class="text-xs" style="color:var(--text-muted);">No categories yet. Create one from the card form.</div>';
@@ -614,35 +661,53 @@ require_once __DIR__.'/includes/header.php';
                 }
                 categoryList.innerHTML = categories.map(category => `
                     <div class="summary-card-category-row" data-id="${escapeHtml(category.id)}" style="display:grid; grid-template-columns:minmax(120px,1fr) 90px auto auto; align-items:center; gap:0.5rem;">
-                        <input class="form-input" data-category-name value="${escapeHtml(category.name)}" maxlength="40" aria-label="Category name">
-                        <input class="form-input" data-category-order type="number" value="${escapeHtml(category.sort_order)}" aria-label="Category sort order">
+                        <input class="form-input" data-category-name value="${escapeHtml(category.name)}" maxlength="40" required aria-label="Category name">
+                        <input class="form-input" data-category-order type="number" min="0" step="1" required value="${escapeHtml(category.sort_order)}" aria-label="Category sort order">
                         <button type="button" class="btn-studio-action summary-category-save">Save</button>
                         <button type="button" class="archive-delete-button summary-category-delete">Delete</button>
                     </div>`).join('');
                 categoryList.querySelectorAll('.summary-category-save').forEach(button => button.addEventListener('click', async () => {
                     const row = button.closest('.summary-card-category-row');
-                    const response = await fetch(categoryApi + '&id=' + encodeURIComponent(row.dataset.id), {
-                        method: 'PUT', headers: mutationHeaders(),
-                        body: JSON.stringify({ name: row.querySelector('[data-category-name]').value.trim(), sort_order: Number(row.querySelector('[data-category-order]').value || 0) })
-                    });
-                    if (!response.ok) {
-                        const error = await response.json().catch(() => ({}));
-                        alert(error.error || 'Unable to update category.');
-                        return;
+                    const name = row.querySelector('[data-category-name]');
+                    const order = row.querySelector('[data-category-order]');
+                    const nameInvalid = !name.value.trim();
+                    const orderInvalid = !order.validity.valid;
+                    name.setCustomValidity(nameInvalid ? 'Enter a category name.' : '');
+                    name.toggleAttribute('aria-invalid', nameInvalid);
+                    order.toggleAttribute('aria-invalid', orderInvalid);
+                    if (!name.reportValidity() || !order.reportValidity() || button.disabled) return;
+                    button.disabled = true;
+                    try {
+                        const response = await fetch(categoryApi + '&id=' + encodeURIComponent(row.dataset.id), {
+                            method: 'PUT', headers: mutationHeaders(),
+                            body: JSON.stringify({ name: name.value.trim(), sort_order: Number(order.value) })
+                        });
+                        if (!response.ok) {
+                            const error = await response.json().catch(() => ({}));
+                            throw new Error(error.error || 'Unable to update category.');
+                        }
+                        await refreshSummaryCardEditor();
+                    } catch (error) {
+                        alert(error.message || 'Unable to update category.');
+                        button.disabled = false;
                     }
-                    await refreshSummaryCardEditor();
                 }));
                 categoryList.querySelectorAll('.summary-category-delete').forEach(button => button.addEventListener('click', async () => {
                     const row = button.closest('.summary-card-category-row');
                     const category = categories.find(item => String(item.id) === row.dataset.id);
                     if (!confirm(`Delete “${category?.name || 'this category'}”? Its cards will move to Uncategorized.`)) return;
-                    const response = await fetch(categoryApi + '&id=' + encodeURIComponent(row.dataset.id), { method: 'DELETE', headers: { 'Accept': 'application/json', 'X-CSRF-Token': csrfToken } });
-                    if (!response.ok) {
-                        const error = await response.json().catch(() => ({}));
-                        alert(error.error || 'Unable to delete category.');
-                        return;
+                    button.disabled = true;
+                    try {
+                        const response = await fetch(categoryApi + '&id=' + encodeURIComponent(row.dataset.id), { method: 'DELETE', headers: { 'Accept': 'application/json', 'X-CSRF-Token': csrfToken } });
+                        if (!response.ok) {
+                            const error = await response.json().catch(() => ({}));
+                            throw new Error(error.error || 'Unable to delete category.');
+                        }
+                        await refreshSummaryCardEditor();
+                    } catch (error) {
+                        alert(error.message || 'Unable to delete category.');
+                        button.disabled = false;
                     }
-                    await refreshSummaryCardEditor();
                 }));
             }
 
@@ -652,30 +717,38 @@ require_once __DIR__.'/includes/header.php';
                 const draftCards = cards.filter(card => !card.is_published);
                 const publishAllButton = document.getElementById('publishAllSummaryCards');
                 const publishAllCount = document.getElementById('publishAllSummaryCardsCount');
-                if (publishAllButton) publishAllButton.style.display = draftCards.length ? 'inline-block' : 'none';
+                if (publishAllButton) {
+                    publishAllButton.style.display = draftCards.length ? 'inline-block' : 'none';
+                    publishAllButton.disabled = draftCards.length === 0;
+                }
                 if (publishAllCount) publishAllCount.textContent = String(draftCards.length);
                 if (publishAllButton) {
                     publishAllButton.onclick = async () => {
                         const draftCards = cards.filter(card => !card.is_published);
-                        if (!draftCards.length) return;
+                        if (!draftCards.length || publishAllButton.disabled) return;
                         if (!confirm(`Publish all ${draftCards.length} draft Summary Card(s)?`)) return;
                         publishAllButton.disabled = true;
                         const count = document.getElementById('publishAllSummaryCardsCount');
                         if (count) count.textContent = '…';
                         let hasError = false;
-                        for (const card of draftCards) {
-                            try {
-                                const response = await fetch(summaryCardApi + '&id=' + encodeURIComponent(card.id), {
-                                    method: 'PUT',
-                                    headers: mutationHeaders(),
-                                    body: JSON.stringify({ is_published: true })
-                                });
-                                if (!response.ok) hasError = true;
-                            } catch (error) { hasError = true; }
+                        try {
+                            for (const card of draftCards) {
+                                try {
+                                    const response = await fetch(summaryCardApi + '&id=' + encodeURIComponent(card.id), {
+                                        method: 'PUT',
+                                        headers: mutationHeaders(),
+                                        body: JSON.stringify({ is_published: true })
+                                    });
+                                    if (!response.ok) hasError = true;
+                                } catch (error) { hasError = true; }
+                            }
+                            if (hasError) alert('Some summary cards could not be published.');
+                            await refreshSummaryCardEditor();
+                        } catch (error) {
+                            alert(error.message || 'Unable to publish summary cards.');
+                        } finally {
+                            publishAllButton.disabled = false;
                         }
-                        if (hasError) alert('Some summary cards could not be published.');
-                        await refreshSummaryCardEditor();
-                        publishAllButton.disabled = false;
                     };
                 }
                 const visibleCards = cards.filter(card => {
@@ -693,8 +766,15 @@ require_once __DIR__.'/includes/header.php';
                     ].flat().filter(Boolean).join(' ').toLocaleLowerCase();
                     return searchable.includes(searchTerm);
                 });
+                const selectAllSummary = document.getElementById('selectAllSummaryCards');
+                const selectAllSummaryLabel = document.getElementById('selectAllSummaryCardsLabel');
                 if (!visibleCards.length) {
                     editorList.innerHTML = `<div class="rounded-xl border border-dashed border-gray-300 px-4 py-6 text-sm text-gray-500 text-center">${searchTerm ? 'No summary cards match your search.' : 'No summary cards in this category.'}</div>`;
+                    ['bulkDeleteSummaryCards', 'bulkPublishSummaryCards', 'bulkUnpublishSummaryCards'].forEach(id => {
+                        const button = document.getElementById(id);
+                        if (button) { button.style.display = 'none'; button.disabled = true; }
+                    });
+                    if (selectAllSummary) selectAllSummary.checked = false;
                     return;
                 }
                 editorList.innerHTML = visibleCards
@@ -726,9 +806,7 @@ require_once __DIR__.'/includes/header.php';
                         </div>
                     `).join('');
 
-                                                // Bulk delete wiring
-                const selectAllSummary = document.getElementById('selectAllSummaryCards');
-                const selectAllSummaryLabel = document.getElementById('selectAllSummaryCardsLabel');
+                // Bulk delete wiring
 
                 if (selectAllSummaryLabel) selectAllSummaryLabel.style.display = visibleCards.length ? 'inline-flex' : 'none';
                 if (selectAllSummary) selectAllSummary.checked = false;
@@ -750,11 +828,20 @@ require_once __DIR__.'/includes/header.php';
                         const card = cards.find(item => item.id === cb.dataset.id);
                         return card && card.is_published;
                     });
-                    if (currentBulkBtn) currentBulkBtn.style.display = selected.length > 0 ? 'inline-block' : 'none';
+                    if (currentBulkBtn) {
+                        currentBulkBtn.style.display = selected.length > 0 ? 'inline-block' : 'none';
+                        currentBulkBtn.disabled = selected.length === 0;
+                    }
                     if (currentBulkCount) currentBulkCount.textContent = selected.length;
-                    if (currentPublishBtn) currentPublishBtn.style.display = selectedDrafts.length > 0 ? 'inline-block' : 'none';
+                    if (currentPublishBtn) {
+                        currentPublishBtn.style.display = selectedDrafts.length > 0 ? 'inline-block' : 'none';
+                        currentPublishBtn.disabled = selectedDrafts.length === 0;
+                    }
                     if (currentPublishCount) currentPublishCount.textContent = selectedDrafts.length;
-                    if (currentUnpublishBtn) currentUnpublishBtn.style.display = selectedPublished.length > 0 ? 'inline-block' : 'none';
+                    if (currentUnpublishBtn) {
+                        currentUnpublishBtn.style.display = selectedPublished.length > 0 ? 'inline-block' : 'none';
+                        currentUnpublishBtn.disabled = selectedPublished.length === 0;
+                    }
                     if (currentUnpublishCount) currentUnpublishCount.textContent = selectedPublished.length;
                     if (selectAllSummary) selectAllSummary.checked = allCbs.length > 0 && selected.length === allCbs.length;
                 };
@@ -774,17 +861,25 @@ require_once __DIR__.'/includes/header.php';
                     bulkBtn.parentNode.replaceChild(newBulkBtn, bulkBtn);
                     newBulkBtn.addEventListener('click', async () => {
                         const selectedIds = Array.from(editorList.querySelectorAll('.bulk-delete-summary-checkbox:checked')).map(cb => cb.dataset.id);
-                        if (!selectedIds.length) return;
+                        if (!selectedIds.length || newBulkBtn.disabled) return;
                         if (!confirm(`Delete ${selectedIds.length} selected summary card(s)?`)) return;
                         newBulkBtn.disabled = true;
                         newBulkBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Deleting...';
                         let hasError = false;
-                        for (const id of selectedIds) {
-                            const res = await fetch(summaryCardApi + '&id=' + encodeURIComponent(id), { method: 'DELETE', headers: { 'Accept': 'application/json', 'X-CSRF-Token': csrfToken } });
-                            if (!res.ok) hasError = true;
+                        try {
+                            for (const id of selectedIds) {
+                                try {
+                                    const res = await fetch(summaryCardApi + '&id=' + encodeURIComponent(id), { method: 'DELETE', headers: { 'Accept': 'application/json', 'X-CSRF-Token': csrfToken } });
+                                    if (!res.ok) hasError = true;
+                                } catch (error) { hasError = true; }
+                            }
+                            if (hasError) alert('Some summary cards could not be deleted.');
+                            await refreshSummaryCardEditor();
+                        } catch (error) {
+                            alert(error.message || 'Unable to delete summary cards.');
+                        } finally {
+                            newBulkBtn.disabled = false;
                         }
-                        if (hasError) alert('Some summary cards could not be deleted.');
-                        await refreshSummaryCardEditor();
                     });
                 }
 
@@ -795,24 +890,30 @@ require_once __DIR__.'/includes/header.php';
                     newPublishBtn.addEventListener('click', async () => {
                         const selectedIds = new Set(Array.from(editorList.querySelectorAll('.bulk-delete-summary-checkbox:checked')).map(cb => cb.dataset.id));
                         const selectedDrafts = cards.filter(card => selectedIds.has(card.id) && !card.is_published);
-                        if (!selectedDrafts.length) return;
+                        if (!selectedDrafts.length || newPublishBtn.disabled) return;
                         if (!confirm(`Publish ${selectedDrafts.length} selected Summary Card(s)?`)) return;
                         newPublishBtn.disabled = true;
                         const count = newPublishBtn.querySelector('#bulkPublishSummaryCardsCount');
                         if (count) count.textContent = '…';
                         let hasError = false;
-                        for (const card of selectedDrafts) {
-                            try {
-                                const response = await fetch(summaryCardApi + '&id=' + encodeURIComponent(card.id), {
-                                    method: 'PUT',
-                                    headers: mutationHeaders(),
-                                    body: JSON.stringify({ is_published: true })
-                                });
-                                if (!response.ok) hasError = true;
-                            } catch (error) { hasError = true; }
+                        try {
+                            for (const card of selectedDrafts) {
+                                try {
+                                    const response = await fetch(summaryCardApi + '&id=' + encodeURIComponent(card.id), {
+                                        method: 'PUT',
+                                        headers: mutationHeaders(),
+                                        body: JSON.stringify({ is_published: true })
+                                    });
+                                    if (!response.ok) hasError = true;
+                                } catch (error) { hasError = true; }
+                            }
+                            if (hasError) alert('Some selected summary cards could not be published.');
+                            await refreshSummaryCardEditor();
+                        } catch (error) {
+                            alert(error.message || 'Unable to publish selected summary cards.');
+                        } finally {
+                            newPublishBtn.disabled = false;
                         }
-                        if (hasError) alert('Some selected summary cards could not be published.');
-                        await refreshSummaryCardEditor();
                     });
                 }
 
@@ -823,35 +924,44 @@ require_once __DIR__.'/includes/header.php';
                     newUnpublishBtn.addEventListener('click', async () => {
                         const selectedIds = new Set(Array.from(editorList.querySelectorAll('.bulk-delete-summary-checkbox:checked')).map(cb => cb.dataset.id));
                         const selectedPublished = cards.filter(card => selectedIds.has(card.id) && card.is_published);
-                        if (!selectedPublished.length) return;
+                        if (!selectedPublished.length || newUnpublishBtn.disabled) return;
                         if (!confirm(`Unpublish ${selectedPublished.length} selected Summary Card(s)?`)) return;
                         newUnpublishBtn.disabled = true;
                         const count = newUnpublishBtn.querySelector('#bulkUnpublishSummaryCardsCount');
                         if (count) count.textContent = '…';
                         let hasError = false;
-                        for (const card of selectedPublished) {
-                            try {
-                                const response = await fetch(summaryCardApi + '&id=' + encodeURIComponent(card.id), {
-                                    method: 'PUT',
-                                    headers: mutationHeaders(),
-                                    body: JSON.stringify({ is_published: false })
-                                });
-                                if (!response.ok) hasError = true;
-                            } catch (error) { hasError = true; }
+                        try {
+                            for (const card of selectedPublished) {
+                                try {
+                                    const response = await fetch(summaryCardApi + '&id=' + encodeURIComponent(card.id), {
+                                        method: 'PUT',
+                                        headers: mutationHeaders(),
+                                        body: JSON.stringify({ is_published: false })
+                                    });
+                                    if (!response.ok) hasError = true;
+                                } catch (error) { hasError = true; }
+                            }
+                            if (hasError) alert('Some selected summary cards could not be unpublished.');
+                            await refreshSummaryCardEditor();
+                        } catch (error) {
+                            alert(error.message || 'Unable to unpublish selected summary cards.');
+                        } finally {
+                            newUnpublishBtn.disabled = false;
                         }
-                        if (hasError) alert('Some selected summary cards could not be unpublished.');
-                        await refreshSummaryCardEditor();
                     });
                 }
                 updateBulkBtn();
 
                 editorList.querySelectorAll('.summary-card-editor-edit').forEach(button => {
                     button.addEventListener('click', () => {
-                        const id = button.dataset.id;
-                        const card = cards.find(item => item.id === id);
-                        if (!card) return;
-                        document.getElementById('summaryCardEditorId').value = card.id || '';
-                        document.getElementById('summaryCardEditorImportKey').value = card.import_key || card.id || '';
+                        const id = String(button.dataset.id || '');
+                        const card = cards.find(item => String(item.id ?? item.card_id ?? '') === id);
+                        if (!card) {
+                            managerCategoryStatus.textContent = 'This summary card could not be found. Refresh the list and try again.';
+                            return;
+                        }
+                        document.getElementById('summaryCardEditorId').value = String(card.id ?? card.card_id ?? '');
+                        document.getElementById('summaryCardEditorImportKey').value = card.import_key || card.id || card.card_id || '';
                         document.getElementById('summaryCardEditorTitle').value = card.title || '';
                         document.getElementById('summaryCardEditorMainValue').value = card.main_value || '';
                         document.getElementById('summaryCardEditorMainLabel').value = card.main_label || '';
@@ -868,6 +978,7 @@ require_once __DIR__.'/includes/header.php';
                         newCategoryInput.style.display = 'none';
                         document.getElementById('summaryCardEditorPrecision').value = String(card.display_precision ?? 2);
                         document.getElementById('summaryCardEditorPublished').checked = !!card.is_published;
+                        managerCategoryStatus.textContent = '';
                         showCardForm(true);
                         openEditor();
                     });
@@ -875,56 +986,175 @@ require_once __DIR__.'/includes/header.php';
 
                 editorList.querySelectorAll('.summary-card-editor-toggle').forEach(button => {
                     button.addEventListener('click', async () => {
+                        if (button.disabled) return;
                         const id = button.dataset.id;
                         const published = button.dataset.published === '1';
-                        await fetch(summaryCardApi + '&id=' + encodeURIComponent(id), {
-                            method: 'PUT',
-                            headers: mutationHeaders(),
-                            body: JSON.stringify({ is_published: !published })
-                        });
-                        refreshSummaryCardEditor();
+                        button.disabled = true;
+                        try {
+                            const response = await fetch(summaryCardApi + '&id=' + encodeURIComponent(id), {
+                                method: 'PUT',
+                                headers: mutationHeaders(),
+                                body: JSON.stringify({ is_published: !published })
+                            });
+                            if (!response.ok) {
+                                const error = await response.json().catch(() => ({}));
+                                throw new Error(error.error || 'Unable to update publication.');
+                            }
+                            await refreshSummaryCardEditor();
+                        } catch (error) {
+                            alert(error.message || 'Unable to update publication.');
+                            button.disabled = false;
+                        }
                     });
                 });
 
                 editorList.querySelectorAll('.summary-card-editor-delete').forEach(button => {
                     button.addEventListener('click', async () => {
                         if (!confirm('Delete this summary card?')) return;
-                        await fetch(summaryCardApi + '&id=' + encodeURIComponent(button.dataset.id), {
-                            method: 'DELETE',
-                            headers: { 'Accept': 'application/json', 'X-CSRF-Token': csrfToken }
-                        });
-                        refreshSummaryCardEditor();
+                        if (button.disabled) return;
+                        button.disabled = true;
+                        try {
+                            const response = await fetch(summaryCardApi + '&id=' + encodeURIComponent(button.dataset.id), {
+                                method: 'DELETE',
+                                headers: { 'Accept': 'application/json', 'X-CSRF-Token': csrfToken }
+                            });
+                            if (!response.ok) {
+                                const error = await response.json().catch(() => ({}));
+                                throw new Error(error.error || 'Unable to delete summary card.');
+                            }
+                            await refreshSummaryCardEditor();
+                        } catch (error) {
+                            alert(error.message || 'Unable to delete summary card.');
+                            button.disabled = false;
+                        }
                     });
                 });
             }
 
             async function refreshSummaryCardEditor() {
-                const [cardResponse, categoryResponse] = await Promise.all([
+                const [cardResponse, categoryResponse, defaultResponse] = await Promise.all([
                     fetch(summaryCardApi, { headers: { Accept: 'application/json' } }),
-                    fetch(categoryApi, { headers: { Accept: 'application/json' } })
+                    fetch(categoryApi, { headers: { Accept: 'application/json' } }),
+                    fetch(categoryApi + '&action=public-default', { headers: { Accept: 'application/json' } })
                 ]);
-                if (!cardResponse.ok || !categoryResponse.ok) return;
+                if (!cardResponse.ok || !categoryResponse.ok || !defaultResponse.ok) throw new Error('Unable to load Summary Cards and categories.');
                 cards = await cardResponse.json();
                 categories = await categoryResponse.json();
+                publicDefaultCategorySlug = (await defaultResponse.json()).default_category_slug || '';
                 renderCategoryOptions();
                 renderCategoryList();
+                renderPublicDefaultCategory();
                 renderCards();
             }
 
             categoryFilter.addEventListener('change', renderCards);
             cardSearch.addEventListener('input', renderCards);
+            savePublicDefaultButton?.addEventListener('click', async () => {
+                if (savePublicDefaultButton.disabled) return;
+                savePublicDefaultButton.disabled = true;
+                publicDefaultStatus.textContent = 'Saving…';
+                try {
+                    const response = await fetch(categoryApi + '&action=save-public-default', {
+                        method: 'POST',
+                        headers: mutationHeaders(),
+                        body: JSON.stringify({ default_category_slug: publicDefaultCategory.value })
+                    });
+                    const result = await response.json().catch(() => ({}));
+                    if (!response.ok) throw new Error(result.error || 'Unable to save the public summary-card default.');
+                    publicDefaultCategorySlug = result.default_category_slug || '';
+                    const selected = categories.find(category => category.slug === publicDefaultCategorySlug);
+                    publicDefaultStatus.textContent = `Saved: ${selected?.name || 'All categories'}. Public visitors can still change the category.`;
+                } catch (error) {
+                    publicDefaultStatus.textContent = error.message || 'Unable to save the public summary-card default.';
+                } finally {
+                    savePublicDefaultButton.disabled = false;
+                }
+            });
             document.getElementById('summaryCardEditorAddCategory').addEventListener('click', () => {
                 newCategoryInput.style.display = newCategoryInput.style.display === 'none' ? 'block' : 'none';
                 if (newCategoryInput.style.display === 'block') newCategoryInput.focus();
             });
+            managerCategoryMenuButton?.addEventListener('click', () => {
+                managerActionsMenu.open = false;
+                managerCategoryAction.hidden = false;
+                managerCategoryStatus.textContent = '';
+                managerNewCategoryInput.focus();
+            });
+            managerCancelCategoryButton.addEventListener('click', () => {
+                managerCategoryAction.hidden = true;
+                managerNewCategoryInput.value = '';
+                managerNewCategoryInput.setCustomValidity('');
+                managerNewCategoryInput.removeAttribute('aria-invalid');
+                managerCategoryStatus.textContent = '';
+                managerCategoryMenuButton?.focus();
+            });
+            managerAddCategoryButton.addEventListener('click', async () => {
+                const name = managerNewCategoryInput.value.trim();
+                const invalid = !name || name.length > 40;
+                managerNewCategoryInput.setCustomValidity(invalid
+                    ? 'Enter a category name between 1 and 40 characters.'
+                    : '');
+                managerNewCategoryInput.setAttribute('aria-invalid', String(invalid));
+                managerCategoryStatus.textContent = '';
+                if (!managerNewCategoryInput.reportValidity() || managerAddCategoryButton.disabled) return;
+                if (!confirm(`Add the category "${name}"?`)) return;
+                managerAddCategoryButton.disabled = true;
+                managerCategoryStatus.textContent = 'Adding category…';
+                try {
+                    const nextSortOrder = categories.length
+                        ? Math.max(...categories.map(category => Number(category.sort_order) || 0)) + 1
+                        : 0;
+                    const response = await fetch(categoryApi, {
+                        method: 'POST',
+                        headers: mutationHeaders(),
+                        body: JSON.stringify({ name, sort_order: nextSortOrder })
+                    });
+                    const result = await response.json().catch(() => ({}));
+                    if (!response.ok) throw new Error(result.error || 'Unable to add category.');
+                    managerNewCategoryInput.value = '';
+                    managerNewCategoryInput.removeAttribute('aria-invalid');
+                    managerCategoryStatus.textContent = `Category “${result.name || name}” added.`;
+                    managerCategoryAction.hidden = true;
+                    showCardList();
+                    editorPanel.classList.add('active');
+                    editorPanel.setAttribute('aria-hidden', 'false');
+                    await refreshSummaryCardEditor();
+                    managerCategoryStatus.textContent = `Category “${result.name || name}” added. It is now listed in the manager; it can be selected as the public default after a card in it is published.`;
+                    categoryFilter.focus();
+                } catch (error) {
+                    managerCategoryStatus.textContent = error.message || 'Unable to add category.';
+                } finally {
+                    managerAddCategoryButton.disabled = false;
+                }
+            });
 
             form.addEventListener('submit', async (event) => {
                 event.preventDefault();
+                const importKeyInput = document.getElementById('summaryCardEditorImportKey');
+                const titleInput = document.getElementById('summaryCardEditorTitle');
+                const mainValueInput = document.getElementById('summaryCardEditorMainValue');
+                const mainLabelInput = document.getElementById('summaryCardEditorMainLabel');
+                const importKeyInvalid = importKeyInput.value.trim() !== importKeyInput.value || !importKeyInput.value.trim();
+                const titleInvalid = !titleInput.value.trim();
+                const mainValueInvalid = !mainValueInput.value.trim();
+                const mainLabelInvalid = !mainLabelInput.value.trim();
+                importKeyInput.setCustomValidity(importKeyInvalid ? 'Enter a Global Label without leading or trailing spaces.' : '');
+                titleInput.setCustomValidity(titleInvalid ? 'Enter a title.' : '');
+                mainValueInput.setCustomValidity(mainValueInvalid ? 'Enter a main value.' : '');
+                mainLabelInput.setCustomValidity(mainLabelInvalid ? 'Enter a main label.' : '');
+                importKeyInput.toggleAttribute('aria-invalid', importKeyInvalid);
+                titleInput.toggleAttribute('aria-invalid', titleInvalid);
+                mainValueInput.toggleAttribute('aria-invalid', mainValueInvalid);
+                mainLabelInput.toggleAttribute('aria-invalid', mainLabelInvalid);
+                if (!form.reportValidity()) return;
+                const submitButton = form.querySelector('[type="submit"]');
+                if (submitButton.disabled) return;
+                submitButton.disabled = true;
                 const payload = {
-                    import_key: document.getElementById('summaryCardEditorImportKey').value,
-                    title: document.getElementById('summaryCardEditorTitle').value.trim(),
-                    main_value: document.getElementById('summaryCardEditorMainValue').value.trim(),
-                    main_label: document.getElementById('summaryCardEditorMainLabel').value.trim(),
+                    import_key: importKeyInput.value,
+                    title: titleInput.value.trim(),
+                    main_value: mainValueInput.value.trim(),
+                    main_label: mainLabelInput.value.trim(),
                     year_date: document.getElementById('summaryCardEditorYearDate').value.trim(),
                     secondary_label: document.getElementById('summaryCardEditorSecondaryLabel').value.trim(),
                     secondary_value: document.getElementById('summaryCardEditorSecondaryValue').value.trim(),
@@ -942,19 +1172,27 @@ require_once __DIR__.'/includes/header.php';
                 const newCategoryName = newCategoryInput.value.trim();
                 if (newCategoryName) payload.category_names = [newCategoryName];
                 const id = document.getElementById('summaryCardEditorId').value;
-                const response = await fetch(summaryCardApi + (id ? '&id=' + encodeURIComponent(id) : ''), {
-                    method: id ? 'PUT' : 'POST',
-                    headers: mutationHeaders(),
-                    body: JSON.stringify(payload)
-                });
-                if (response.ok) {
+                try {
+                    const response = await fetch(summaryCardApi + (id ? '&id=' + encodeURIComponent(id) : ''), {
+                        method: id ? 'PUT' : 'POST',
+                        headers: mutationHeaders(),
+                        body: JSON.stringify(payload)
+                    });
+                    if (!response.ok) {
+                        const error = await response.json().catch(() => ({}));
+                        throw new Error(error.error || 'Unable to save summary card.');
+                    }
                     form.reset();
                     document.getElementById('summaryCardEditorId').value = '';
                     newCategoryInput.style.display = 'none';
                     newCategoryInput.value = '';
                     showCardList();
                     closeEditor();
-                    refreshSummaryCardEditor();
+                    await refreshSummaryCardEditor();
+                } catch (error) {
+                    alert(error.message || 'Unable to save summary card.');
+                } finally {
+                    submitButton.disabled = false;
                 }
             });
 
@@ -989,7 +1227,7 @@ require_once __DIR__.'/includes/header.php';
                 if (event.key === 'Escape' && editorPanel.classList.contains('active')) closeEditor();
             });
 
-            refreshSummaryCardEditor();
+            refreshSummaryCardEditor().catch(error => alert(error.message || 'Unable to load Summary Cards.'));
         })();
     </script>
     <script>
@@ -1071,7 +1309,7 @@ require_once __DIR__.'/includes/header.php';
                 row.dataset.starRow = '1';
                 row.style.cssText = 'display:grid; grid-template-columns:minmax(130px,1.4fr) minmax(95px,0.8fr) minmax(95px,0.8fr) auto; align-items:end; gap:0.5rem; padding:0.65rem; border:1px solid var(--border-light); border-radius:var(--radius-md);';
                 const options = Array.from({ length: 10 }, (_, index) => `<option value="${index + 1}" ${Number(value.max_stars || 10) === index + 1 ? 'selected' : ''}>${index + 1}</option>`).join('');
-                row.innerHTML = `<label class="form-label" style="margin:0;">Label<input data-label type="text" class="form-input" maxlength="80" value="${escapeHtml(value.label || '')}" placeholder="Teaching"></label><label class="form-label" style="margin:0;">Number of stars<select data-max-stars class="form-input">${options}</select></label><label class="form-label" style="margin:0;">Score<input data-score type="number" class="form-input" min="0" max="${Number(value.max_stars || 10)}" step="0.5" value="${Number.isFinite(Number(value.score)) ? Number(value.score) : 0}"></label><div style="display:flex; gap:0.25rem;"><button type="button" data-move-up class="btn-studio-action" aria-label="Move row up" title="Move up">↑</button><button type="button" data-move-down class="btn-studio-action" aria-label="Move row down" title="Move down">↓</button><button type="button" data-remove-row class="archive-delete-button" aria-label="Remove row" title="Remove row">×</button></div>`;
+                row.innerHTML = `<label class="form-label" style="margin:0;">Label<input data-label type="text" class="form-input" maxlength="80" value="${escapeHtml(value.label || '')}" placeholder="Teaching" required></label><label class="form-label" style="margin:0;">Number of stars<select data-max-stars class="form-input">${options}</select></label><label class="form-label" style="margin:0;">Score<input data-score type="number" class="form-input" min="0" max="${Number(value.max_stars || 10)}" step="0.5" value="${Number.isFinite(Number(value.score)) ? Number(value.score) : 0}" required></label><div style="display:flex; gap:0.25rem;"><button type="button" data-move-up class="btn-studio-action" aria-label="Move row up" title="Move up">↑</button><button type="button" data-move-down class="btn-studio-action" aria-label="Move row down" title="Move down">↓</button><button type="button" data-remove-row class="archive-delete-button" aria-label="Remove row" title="Remove row">×</button></div>`;
                 rowsHost.appendChild(row);
                 row.querySelector('[data-max-stars]').addEventListener('change', event => {
                     const scoreInput = row.querySelector('[data-score]');
@@ -1081,7 +1319,12 @@ require_once __DIR__.'/includes/header.php';
                     renderPreview();
                 });
                 row.querySelectorAll('input').forEach(input => input.addEventListener('input', renderPreview));
-                row.querySelector('[data-remove-row]').addEventListener('click', () => { row.remove(); updateRowButtons(); renderPreview(); });
+                row.querySelector('[data-remove-row]').addEventListener('click', () => {
+                    if (!confirm('Remove this rating row?')) return;
+                    row.remove();
+                    updateRowButtons();
+                    renderPreview();
+                });
                 row.querySelector('[data-move-up]').addEventListener('click', () => { row.previousElementSibling && rowsHost.insertBefore(row, row.previousElementSibling); updateRowButtons(); });
                 row.querySelector('[data-move-down]').addEventListener('click', () => { row.nextElementSibling && rowsHost.insertBefore(row.nextElementSibling, row); updateRowButtons(); });
                 updateRowButtons();
@@ -1126,23 +1369,44 @@ require_once __DIR__.'/includes/header.php';
                     categoryList.innerHTML = '<div class="text-xs" style="color:var(--text-muted);">No star rating categories yet. Create one from the card form.</div>';
                     return;
                 }
-                categoryList.innerHTML = categories.map(category => `<div class="star-rating-category-row" data-id="${escapeHtml(category.id)}" style="display:grid; grid-template-columns:minmax(120px,1fr) 90px auto auto; align-items:center; gap:0.5rem;"><input class="form-input" data-category-name value="${escapeHtml(category.name)}" maxlength="40" aria-label="Star rating category name"><input class="form-input" data-category-order type="number" value="${escapeHtml(category.sort_order)}" aria-label="Star rating category sort order"><button type="button" class="btn-studio-action" data-save-category>Save</button><button type="button" class="archive-delete-button" data-delete-category>Delete</button></div>`).join('');
+                categoryList.innerHTML = categories.map(category => `<div class="star-rating-category-row" data-id="${escapeHtml(category.id)}" style="display:grid; grid-template-columns:minmax(120px,1fr) 90px auto auto; align-items:center; gap:0.5rem;"><input class="form-input" data-category-name value="${escapeHtml(category.name)}" maxlength="40" required aria-label="Star rating category name"><input class="form-input" data-category-order type="number" min="0" step="1" value="${escapeHtml(category.sort_order)}" required aria-label="Star rating category sort order"><button type="button" class="btn-studio-action" data-save-category>Save</button><button type="button" class="archive-delete-button" data-delete-category>Delete</button></div>`).join('');
                 categoryList.querySelectorAll('[data-save-category]').forEach(button => button.addEventListener('click', async () => {
                     const row = button.closest('.star-rating-category-row');
-                    const response = await fetch(categoryApiUrl + '&id=' + encodeURIComponent(row.dataset.id), {
-                        method: 'PUT', headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken, Accept: 'application/json' },
-                        body: JSON.stringify({ name: row.querySelector('[data-category-name]').value.trim(), sort_order: Number(row.querySelector('[data-category-order]').value || 0) })
-                    });
-                    if (!response.ok) { const error = await response.json().catch(() => ({})); alert(error.error || 'Unable to update category.'); return; }
-                    await refreshCards();
+                    const name = row.querySelector('[data-category-name]');
+                    const order = row.querySelector('[data-category-order]');
+                    const nameInvalid = !name.value.trim();
+                    const orderInvalid = !order.validity.valid;
+                    name.setCustomValidity(nameInvalid ? 'Enter a category name.' : '');
+                    name.toggleAttribute('aria-invalid', nameInvalid);
+                    order.toggleAttribute('aria-invalid', orderInvalid);
+                    if (!name.reportValidity() || !order.reportValidity() || button.disabled) return;
+                    button.disabled = true;
+                    try {
+                        const response = await fetch(categoryApiUrl + '&id=' + encodeURIComponent(row.dataset.id), {
+                            method: 'PUT', headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken, Accept: 'application/json' },
+                            body: JSON.stringify({ name: name.value.trim(), sort_order: Number(order.value) })
+                        });
+                        if (!response.ok) { const error = await response.json().catch(() => ({})); throw new Error(error.error || 'Unable to update category.'); }
+                        await refreshCards();
+                    } catch (error) {
+                        alert(error.message || 'Unable to update category.');
+                        button.disabled = false;
+                    }
                 }));
                 categoryList.querySelectorAll('[data-delete-category]').forEach(button => button.addEventListener('click', async () => {
                     const row = button.closest('.star-rating-category-row');
                     const category = categories.find(item => String(item.id) === row.dataset.id);
                     if (!confirm(`Delete “${category?.name || 'this category'}”? It will be removed from assigned star cards.`)) return;
-                    const response = await fetch(categoryApiUrl + '&id=' + encodeURIComponent(row.dataset.id), { method: 'DELETE', headers: { 'X-CSRF-Token': csrfToken, Accept: 'application/json' } });
-                    if (!response.ok) { const error = await response.json().catch(() => ({})); alert(error.error || 'Unable to delete category.'); return; }
-                    await refreshCards();
+                    if (button.disabled) return;
+                    button.disabled = true;
+                    try {
+                        const response = await fetch(categoryApiUrl + '&id=' + encodeURIComponent(row.dataset.id), { method: 'DELETE', headers: { 'X-CSRF-Token': csrfToken, Accept: 'application/json' } });
+                        if (!response.ok) { const error = await response.json().catch(() => ({})); throw new Error(error.error || 'Unable to delete category.'); }
+                        await refreshCards();
+                    } catch (error) {
+                        alert(error.message || 'Unable to delete category.');
+                        button.disabled = false;
+                    }
                 }));
             }
 
@@ -1155,7 +1419,7 @@ require_once __DIR__.'/includes/header.php';
                     fetch(apiUrl, { headers: { Accept: 'application/json' } }),
                     fetch(categoryApiUrl, { headers: { Accept: 'application/json' } })
                 ]);
-                if (!response.ok || !categoryResponse.ok) return;
+                if (!response.ok || !categoryResponse.ok) throw new Error('Unable to load star rating cards and categories.');
                 cards = await response.json();
                 categories = await categoryResponse.json();
                 renderCategoryOptions();
@@ -1168,6 +1432,14 @@ require_once __DIR__.'/includes/header.php';
                 if (!visibleCards.length) {
                     const emptyText = cards.length ? 'No star rating cards in this category.' : 'No star rating cards yet.';
                     cardList.innerHTML = `<div class="rounded-xl border border-dashed border-gray-300 px-4 py-6 text-sm text-gray-500 text-center">${emptyText}</div>`;
+                    const bulkButton = document.getElementById('bulkDeleteStarCards');
+                    const bulkCount = document.getElementById('bulkDeleteStarCardsCount');
+                    const selectAll = document.getElementById('selectAllStarCards');
+                    const selectAllLabel = document.getElementById('selectAllStarCardsLabel');
+                    if (bulkButton) { bulkButton.style.display = 'none'; bulkButton.disabled = true; }
+                    if (bulkCount) bulkCount.textContent = '0';
+                    if (selectAll) selectAll.checked = false;
+                    if (selectAllLabel) selectAllLabel.style.display = 'none';
                     return;
                 }
                 cardList.innerHTML = visibleCards.map(card => `<article class="rounded-xl border border-gray-200 bg-gray-50 p-3"><div class="flex items-start gap-3"><input type="checkbox" class="bulk-delete-star-checkbox mt-1 cursor-pointer" data-id="${Number(card.id)}" aria-label="Select for bulk delete" style="width:1rem;height:1rem;"> <div class="flex-1 flex flex-wrap items-start justify-between gap-3"><div><h4 class="font-bold text-sm text-slate-900">${escapeHtml(card.title)}</h4><p class="text-xs text-slate-500">${escapeHtml(card.year || 'No year')} · ${rowSummary(card.rows || [])}</p><span class="mt-1 inline-flex rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold text-emerald-800">${escapeHtml((card.category_names || []).join(', ') || 'Uncategorized')}</span></div><span class="rounded-full px-2 py-1 text-[10px] font-bold uppercase ${card.is_published ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-200 text-slate-700'}">${card.is_published ? 'Published' : 'Draft'}</span></div></div><div class="mt-3 flex flex-wrap gap-2 pl-7"><button type="button" class="btn-studio-action" data-edit="${card.id}">Edit</button><button type="button" class="btn-studio-action" data-toggle="${card.id}">${card.is_published ? 'Unpublish' : 'Publish'}</button><button type="button" class="archive-delete-button" data-delete="${card.id}">Delete</button></div></article>`).join('');
@@ -1182,7 +1454,10 @@ require_once __DIR__.'/includes/header.php';
                     const currentBulkCount = document.getElementById('bulkDeleteStarCardsCount');
                     const allCbs = Array.from(cardList.querySelectorAll('.bulk-delete-star-checkbox'));
                     const selected = allCbs.filter(cb => cb.checked);
-                    if (currentBulkBtn) currentBulkBtn.style.display = selected.length > 0 ? 'inline-block' : 'none';
+                    if (currentBulkBtn) {
+                        currentBulkBtn.style.display = selected.length > 0 ? 'inline-block' : 'none';
+                        currentBulkBtn.disabled = selected.length === 0;
+                    }
                     if (currentBulkCount) currentBulkCount.textContent = selected.length;
                     if (selectAllStar) selectAllStar.checked = allCbs.length > 0 && selected.length === allCbs.length;
                 };
@@ -1202,17 +1477,25 @@ require_once __DIR__.'/includes/header.php';
                     bulkBtn.parentNode.replaceChild(newBulkBtn, bulkBtn);
                     newBulkBtn.addEventListener('click', async () => {
                         const selectedIds = Array.from(cardList.querySelectorAll('.bulk-delete-star-checkbox:checked')).map(cb => cb.dataset.id);
-                        if (!selectedIds.length) return;
+                        if (!selectedIds.length || newBulkBtn.disabled) return;
                         if (!confirm(`Delete ${selectedIds.length} selected star rating card(s)?`)) return;
                         newBulkBtn.disabled = true;
                         newBulkBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Deleting...';
                         let hasError = false;
-                        for (const id of selectedIds) {
-                            const response = await fetch(apiUrl + '?id=' + encodeURIComponent(id), { method: 'DELETE', headers: { 'X-CSRF-Token': csrfToken, Accept: 'application/json' } });
-                            if (!response.ok) hasError = true;
+                        try {
+                            for (const id of selectedIds) {
+                                try {
+                                    const response = await fetch(apiUrl + '?id=' + encodeURIComponent(id), { method: 'DELETE', headers: { 'X-CSRF-Token': csrfToken, Accept: 'application/json' } });
+                                    if (!response.ok) hasError = true;
+                                } catch (error) { hasError = true; }
+                            }
+                            if (hasError) alert('Some star rating cards could not be deleted.');
+                            await refreshCards();
+                        } catch (error) {
+                            alert(error.message || 'Unable to delete star rating cards.');
+                        } finally {
+                            newBulkBtn.disabled = false;
                         }
-                        if (hasError) alert('Some star rating cards could not be deleted.');
-                        await refreshCards();
                     });
                 }
                 updateBulkBtn();
@@ -1239,6 +1522,7 @@ require_once __DIR__.'/includes/header.php';
                     openPanel();
                 }));
                 cardList.querySelectorAll('[data-toggle]').forEach(button => button.addEventListener('click', async () => {
+                    if (button.disabled) return;
                     const card = cards.find(item => String(item.id) === button.dataset.toggle);
                     if (!card) return;
                     const data = new FormData();
@@ -1248,20 +1532,33 @@ require_once __DIR__.'/includes/header.php';
                     data.set('is_published', card.is_published ? '0' : '1');
                     data.set('rows', JSON.stringify(card.rows || []));
                     data.set('category_ids', JSON.stringify(card.category_ids || []));
-                    const response = await fetch(apiUrl + '?id=' + encodeURIComponent(card.id), { method: 'POST', headers: { 'X-CSRF-Token': csrfToken, Accept: 'application/json' }, body: data });
-                    if (!response.ok) { const error = await response.json().catch(() => ({})); alert(error.error || 'Unable to update publication.'); return; }
-                    refreshCards();
+                    button.disabled = true;
+                    try {
+                        const response = await fetch(apiUrl + '?id=' + encodeURIComponent(card.id), { method: 'POST', headers: { 'X-CSRF-Token': csrfToken, Accept: 'application/json' }, body: data });
+                        if (!response.ok) { const error = await response.json().catch(() => ({})); throw new Error(error.error || 'Unable to update publication.'); }
+                        await refreshCards();
+                    } catch (error) {
+                        alert(error.message || 'Unable to update publication.');
+                        button.disabled = false;
+                    }
                 }));
                 cardList.querySelectorAll('[data-delete]').forEach(button => button.addEventListener('click', async () => {
                     if (!confirm('Delete this star rating card?')) return;
-                    const response = await fetch(apiUrl + '?id=' + encodeURIComponent(button.dataset.delete), { method: 'DELETE', headers: { 'X-CSRF-Token': csrfToken, Accept: 'application/json' } });
-                    if (!response.ok) { const error = await response.json().catch(() => ({})); alert(error.error || 'Unable to delete star rating card.'); return; }
-                    refreshCards();
+                    if (button.disabled) return;
+                    button.disabled = true;
+                    try {
+                        const response = await fetch(apiUrl + '?id=' + encodeURIComponent(button.dataset.delete), { method: 'DELETE', headers: { 'X-CSRF-Token': csrfToken, Accept: 'application/json' } });
+                        if (!response.ok) { const error = await response.json().catch(() => ({})); throw new Error(error.error || 'Unable to delete star rating card.'); }
+                        await refreshCards();
+                    } catch (error) {
+                        alert(error.message || 'Unable to delete star rating card.');
+                        button.disabled = false;
+                    }
                 }));
             }
 
             document.getElementById('toggleStarRatingEditor').addEventListener('click', () => { showList(); openPanel(); });
-            categoryFilter.addEventListener('change', refreshCards);
+            categoryFilter.addEventListener('change', () => refreshCards().catch(error => alert(error.message || 'Unable to load star rating cards.')));
             document.getElementById('starRatingAddCategory').addEventListener('click', () => {
                 newCategoryInput.style.display = newCategoryInput.style.display === 'none' ? 'block' : 'none';
                 if (newCategoryInput.style.display === 'block') newCategoryInput.focus();
@@ -1294,6 +1591,25 @@ require_once __DIR__.'/includes/header.php';
             removeLogo.addEventListener('change', renderPreview);
             form.addEventListener('submit', async event => {
                 event.preventDefault();
+                const titleInput = document.getElementById('starRatingTitle');
+                const titleInvalid = !titleInput.value.trim();
+                titleInput.setCustomValidity(titleInvalid ? 'Enter a title.' : '');
+                titleInput.toggleAttribute('aria-invalid', titleInvalid);
+                rowsHost.querySelectorAll('[data-label]').forEach(input => {
+                    const labelInvalid = !input.value.trim();
+                    input.setCustomValidity(labelInvalid ? 'Enter a label for this rating row.' : '');
+                    input.toggleAttribute('aria-invalid', labelInvalid);
+                });
+                if (!form.reportValidity()) return;
+                const submitButton = form.querySelector('[type="submit"]');
+                if (submitButton.disabled) return;
+                const isPublished = document.getElementById('starRatingPublished').checked;
+                if (isPublished && !rowsHost.querySelector('[data-star-row]')) {
+                    alert('Add at least one rating row before publishing.');
+                    document.getElementById('addStarRatingRow').focus();
+                    return;
+                }
+                submitButton.disabled = true;
                 const data = new FormData(form);
                 data.set('rows', JSON.stringify(rowValues()));
                 data.set('category_ids', JSON.stringify([...categorySelect.selectedOptions].map(option => Number(option.value))));
@@ -1301,14 +1617,20 @@ require_once __DIR__.'/includes/header.php';
                 data.set('is_published', document.getElementById('starRatingPublished').checked ? '1' : '0');
                 data.set('remove_logo', removeLogo.checked ? '1' : '0');
                 const id = document.getElementById('starRatingCardId').value;
-                const response = await fetch(apiUrl + (id ? '?id=' + encodeURIComponent(id) : ''), { method: 'POST', headers: { 'X-CSRF-Token': csrfToken, Accept: 'application/json' }, body: data });
-                if (!response.ok) { const error = await response.json().catch(() => ({})); alert(error.error || 'Unable to save star rating card.'); return; }
-                form.reset();
-                clearLocalLogoPreview();
-                rowsHost.innerHTML = '';
-                showList();
-                closePanel();
-                await refreshCards();
+                try {
+                    const response = await fetch(apiUrl + (id ? '?id=' + encodeURIComponent(id) : ''), { method: 'POST', headers: { 'X-CSRF-Token': csrfToken, Accept: 'application/json' }, body: data });
+                    if (!response.ok) { const error = await response.json().catch(() => ({})); throw new Error(error.error || 'Unable to save star rating card.'); }
+                    form.reset();
+                    clearLocalLogoPreview();
+                    rowsHost.innerHTML = '';
+                    showList();
+                    closePanel();
+                    await refreshCards();
+                } catch (error) {
+                    alert(error.message || 'Unable to save star rating card.');
+                } finally {
+                    submitButton.disabled = false;
+                }
             });
             document.getElementById('cancelStarRatingEditor').addEventListener('click', () => { form.reset(); [...categorySelect.options].forEach(option => { option.selected = false; }); newCategoryInput.value = ''; newCategoryInput.style.display = 'none'; clearLocalLogoPreview(); rowsHost.innerHTML = ''; showList(); });
             document.getElementById('closeStarRatingEditor').addEventListener('click', closePanel);
@@ -1316,7 +1638,7 @@ require_once __DIR__.'/includes/header.php';
             document.addEventListener('keydown', event => { if (event.key === 'Escape' && panel.classList.contains('active')) closePanel(); });
             document.getElementById('starRatingTitle').addEventListener('input', renderPreview);
             document.getElementById('starRatingYear').addEventListener('input', renderPreview);
-            refreshCards();
+            refreshCards().catch(error => alert(error.message || 'Unable to load star rating cards.'));
         })();
     </script>
     <script>

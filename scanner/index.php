@@ -50,6 +50,9 @@
         <button id="navScannerBtn" class="nav-btn active">
           <span><i class="fa-solid fa-magnifying-glass" aria-hidden="true"></i></span> Review Workspace
         </button>
+        <button id="navArchivesBtn" class="nav-btn" type="button">
+          <span><i class="fa-solid fa-box-archive" aria-hidden="true"></i></span> File Archives
+        </button>
       </nav>
     </div>
   </header>
@@ -410,9 +413,9 @@
                 </div>
                 
                 <!-- Chart Type Selector -->
-                <div style="display: flex; gap: 0.5rem; align-items: center;">
-                  <label style="font-size: 0.78rem; font-weight: 800; color: #334155; text-transform: uppercase;">Chart Type:</label>
-                  <select id="studioChartTypeSelect" class="form-input" style="width: auto; padding: 0.35rem 0.75rem; font-size: 0.82rem; font-weight: 700; color: #0F172A;">
+                <div class="studio-chart-type-group">
+                  <label class="studio-field-mapping-label">Chart Type:</label>
+                  <select id="studioChartTypeSelect" class="form-input studio-chart-type-select" style="font-size: 0.82rem; font-weight: 700; color: #0F172A;">
                     <option value="bar"><i class="fa-solid fa-chart-column" aria-hidden="true"></i> Bar Chart</option>
                     <option value="line"><i class="fa-solid fa-chart-line" aria-hidden="true"></i> Line Chart</option>
                     <option value="pie"><i class="fa-solid fa-chart-pie" aria-hidden="true"></i> Pie Chart</option>
@@ -424,35 +427,35 @@
               </div>
 
               <!-- Field Mapping Controls (chart-type aware) -->
-              <div id="studioFieldMappingRow" style="background: #EFF6FF; border: 1px solid #BFDBFE; border-radius: var(--radius-sm); padding: 0.65rem 1rem; margin-bottom: 0.75rem; display: flex; flex-wrap: wrap; align-items: center; gap: 0.65rem;">
-                <span style="font-size: 0.78rem; font-weight: 800; color: #1D4ED8; text-transform: uppercase;"><i class="fa-solid fa-ruler-combined" aria-hidden="true"></i> Field Mapping:</span>
-                <div style="display: flex; align-items: center; gap: 0.35rem;">
-                  <label style="font-size: 0.75rem; font-weight: 700; color: #334155; white-space: nowrap;" id="studioCategoryLabel">Category (X-axis):</label>
-                  <select id="studioCategoryCol" class="form-input" style="width: auto; padding: 0.3rem 0.55rem; font-size: 0.78rem;" aria-label="Category column"></select>
+              <div id="studioFieldMappingRow" class="studio-field-mapping">
+                <span class="studio-field-mapping-title"><i class="fa-solid fa-ruler-combined" aria-hidden="true"></i> Field Mapping:</span>
+                <div class="studio-field-mapping-group">
+                  <label class="studio-field-mapping-label" id="studioCategoryLabel">Category (X-axis):</label>
+                  <select id="studioCategoryCol" class="form-input studio-field-mapping-select" aria-label="Category column"></select>
                 </div>
-                <div style="display: flex; align-items: center; gap: 0.35rem;">
-                  <label style="font-size: 0.75rem; font-weight: 700; color: #334155; white-space: nowrap;" id="studioValueLabel">Value (Y-axis):</label>
-                  <select id="studioValueCol" class="form-input" style="width: auto; padding: 0.3rem 0.55rem; font-size: 0.78rem;" aria-label="Value column"></select>
+                <div class="studio-field-mapping-group">
+                  <label class="studio-field-mapping-label" id="studioValueLabel">Value (Y-axis):</label>
+                  <select id="studioValueCol" class="form-input studio-field-mapping-select" aria-label="Value column"></select>
                 </div>
-                <div id="studioGroupFieldWrapper" style="display: none; align-items: center; gap: 0.35rem;">
-                  <label for="studioGroupField" style="font-size: 0.75rem; font-weight: 700; color: #334155; white-space: nowrap;">Group (inner ring):</label>
-                  <select id="studioGroupField" class="form-input" style="width: auto; padding: 0.3rem 0.55rem; font-size: 0.78rem;"></select>
+                <div id="studioGroupFieldWrapper" class="studio-field-mapping-group" style="display: none;">
+                  <label for="studioGroupField" class="studio-field-mapping-label">Group (inner ring):</label>
+                  <select id="studioGroupField" class="form-input studio-field-mapping-select"></select>
                 </div>
-                <div style="display: flex; align-items: center; gap: 0.35rem;">
-                  <label style="font-size: 0.75rem; font-weight: 700; color: #334155; white-space: nowrap;" id="studioValuePrecisionLabel">Display Precision:</label>
-                  <select id="studioValuePrecisionSelect" class="form-input" style="width: auto; padding: 0.3rem 0.55rem; font-size: 0.78rem;" aria-label="Display precision">
+                <div class="studio-field-mapping-group">
+                  <label class="studio-field-mapping-label" id="studioValuePrecisionLabel">Display Precision:</label>
+                  <select id="studioValuePrecisionSelect" class="form-input studio-field-mapping-select" aria-label="Display precision">
                     <option value="0">No decimals</option>
                     <option value="1">1 decimal</option>
                     <option value="2" selected>2 decimals</option>
                   </select>
                 </div>
-                <div id="studioRankedYearWrapper" style="display: none; align-items: center; gap: 0.35rem;">
-                  <label style="font-size: 0.75rem; font-weight: 700; color: #334155; white-space: nowrap;" id="studioRankedYearLabel">Year:</label>
-                  <select id="studioRankedYearSelect" class="form-input" style="width: auto; padding: 0.3rem 0.55rem; font-size: 0.78rem;" aria-label="Year for Ranked Bar Chart"></select>
+                <div id="studioRankedYearWrapper" class="studio-field-mapping-group" style="display: none;">
+                  <label class="studio-field-mapping-label" id="studioRankedYearLabel">Year:</label>
+                  <select id="studioRankedYearSelect" class="form-input studio-field-mapping-select" aria-label="Year for Ranked Bar Chart"></select>
                 </div>
-                <div id="studioRankedReverseOrderWrapper" style="display: none; align-items: center; gap: 0.35rem;">
-                  <label style="font-size: 0.75rem; font-weight: 700; color: #334155; white-space: nowrap;" id="studioRankedReverseOrderLabel">
-                    <input id="studioRankedReverseOrder" type="checkbox" style="accent-color: var(--clsu-green); margin-right: 0.25rem;" aria-label="Reverse ranked bar display order">Reverse order
+                <div id="studioRankedReverseOrderWrapper" class="studio-field-mapping-group" style="display: none;">
+                  <label class="studio-field-mapping-label" id="studioRankedReverseOrderLabel">
+                    <input id="studioRankedReverseOrder" type="checkbox" aria-label="Reverse ranked bar display order">Reverse order
                   </label>
                 </div>
                 <div id="studioFieldWarning" style="display:none; font-size: 0.75rem; color: #DC2626; font-weight: 700; background: #FEF2F2; border: 1px solid #FECACA; border-radius: 4px; padding: 0.2rem 0.6rem;"></div>
@@ -525,12 +528,12 @@
               <!-- Record Metadata & Status Settings -->
               <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem; margin-bottom: 1.25rem; background: #F8FAF8; padding: 1.25rem; border-radius: var(--radius-md); border: 1px solid var(--border-light);">
                 <div>
-                  <label class="form-label" style="font-weight: 800; font-size: 0.78rem; color: #334155; text-transform: uppercase; margin-bottom: 0.35rem; display: block;">Classification Category</label>
-                  <input type="text" id="studioDocTypeInput" class="form-input" style="font-weight: 600; color: #0F172A;">
+                  <label class="form-label" for="studioDocTypeInput" style="font-weight: 800; font-size: 0.78rem; color: #334155; text-transform: uppercase; margin-bottom: 0.35rem; display: block;">Classification Category</label>
+                  <input type="text" id="studioDocTypeInput" class="form-input" required style="font-weight: 600; color: #0F172A;">
                 </div>
                 <div>
-                  <label class="form-label" style="font-weight: 800; font-size: 0.78rem; color: #334155; text-transform: uppercase; margin-bottom: 0.35rem; display: block;">Publication Status</label>
-                  <select id="studioStatusSelect" class="form-input" style="font-weight: 600; color: #0F172A;">
+                  <label class="form-label" for="studioStatusSelect" style="font-weight: 800; font-size: 0.78rem; color: #334155; text-transform: uppercase; margin-bottom: 0.35rem; display: block;">Publication Status</label>
+                  <select id="studioStatusSelect" class="form-input" required style="font-weight: 600; color: #0F172A;">
                     <option value="Pending Review">Pending Review</option>
                     <option value="Approved">Published</option>
                     <option value="Needs Revision">Needs Revision</option>
@@ -544,8 +547,8 @@
 
               <!-- Studio Action Footer -->
               <div style="display: flex; justify-content: flex-end; gap: 0.85rem; padding-top: 1rem; border-top: 1px solid var(--border-light);">
-                <button id="studioBtnSave" type="button" class="btn-save-modal">
-                  <i class="fa-solid fa-floppy-disk" aria-hidden="true"></i> Save Dashboard Changes
+                <button id="studioBtnSave" type="button" class="btn-save-modal" title="Save this chart to Saved Graphs and save dataset changes">
+                  <i class="fa-solid fa-floppy-disk" aria-hidden="true"></i> Save Graph
                 </button>
                 <button id="studioBtnApprove" type="button" class="btn-approve-modal">
                   <i class="fa-solid fa-circle-check" aria-hidden="true"></i> Publish

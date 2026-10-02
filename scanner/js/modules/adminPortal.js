@@ -2,6 +2,7 @@ import { $, all } from '../utils/helpers.js';
 
 export function initAdminPortal(ctx) {
   const selectedRecordIds = new Set();
+  let bulkPromptOpen = false;
   let archiveRecords = [];
   const importDestinations = new Set(['summary_cards', 'ranking_history']);
   const recordPurpose = record => {
@@ -22,9 +23,96 @@ export function initAdminPortal(ctx) {
     if (message.startsWith('Editing saved graph:')) return;
     showToast(message);
   };
+  const openRecordHistory = async record => {
+    const overlay = document.createElement('div');
+    overlay.className = 'modal-overlay active';
+    overlay.innerHTML = '<div class="modal-card" style="max-width:900px;max-height:calc(100vh - 2rem);overflow:auto" role="dialog" aria-modal="true" aria-labelledby="recordHistoryTitle"><div class="modal-header"><h3 class="modal-title" id="recordHistoryTitle">File History</h3><button type="button" class="export-cancel-button" data-close>Close</button></div><p role="status" aria-live="polite">Loading versions...</p></div>';
+    document.body.appendChild(overlay);
+    const card = overlay.querySelector('.modal-card');
+    const close = () => overlay.remove();
+    overlay.querySelector('[data-close]').addEventListener('click', close);
+    let versions;
+    try {
+      versions = await ctx.dbManager.getRecordFileHistory(record.id);
+    } catch (error) {
+      card.querySelector('[role="status"]').textContent = `File History could not be loaded: ${error.message}`;
+      return;
+    }
+    if (!versions.length) {
+      card.querySelector('[role="status"]').textContent = 'No File History versions exist for this record.';
+      return;
+    }
+
+    const renderList = () => {
+      card.innerHTML = `<div class="modal-header"><h3 class="modal-title" id="recordHistoryTitle">File History: ${escape(record.fileName || `Record ${record.id}`)}</h3><button type="button" class="export-cancel-button" data-close>Close</button></div>
+        <p>Merge history is append-only. Select exactly two versions to compare.</p>
+        <div style="display:flex;gap:.5rem;margin:.75rem 0"><button type="button" class="archive-load-button" data-compare disabled>Compare selected</button></div>
+        <div style="overflow:auto"><table class="admin-records-table"><thead><tr><th>Compare</th><th>Version</th><th>Entry</th><th>Method</th><th>Created</th><th>File</th><th>Actions</th></tr></thead><tbody>
+          ${versions.map(version => `<tr><td><input type="checkbox" data-compare-version="${escape(version.version_id)}" aria-label="Select version ${escape(version.version_id)} for comparison"></td><td>${escape(version.version_id)}</td><td>${escape(version.entry_type)}</td><td>${escape(version.merge_method)}</td><td>${escape(new Date(version.created_at).toLocaleString())}</td><td>${version.original_file_name ? escape(version.original_file_name) : 'No file snapshot'}</td><td><button type="button" class="archive-load-button" data-view-version="${escape(version.version_id)}">View</button> ${version.file_snapshot_key ? `<a class="archive-load-button" href="${escape(ctx.dbManager.config.endpoints.fileHistoryDownload(version.version_id))}">Download</a>` : ''} <button type="button" class="archive-load-button" data-restore-version="${escape(version.version_id)}">Restore</button></td></tr>`).join('')}
+        </tbody></table></div>`;
+      card.querySelector('[data-close]').addEventListener('click', close);
+      const compareButton = card.querySelector('[data-compare]');
+      card.querySelectorAll('[data-compare-version]').forEach(input => input.addEventListener('change', () => {
+        const selected = [...card.querySelectorAll('[data-compare-version]:checked')];
+        if (selected.length > 2) input.checked = false;
+        compareButton.disabled = card.querySelectorAll('[data-compare-version]:checked').length !== 2;
+      }));
+      compareButton.addEventListener('click', async () => {
+        const ids = [...card.querySelectorAll('[data-compare-version]:checked')].map(input => input.dataset.compareVersion);
+        if (ids.length !== 2) return;
+        compareButton.disabled = true;
+        try {
+          const [left, right] = await Promise.all(ids.map(id => ctx.dbManager.getFileHistoryVersion(id)));
+          const changes = [];
+          const compare = (path, a, b) => {
+            if (changes.length >= 250 || JSON.stringify(a) === JSON.stringify(b)) return;
+            if (a && b && typeof a === 'object' && typeof b === 'object' && Array.isArray(a) === Array.isArray(b)) {
+              const keys = new Set([...Object.keys(a), ...Object.keys(b)]);
+              keys.forEach(key => compare(`${path}[${key}]`, a[key], b[key]));
+            } else {
+              changes.push({ path: path || '$', left: a, right: b });
+            }
+          };
+          compare('', left.snapshot, right.snapshot);
+          card.innerHTML = `<div class="modal-header"><h3 class="modal-title">File History comparison</h3><button type="button" class="export-cancel-button" data-back>Back</button></div><p>${escape(left.entry_type)} v${escape(left.version_id)} compared with ${escape(right.entry_type)} v${escape(right.version_id)}.</p><div style="max-height:65vh;overflow:auto"><table class="admin-records-table"><thead><tr><th>Path</th><th>Version ${escape(left.version_id)}</th><th>Version ${escape(right.version_id)}</th></tr></thead><tbody>${changes.map(change => `<tr><td>${escape(change.path)}</td><td><pre style="white-space:pre-wrap">${escape(JSON.stringify(change.left) ?? 'undefined')}</pre></td><td><pre style="white-space:pre-wrap">${escape(JSON.stringify(change.right) ?? 'undefined')}</pre></td></tr>`).join('') || '<tr><td colspan="3">The selected versions are identical.</td></tr>'}</tbody></table></div>${changes.length >= 250 ? '<p>Comparison capped at 250 differences.</p>' : ''}`;
+          card.querySelector('[data-back]').addEventListener('click', renderList);
+        } catch (error) {
+          alert(`Unable to compare versions: ${error.message}`);
+          compareButton.disabled = false;
+        }
+      });
+      card.querySelectorAll('[data-view-version]').forEach(button => button.addEventListener('click', async () => {
+        button.disabled = true;
+        try {
+          const version = await ctx.dbManager.getFileHistoryVersion(button.dataset.viewVersion);
+          card.innerHTML = `<div class="modal-header"><h3 class="modal-title">Version ${escape(version.version_id)} · ${escape(version.entry_type)}</h3><button type="button" class="export-cancel-button" data-back>Back</button></div><p>Created ${escape(new Date(version.created_at).toLocaleString())} by Super Admin ${escape(version.acting_super_admin_id)}. Related source ${escape(version.source_record_id)}; target ${escape(version.target_record_id)}.</p><pre style="max-height:65vh;overflow:auto;white-space:pre-wrap">${escape(JSON.stringify(version.snapshot, null, 2))}</pre>`;
+          card.querySelector('[data-back]').addEventListener('click', renderList);
+        } catch (error) {
+          button.disabled = false;
+          alert(`Unable to view archived version: ${error.message}`);
+        }
+      }));
+      card.querySelectorAll('[data-restore-version]').forEach(button => button.addEventListener('click', async () => {
+        const versionId = button.dataset.restoreVersion;
+        if (!confirm(`Restore version ${versionId}? The current state will first be archived as a new File History entry.`)) return;
+        button.disabled = true;
+        try {
+          await ctx.dbManager.restoreFileHistoryVersion(versionId);
+          close();
+          await ctx.api.renderAdminPortal();
+          showToast('Version restored. A new restore-result version was added to File History.');
+        } catch (error) {
+          button.disabled = false;
+          alert(`Unable to restore archived version: ${error.message}`);
+        }
+      }));
+    };
+    renderList();
+  };
   const clearGraphEditState = (removeGraphParam = false) => {
     ctx.state.studioActiveGraphId = null;
     ctx.state.studioActiveGraphPublished = false;
+    ctx.state.studioActiveGraphUpdatedAt = null;
     if (removeGraphParam) {
       const url = new URL(window.location.href);
       url.searchParams.delete('graph_id');
@@ -60,6 +148,7 @@ export function initAdminPortal(ctx) {
 
     ctx.state.studioActiveGraphId = String(graph.id);
     ctx.state.studioActiveGraphPublished = Boolean(graph.is_published);
+    ctx.state.studioActiveGraphUpdatedAt = graph.updated_at || graph.updatedAt || null;
     const titleInput = $('studioChartTitleInput');
     if (titleInput) {
       titleInput.value = graph.title || 'Saved Chart';
@@ -91,6 +180,21 @@ export function initAdminPortal(ctx) {
       if (precision && irisConfig.precision !== undefined) precision.value = String(irisConfig.precision);
       const reverse = $('studioRankedReverseOrder');
       if (reverse) reverse.checked = Boolean(irisConfig.reverseOrder ?? mapping.reverseOrder);
+      const restoreValue = (id, key, fallback = '') => {
+        const input = $(id);
+        if (input && irisConfig[key] !== undefined && irisConfig[key] !== null) input.value = String(irisConfig[key]);
+        else if (input) input.value = String(fallback);
+      };
+      restoreValue('studioFilterField', 'filterField', 'all');
+      restoreValue('studioFilterOperator', 'filterOperator', 'all');
+      restoreValue('studioFilterValue', 'filterValue');
+      restoreValue('studioFilterUpperValue', 'filterUpperValue');
+      restoreValue('studioSortOrder', 'sortOrder', 'source');
+      restoreValue('studioRowLimit', 'rowLimit', 30);
+      const groupDuplicates = $('studioGroupDuplicates');
+      if (groupDuplicates) groupDuplicates.checked = irisConfig.groupDuplicates !== false;
+      const applyColorsToAll = $('studioColorApplyAll');
+      if (applyColorsToAll) applyColorsToAll.checked = irisConfig.applyColorsToAllCharts !== false && !Array.isArray(graph.colors);
       ctx.api.renderStudioTableGrid(record);
       ctx.api.renderStudioChart(record);
     }
@@ -241,6 +345,7 @@ export function initAdminPortal(ctx) {
         <td>${scannedDate ? escape(new Date(scannedDate).toLocaleString()) : 'N/A'}</td>
         <td><div class="admin-record-actions">
           <button class="archive-load-button btn-table-load-studio" data-id="${escape(record.id)}"><i class="fa-solid fa-palette" aria-hidden="true"></i> Review</button>
+          <button class="archive-load-button btn-table-history" type="button" data-id="${escape(record.id)}"><i class="fa-solid fa-clock-rotate-left" aria-hidden="true"></i> File History</button>
           ${record.metadata?.stored_file ? `<a class="archive-load-button" href="${escape(projectBase)}/admin/upload_source.php?id=${encodeURIComponent(record.id)}" target="_blank" rel="noopener"><i class="fa-solid fa-file-arrow-up" aria-hidden="true"></i> Source</a>` : ''}
           ${record.metadata?.stored_file && status !== 'Approved' && (!record.template_id || !['xlsx', 'csv', 'tsv'].includes(String(record.fileType || '').toLowerCase())) ? `<button class="archive-load-button" type="button" data-template-review-record="${escape(record.id)}"><i class="fa-solid fa-code-compare" aria-hidden="true"></i> Diff &amp; approve</button>` : ''}
           ${approved ? `<button class="archive-load-button btn-table-unpublish" data-id="${escape(record.id)}" title="Unpublish this record and its saved charts"><i class="fa-solid fa-eye-slash" aria-hidden="true"></i> Unpublish</button>` : `<button class="archive-load-button btn-table-approve" data-id="${escape(record.id)}"><i class="fa-solid fa-circle-check" aria-hidden="true"></i> Publish</button>`}
@@ -262,6 +367,17 @@ export function initAdminPortal(ctx) {
         ctx.api.renderStudioWorkbench(record);
         const workbench = $('studioContainer');
         if (workbench) requestAnimationFrame(() => workbench.scrollIntoView({ behavior: 'smooth', block: 'start' }));
+      }
+    });
+
+    all('.btn-table-history').forEach(button => button.onclick = async () => {
+      const record = filtered.find(item => String(item.id) === String(button.dataset.id));
+      if (!record) return;
+      button.disabled = true;
+      try {
+        await openRecordHistory(record);
+      } finally {
+        button.disabled = false;
       }
     });
 
@@ -311,10 +427,27 @@ export function initAdminPortal(ctx) {
   };
 
   const confirmBulk = async mode => {
+    if (bulkPromptOpen) return;
     const ids = [...selectedRecordIds];
     if (!ids.length) return;
-    const records = await ctx.dbManager.getAllRecords();
-    const selected = records.filter(record => ids.includes(String(record.id)));
+    bulkPromptOpen = true;
+    let selected;
+    try {
+      const records = await ctx.dbManager.getAllRecords();
+      selected = records.filter(record => ids.includes(String(record.id)));
+    } catch (error) {
+      bulkPromptOpen = false;
+      alert(`Unable to load the selected uploads: ${error.message || error}`);
+      return;
+    }
+    if (!selected.length) {
+      bulkPromptOpen = false;
+      selectedRecordIds.clear();
+      bindSelection();
+      alert('The selected uploads are no longer available. Refresh the archive and try again.');
+      return;
+    }
+    const selectedIds = selected.map(record => String(record.id));
     const verb = mode;
     const description = mode === 'delete'
       ? `Permanently delete <strong>${selected.length}</strong> selected upload${selected.length === 1 ? '' : 's'} and their saved charts?`
@@ -330,22 +463,25 @@ export function initAdminPortal(ctx) {
       <div style="display:flex;justify-content:flex-end;gap:.75rem;margin-top:1rem;"><button type="button" class="${actionClass}" data-confirm>${actionLabel}</button></div>
     </div>`;
     document.body.appendChild(modal);
-    const close = () => modal.remove();
+    const close = () => {
+      bulkPromptOpen = false;
+      modal.remove();
+    };
     modal.querySelector('[data-close]').onclick = close;
     modal.querySelector('[data-confirm]').onclick = async () => {
       const action = modal.querySelector('[data-confirm]');
       action.disabled = true;
       try {
         const result = mode === 'delete'
-          ? await ctx.dbManager.deleteRecords(ids)
-          : await ctx.dbManager.setRecordsPublication(ids, mode === 'publish');
+          ? await ctx.dbManager.deleteRecords(selectedIds)
+          : await ctx.dbManager.setRecordsPublication(selectedIds, mode === 'publish');
         close();
         selectedRecordIds.clear();
         await ctx.api.renderAdminPortal();
         const relatedCharts = Number(result.published_graph_count || 0);
         const message = mode === 'delete'
-          ? `${result.successCount} of ${ids.length} records deleted successfully.`
-          : `${result.successCount} of ${ids.length} records ${mode}ed with ${relatedCharts} related chart${relatedCharts === 1 ? '' : 's'}.`;
+          ? `${result.successCount} of ${selectedIds.length} records deleted successfully.`
+          : `${result.successCount} of ${selectedIds.length} records ${mode}ed with ${relatedCharts} related chart${relatedCharts === 1 ? '' : 's'}.`;
         showToast(message);
       } catch (error) {
         action.disabled = false;

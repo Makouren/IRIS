@@ -6,6 +6,7 @@ export function initStudioWorkbench(ctx) {
   initStudioColorCustomizer(ctx);
   ctx.api.renderStudioWorkbench = record => {
     if (!record) return;
+    ['studioBtnSave', 'studioBtnApprove'].forEach(id => { const button = $(id); if (button) button.disabled = false; });
     if (ctx.state.studioChartColorRecordId !== record.id) {
       ctx.api.resetStudioColorChanges?.();
       ctx.state.studioChartColorRecordId = record.id;
@@ -20,6 +21,7 @@ export function initStudioWorkbench(ctx) {
     $('studioChartTitleInput')?.removeAttribute('data-customized');
     ctx.api.renderDocumentWindow(record);
     const sheet = ctx.api.getStudioActiveSheet(record);
+    ['studioBtnAddField', 'studioBtnAddRow'].forEach(id => { const button = $(id); if (button) button.disabled = !sheet; });
     if (sheet) {
       ctx.api.updateFieldSelectOptions(sheet.data);
       ctx.api.renderStudioTableGrid(record);
@@ -104,6 +106,8 @@ export function initStudioWorkbench(ctx) {
       const categoryField = Number($('studioCategoryCol')?.value ?? -1);
       const valueField = Number($('studioValueCol')?.value ?? -1);
       const groupField = Number($('studioGroupField')?.value ?? -1);
+      const upperFilterValue = $('studioFilterUpperValue')?.value;
+      const rowLimit = Number($('studioRowLimit')?.value ?? 30);
       const irisConfig = {
         ...config,
         type: selectedType,
@@ -115,7 +119,15 @@ export function initStudioWorkbench(ctx) {
         series: current.series,
         rankSemantic: config.rankSemantic === true,
         reverseOrder: Boolean(config.reverseOrder),
-        selectedYear: config.selectedYear ?? config.rankedYear ?? null
+        selectedYear: $('studioRankedYearSelect')?.value || config.selectedYear || config.rankedYear || null,
+        filterField: $('studioFilterField')?.value || 'all',
+        filterOperator: $('studioFilterOperator')?.value || 'all',
+        filterValue: $('studioFilterValue')?.value || '',
+        filterUpperValue: upperFilterValue !== '' && Number.isFinite(Number(upperFilterValue)) ? Number(upperFilterValue) : null,
+        sortOrder: $('studioSortOrder')?.value || 'source',
+        rowLimit: Number.isFinite(rowLimit) ? Math.max(1, Math.min(100, rowLimit)) : 30,
+        groupDuplicates: $('studioGroupDuplicates')?.checked !== false,
+        applyColorsToAllCharts: $('studioColorApplyAll')?.checked !== false
       };
       savedChart = {
         record_id: record.id,
@@ -134,6 +146,7 @@ export function initStudioWorkbench(ctx) {
         chart_data: { ...options, irisConfig, rankedBar: { selectedYear: irisConfig.selectedYear, yearColumn, reverseOrder: irisConfig.reverseOrder, categoryField: irisConfig.categoryField, valueField: irisConfig.valueField, yearField: yearColumn, chartType: selectedType } }
       };
     }
+    if (!savedChart && !approve) throw new Error('Render a chart before saving it to Saved Graphs.');
     let graphIdToUpdate = ctx.state.studioActiveGraphId;
     let graphIsPublished = Boolean(ctx.state.studioActiveGraphPublished);
     if (savedChart && !graphIdToUpdate) {
@@ -149,7 +162,6 @@ export function initStudioWorkbench(ctx) {
     }
     if (savedChart && graphIdToUpdate && graphIsPublished && !window.confirm('This graph is currently published. Saving will update the live dashboard immediately. Continue?')) return;
 
-    await ctx.api.persistStudioFieldColors?.();
     const updated = await ctx.dbManager.updateRecord(record.id, { docType: $('studioDocTypeInput')?.value.trim() || record.docType, status: approve ? 'Approved' : ($('studioStatusSelect')?.value || record.status), adminNotes: $('studioNotesInput')?.value.trim() || record.adminNotes, extractedData: record.extractedData, graphDrafts: [] });
     if (savedChart) {
       const savedMapping = savedChart.chart_data?.rankedBar || {};
@@ -175,16 +187,26 @@ export function initStudioWorkbench(ctx) {
         const updatedGraph = await ctx.dbManager.updateGraph(graphIdToUpdate, savedChart);
         ctx.state.studioActiveGraphId = String(updatedGraph.id);
         ctx.state.studioActiveGraphPublished = Boolean(updatedGraph.is_published);
+        ctx.state.studioActiveGraphUpdatedAt = updatedGraph.updated_at || updatedGraph.updatedAt || new Date().toISOString();
       } else {
         const createdGraph = await ctx.dbManager.saveGraph(savedChart);
         ctx.state.studioActiveGraphId = String(createdGraph.id);
         ctx.state.studioActiveGraphPublished = Boolean(createdGraph.is_published);
+        ctx.state.studioActiveGraphUpdatedAt = createdGraph.updated_at || createdGraph.updatedAt || new Date().toISOString();
       }
     }
     ctx.state.studioActiveRecord = { ...record, ...updated };
     if (ctx.state.activeScan?.id === record.id) { ctx.state.activeScan = { ...ctx.state.activeScan, ...updated }; await ctx.api.renderOverviewTab(ctx.state.activeScan); ctx.api.renderViewerTab(ctx.state.activeScan); await ctx.api.renderGraphsTab(ctx.state.activeScan); }
     window.IRIS_STUDIO_DIRTY = false;
-    await ctx.api.renderAdminPortal(); alert(`Dataset '${record.fileName}' successfully saved to database!${approve ? ' (Published)' : ''}`);
+    await ctx.api.renderAdminPortal();
+    let savedGraphsRefreshError = '';
+    if (savedChart && ctx.api.renderSavedGraphsTab) {
+      try { await ctx.api.renderSavedGraphsTab(); }
+      catch (error) { savedGraphsRefreshError = ` Saved Graphs could not refresh: ${error.message || error}`; }
+    }
+    alert(savedChart
+      ? `Graph "${savedChart.title}" and its dataset were saved.${approve ? ' The graph is published.' : ''}${savedGraphsRefreshError}`
+      : `Dataset '${record.fileName}' successfully saved to database!${approve ? ' (Published)' : ''}`);
   };
   ['studioChartTypeSelect', 'studioCategoryCol', 'studioValueCol', 'studioValuePrecisionSelect', 'studioGroupField', 'studioRankedYearSelect', 'studioRankedReverseOrder', 'studioFilterField', 'studioFilterOperator', 'studioFilterValue', 'studioFilterUpperValue', 'studioSortOrder', 'studioRowLimit', 'studioGroupDuplicates'].forEach(id => $(id)?.addEventListener('change', () => { if (id === 'studioChartTypeSelect') { const sheet = ctx.api.getStudioActiveSheet(ctx.state.studioActiveRecord)?.data; if (sheet) ctx.api.updateFieldSelectOptions(sheet); } window.IRIS_STUDIO_DIRTY = true; ctx.api.updateStudioChart(); }));
   $('studioFilterValue')?.addEventListener('input', () => { window.IRIS_STUDIO_DIRTY = true; ctx.api.updateStudioChart(); }); $('studioRowLimit')?.addEventListener('input', () => { window.IRIS_STUDIO_DIRTY = true; ctx.api.updateStudioChart(); }); $('studioChartTitleInput')?.addEventListener('input', event => { window.IRIS_STUDIO_DIRTY = true; event.target.setAttribute('data-customized', 'true'); });

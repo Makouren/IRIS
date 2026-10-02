@@ -109,15 +109,22 @@
         passwordInput.value = '';
         return;
       }
-      const response = await fetch(api, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': token, Accept: 'application/json' },
-        body: JSON.stringify({ action: button.dataset.action, id: account.id })
-      });
-      const result = await response.json();
-      if (!response.ok) throw new Error(result.error || 'Unable to update account.');
-      showNotice(`Account ${button.dataset.action === 'activate' ? 'activated' : 'deactivated'}.`);
-      await loadAccounts();
+      if (button.dataset.action === 'deactivate' && !window.confirm(`Deactivate ${account.username}? They will no longer be able to sign in.`)) return;
+      button.disabled = true;
+      try {
+        const response = await fetch(api, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': token, Accept: 'application/json' },
+          body: JSON.stringify({ action: button.dataset.action, id: account.id })
+        });
+        const result = await response.json();
+        if (!response.ok) throw new Error(result.error || 'Unable to update account.');
+        showNotice(`Account ${button.dataset.action === 'activate' ? 'activated' : 'deactivated'}.`);
+        await loadAccounts();
+      } catch (error) {
+        showNotice(error.message, true);
+        button.disabled = false;
+      }
     } catch (error) { showNotice(error.message, true); }
   });
 
@@ -134,6 +141,10 @@
 
   form.addEventListener('submit', async event => {
     event.preventDefault();
+    if (!form.reportValidity()) return;
+    const submitButton = form.querySelector('button[type="submit"]');
+    if (submitButton?.disabled) return;
+    if (submitButton) submitButton.disabled = true;
     const data = Object.fromEntries(new FormData(form).entries());
     data.action = 'save';
     if (!data.password) delete data.password;
@@ -143,6 +154,7 @@
       resetForm();
       await loadAccounts();
     } catch (error) { showNotice(error.message, true); }
+    finally { if (submitButton) submitButton.disabled = false; }
   });
 
   resetButton.addEventListener('click', async () => {
@@ -152,10 +164,15 @@
       passwordInput.focus();
       return;
     }
+    const username = form.elements.username.value.trim() || 'this account';
+    if (!window.confirm(`Reset the password for ${username}?`)) return;
+    if (resetButton.disabled) return;
+    resetButton.disabled = true;
     try {
       await send({ action: 'reset-password', id: form.elements.id.value, password });
       passwordInput.value = '';
       showNotice('Password reset.');
     } catch (error) { showNotice(error.message, true); }
+    finally { resetButton.disabled = false; }
   });
 })();

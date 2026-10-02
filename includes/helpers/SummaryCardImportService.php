@@ -5,6 +5,7 @@ require_once __DIR__ . '/LatestYearResolver.php';
 require_once __DIR__ . '/SummaryCardHistory.php';
 require_once __DIR__ . '/ImportBatchAudit.php';
 require_once __DIR__ . '/SummaryCardCategoryStorage.php';
+require_once __DIR__ . '/CustomImportFields.php';
 
 final class SummaryCardImportService
 {
@@ -49,6 +50,7 @@ final class SummaryCardImportService
             $limit = in_array($field, ['description', 'secondary_description', 'info_text', 'source_info'], true) ? 65535 : 255;
             if (strlen($value) > $limit) throw new RuntimeException("Row {$rowNumber}: {$field} exceeds its storage limit.");
         }
+        $values['custom_fields'] = CustomImportFields::merge($base['custom_fields'] ?? [], $input['custom_fields'] ?? []);
         return $values;
     }
 
@@ -57,6 +59,7 @@ final class SummaryCardImportService
         foreach (self::CONTENT_FIELDS as $field) {
             if ((string)($left[$field] ?? '') !== (string)($right[$field] ?? '')) return false;
         }
+        if (CustomImportFields::decode($left['custom_fields'] ?? []) !== CustomImportFields::decode($right['custom_fields'] ?? [])) return false;
         return true;
     }
 
@@ -90,7 +93,10 @@ final class SummaryCardImportService
     private static function signature(?array $period): string
     {
         if (!$period) return '';
-        return hash('sha256', json_encode(array_intersect_key($period, array_flip(self::CONTENT_FIELDS)), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES));
+        return hash('sha256', json_encode([
+            'content' => array_intersect_key($period, array_flip(self::CONTENT_FIELDS)),
+            'custom_fields' => CustomImportFields::decode($period['custom_fields'] ?? [])
+        ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES));
     }
 
     private static function sameCategories(array $left, array $right): bool
@@ -112,6 +118,7 @@ final class SummaryCardImportService
             'header_aliases' => $parsed['profile']['header_aliases'] ?? [],
             'required_columns' => $parsed['profile']['required_columns'] ?? [],
             'mapping_rules' => $parsed['profile']['mapping_rules'] ?? [],
+            'custom_fields' => $parsed['profile']['custom_fields'] ?? [],
             'defaults_json' => $parsed['profile']['defaults_json'] ?? []
         ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR));
         foreach ($parsed['rows'] as $input) {
@@ -273,23 +280,53 @@ final class SummaryCardImportService
     {
         $before = $row['snapshot_before'];
         $values = $row['snapshot_after'];
+        $hasCustomFields = CustomImportFields::columnExists($pdo, 'summary_card_snapshots');
         if (!$before) {
-            $insert = $pdo->prepare('INSERT INTO summary_card_snapshots (card_id, title, period_key, period_label, period_sort, period_precision, is_published, main_value, main_label, secondary_label, secondary_value, year_date, description, secondary_description, info_text, source_info, source_record_id, batch_id, last_source_record_id, last_batch_id) VALUES (?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
-            $insert->execute([$cardId, $values['title'], $row['period_key'], $row['period_label'], $row['period_sort'], $row['period_precision'], $values['main_value'], $values['main_label'], $values['secondary_label'], $values['secondary_value'], self::periodDate($values['year_date']), $values['description'], $values['secondary_description'], $values['info_text'], $values['source_info'], $recordId, $batchId, $recordId, $batchId]);
+            $columns = ['card_id', 'title', 'period_key', 'period_label', 'period_sort', 'period_precision', 'is_published', 'main_value', 'main_label', 'secondary_label', 'secondary_value', 'year_date', 'description', 'secondary_description', 'info_text', 'source_info'];
+            $insertValues = [$cardId, $values['title'], $row['period_key'], $row['period_label'], $row['period_sort'], $row['period_precision'], 0, $values['main_value'], $values['main_label'], $values['secondary_label'], $values['secondary_value'], self::periodDate($values['year_date']), $values['description'], $values['secondary_description'], $values['info_text'], $values['source_info']];
+            if ($hasCustomFields) {
+                $columns[] = 'custom_fields';
+                $insertValues[] = CustomImportFields::encode($values['custom_fields'] ?? []);
+            }
+            $columns = array_merge($columns, ['source_record_id', 'batch_id', 'last_source_record_id', 'last_batch_id']);
+            $insertValues = array_merge($insertValues, [$recordId, $batchId, $recordId, $batchId]);
+            $insert = $pdo->prepare('INSERT INTO summary_card_snapshots (' . implode(', ', array_map(static fn(string $column): string => '`' . $column . '`', $columns)) . ')
+                VALUES (' . implode(', ', array_fill(0, count($columns), '?')) . ')');
+            $insert->execute($insertValues);
         } else {
-            $update = $pdo->prepare('UPDATE summary_card_snapshots SET title = ?, period_label = ?, period_sort = ?, period_precision = ?, main_value = ?, main_label = ?, secondary_label = ?, secondary_value = ?, year_date = ?, description = ?, secondary_description = ?, info_text = ?, source_info = ?, last_source_record_id = ?, last_batch_id = ? WHERE snapshot_id = ?');
-            $update->execute([$values['title'], $row['period_label'], $row['period_sort'], $row['period_precision'], $values['main_value'], $values['main_label'], $values['secondary_label'], $values['secondary_value'], self::periodDate($values['year_date']), $values['description'], $values['secondary_description'], $values['info_text'], $values['source_info'], $recordId, $batchId, $before['snapshot_id']]);
+            $updates = [
+                'title' => $values['title'], 'period_label' => $row['period_label'], 'period_sort' => $row['period_sort'],
+                'period_precision' => $row['period_precision'], 'main_value' => $values['main_value'], 'main_label' => $values['main_label'],
+                'secondary_label' => $values['secondary_label'], 'secondary_value' => $values['secondary_value'],
+                'year_date' => self::periodDate($values['year_date']), 'description' => $values['description'],
+                'secondary_description' => $values['secondary_description'], 'info_text' => $values['info_text'], 'source_info' => $values['source_info']
+            ];
+            if ($hasCustomFields) $updates['custom_fields'] = CustomImportFields::encode($values['custom_fields'] ?? []);
+            $updates['last_source_record_id'] = $recordId;
+            $updates['last_batch_id'] = $batchId;
+            $update = $pdo->prepare('UPDATE summary_card_snapshots SET ' . implode(', ', array_map(static fn(string $column): string => '`' . $column . '` = ?', array_keys($updates))) . ' WHERE snapshot_id = ?');
+            $update->execute([...array_values($updates), $before['snapshot_id']]);
         }
         $query = $pdo->prepare('SELECT * FROM summary_card_snapshots WHERE card_id = ? AND period_key = ? ORDER BY snapshot_id DESC LIMIT 1');
         $query->execute([$cardId, $row['period_key']]);
         $after = $query->fetch(PDO::FETCH_ASSOC);
-        $period = $pdo->prepare('INSERT INTO summary_card_periods (card_id, period_key, period_label, period_sort, period_precision, main_value, main_label, secondary_label, secondary_value, year_date, description, secondary_description, info_text, source_info, is_published)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            ON DUPLICATE KEY UPDATE period_label = VALUES(period_label), period_sort = VALUES(period_sort), period_precision = VALUES(period_precision),
-                main_value = VALUES(main_value), main_label = VALUES(main_label), secondary_label = VALUES(secondary_label),
-                secondary_value = VALUES(secondary_value), year_date = VALUES(year_date), description = VALUES(description),
-                secondary_description = VALUES(secondary_description), info_text = VALUES(info_text), source_info = VALUES(source_info), is_published = VALUES(is_published)');
-        $period->execute([$cardId, $row['period_key'], $row['period_label'], $row['period_sort'], $row['period_precision'], $values['main_value'], $values['main_label'], $values['secondary_label'], $values['secondary_value'], self::periodDate($values['year_date']), $values['description'], $values['secondary_description'], $values['info_text'], $values['source_info'], !empty($before['is_published']) ? 1 : 0]);
+        $periodValues = [
+            $cardId, $row['period_key'], $row['period_label'], $row['period_sort'], $row['period_precision'],
+            $values['main_value'], $values['main_label'], $values['secondary_label'], $values['secondary_value'],
+            self::periodDate($values['year_date']), $values['description'], $values['secondary_description'], $values['info_text'], $values['source_info']
+        ];
+        $periodColumns = ['card_id', 'period_key', 'period_label', 'period_sort', 'period_precision', 'main_value', 'main_label', 'secondary_label', 'secondary_value', 'year_date', 'description', 'secondary_description', 'info_text', 'source_info'];
+        if (CustomImportFields::columnExists($pdo, 'summary_card_periods')) {
+            $periodColumns[] = 'custom_fields';
+            $periodValues[] = CustomImportFields::encode($values['custom_fields'] ?? []);
+        }
+        $periodColumns[] = 'is_published';
+        $periodValues[] = !empty($before['is_published']) ? 1 : 0;
+        $periodUpdates = array_values(array_filter($periodColumns, static fn(string $column): bool => !in_array($column, ['card_id', 'period_key'], true)));
+        $periodSql = 'INSERT INTO summary_card_periods (' . implode(', ', array_map(static fn(string $column): string => '`' . $column . '`', $periodColumns)) . ')
+            VALUES (' . implode(', ', array_fill(0, count($periodColumns), '?')) . ')
+            ON DUPLICATE KEY UPDATE ' . implode(', ', array_map(static fn(string $column): string => '`' . $column . '` = VALUES(`' . $column . '`)', $periodUpdates));
+        $pdo->prepare($periodSql)->execute($periodValues);
         ImportBatchAudit::row($pdo, $batchId, 'summary_card_snapshot', (string)$after['snapshot_id'], $row['sheet_name'], $row['row_number'], $before, $after);
     }
 

@@ -1,5 +1,7 @@
 <?php require_once __DIR__.'/../includes/functions.php'; require_admin();
-if(empty($_SESSION['pending_extraction'])){flash_redirect('admin/smart_upload.php','error','There is no extracted file waiting for review.');}$data=$_SESSION['pending_extraction'];$filename=$_SESSION['pending_extraction_filename']??'uploaded file';$fileType=$_SESSION['pending_extraction_file_type']??'';$rankings=$data['rankings']??[];$breakdowns=$data['ranking_breakdowns']??[];$colleges=$data['colleges']??[];$programs=$data['programs']??[];$accreditations=$data['accreditations']??[];$totalRows=count($rankings)+count($breakdowns)+count($colleges)+count($programs)+count($accreditations);$firstActiveTab='rankings';if(!$rankings){if($breakdowns)$firstActiveTab='breakdowns';elseif($colleges)$firstActiveTab='colleges';elseif($programs)$firstActiveTab='programs';elseif($accreditations)$firstActiveTab='accreditations';}
+if(empty($_SESSION['pending_extraction'])){flash_redirect('admin/smart_upload.php','error','There is no extracted file waiting for review.');}
+$reviewError = flash('error');
+$data=$_SESSION['pending_extraction'];$filename=$_SESSION['pending_extraction_filename']??'uploaded file';$fileType=$_SESSION['pending_extraction_file_type']??'';$rankings=$data['rankings']??[];$breakdowns=$data['ranking_breakdowns']??[];$colleges=$data['colleges']??[];$programs=$data['programs']??[];$accreditations=$data['accreditations']??[];$totalRows=count($rankings)+count($breakdowns)+count($colleges)+count($programs)+count($accreditations);$firstActiveTab='rankings';if(!$rankings){if($breakdowns)$firstActiveTab='breakdowns';elseif($colleges)$firstActiveTab='colleges';elseif($programs)$firstActiveTab='programs';elseif($accreditations)$firstActiveTab='accreditations';}
 ?>
 
 <!DOCTYPE html>
@@ -73,6 +75,9 @@ if(empty($_SESSION['pending_extraction'])){flash_redirect('admin/smart_upload.ph
 
     <!-- Main Container -->
     <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 flex-1 w-full space-y-6">
+        <?php if ($reviewError): ?>
+            <p class="text-sm text-rose-700 dark:text-rose-300" role="alert" aria-live="assertive"><?= e($reviewError) ?></p>
+        <?php endif; ?>
         
         <!-- Document Meta Header Banner -->
         <div class="p-6 bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-4">
@@ -105,6 +110,7 @@ if(empty($_SESSION['pending_extraction'])){flash_redirect('admin/smart_upload.ph
             <form action="<?= e(base_url('admin/smart_upload_confirm.php')) ?>" method="POST" id="reviewForm" class="space-y-6">
                 <?= csrf_field() ?>
                 <input type="hidden" name="file_type" value="<?= htmlspecialchars($fileType) ?>">
+                <input type="hidden" name="confirm_empty" id="confirmEmptySubmission" value="0">
 
                 <!-- Flowbite Tabs Header -->
                 <div class="border-b border-gray-200 dark:border-gray-700">
@@ -370,11 +376,12 @@ if(empty($_SESSION['pending_extraction'])){flash_redirect('admin/smart_upload.ph
                         </div>
                         <div class="flex items-center space-x-3">
                             <a href="<?= e(base_url('admin/smart_upload.php')) ?>" class="px-4 py-2 text-xs font-semibold text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-xl">Cancel</a>
-                            <button type="submit" class="inline-flex items-center px-5 py-2 text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-500 rounded-xl shadow-lg transition-all">
+                            <button type="submit" aria-describedby="reviewFormError" class="inline-flex items-center px-5 py-2 text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-500 rounded-xl shadow-lg transition-all">
                                 <i class="fa-solid fa-circle-check mr-2"></i> Confirm &amp; Save to Observatory
                             </button>
                         </div>
                     </div>
+                    <p id="reviewFormError" class="hidden max-w-7xl mx-auto mt-2 text-right text-xs text-rose-700 dark:text-rose-300" role="alert" aria-live="assertive"></p>
                 </div>
 
             </form>
@@ -389,6 +396,35 @@ if(empty($_SESSION['pending_extraction'])){flash_redirect('admin/smart_upload.ph
             const checkboxes = pane.querySelectorAll('.row-chk');
             const allChecked = Array.from(checkboxes).every(c => c.checked);
             checkboxes.forEach(c => c.checked = !allChecked);
+        }
+
+        const reviewForm = document.getElementById('reviewForm');
+        if (reviewForm) {
+            const submitButton = reviewForm.querySelector('button[type="submit"]');
+            const errorMessage = document.getElementById('reviewFormError');
+            const emptyConfirmation = document.getElementById('confirmEmptySubmission');
+
+            reviewForm.addEventListener('submit', event => {
+                if (reviewForm.dataset.submitting === 'true') {
+                    event.preventDefault();
+                    return;
+                }
+
+                const selectedRows = reviewForm.querySelectorAll('.row-chk:checked').length;
+                if (selectedRows === 0 && !window.confirm('No rows are selected. Confirm saving this upload with 0 rows?')) {
+                    event.preventDefault();
+                    errorMessage.textContent = 'No rows were selected. Select rows, or confirm again to save this upload with 0 rows.';
+                    errorMessage.classList.remove('hidden');
+                    submitButton.focus();
+                    return;
+                }
+
+                emptyConfirmation.value = selectedRows === 0 ? '1' : '0';
+                reviewForm.dataset.submitting = 'true';
+                submitButton.disabled = true;
+                submitButton.setAttribute('aria-disabled', 'true');
+                errorMessage.classList.add('hidden');
+            });
         }
     </script>
 </body>

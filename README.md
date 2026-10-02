@@ -4,9 +4,9 @@
 
 IRIS is a plain-PHP application. Apache serves PHP pages and PDO-backed APIs; browser JavaScript handles interactive workflows, file parsing, and charts. There is no Laravel application, Composer runtime, Node.js web server, or Python service.
 
-## V5.3.0 Highlight
+## V5.7.0 Highlight
 
-V5.3.0 adds destination-aware office uploads and a Super Admin File Archives workspace, grouped public visualizations, editable graph scopes and ranking-body order, and richer Ranking History defaults. It also aligns the Office Upload, Scanner, and Observatory styling, including a responsive dotted background. See [README_V5.3.0.md](README_V5.3.0.md) for changes, migrations, and verification.
+V5.7.0 adds Super Admin record merge with explicit source/target selection and append-only File History, including archived source files and restore support. It expands destination-specific workbook mapping, saved graph editing and color management, Ranking History defaults, and Summary Card category/default controls. See [README_V5.7.0.md](README_V5.7.0.md) for changes, required migrations, and verification.
 
 ## What the System Does
 
@@ -14,6 +14,8 @@ V5.3.0 adds destination-aware office uploads and a Super Admin File Archives wor
 - Lets administrators import structured CSV rows into the institutional database through a reviewable staging workflow.
 - Provides a Scanner for spreadsheet ingestion, extracted-data review, editable tables, and chart drafting.
 - Stores records, saved graph configurations, and manually managed performance snapshot cards in MySQL.
+- Provides Super Admin record merge, File History, and restore tools in File Archives.
+- Supports template-defined custom import fields for Summary Cards and Ranking History.
 - Publishes selected graphs and snapshot cards to the Observatory without conflating graph publication with record approval.
 - Provides authentication, user/admin roles, record management, graph exports, and print views.
 
@@ -21,7 +23,7 @@ V5.3.0 adds destination-aware office uploads and a Super Admin File Archives wor
 
 - **User:** registers with a CLSU email address, signs in, and reads the Observatory.
 - **Admin:** has all user access plus office uploads and the File Ingestion dashboard.
-- **Super Admin:** manages accounts, templates, ranking bodies, review workflows, ranking history, summary cards, and saved graphs.
+- **Super Admin:** manages accounts, templates, ranking bodies, review workflows, ranking history, summary cards, saved graphs, record merges, and File History.
 
 Registration creates a `user` role. An administrator must promote accounts explicitly. PHP session authentication protects the Observatory and APIs; mutations use role checks and CSRF tokens. Do not expose local database credentials in a deployed environment.
 
@@ -37,6 +39,7 @@ Registration creates a `user` role. An administrator must promote accounts expli
 | Smart Upload | `admin/smart_upload.php` | Maps supported structured CSV headers into staging rows for the institutional tables. |
 | Extraction Review | `admin/review_extraction.php` | Lets an admin inspect, edit, and select mapped rows before the Smart Upload database transaction. |
 | Saved Graphs | `admin/saved_graphs.php` | Lists saved chart versions and supports per-graph or selected-graph publishing, export, printing, and deletion. |
+| File Archives | `admin/file_archives.php` and the admin File Archives tab | Filters imported records and provides role-gated merge, history, download, and restore actions. |
 | Scanner workspace | `scanner/index.php` | Provides browser-based ingestion, extraction overview, document/data viewing, draft charts, and links to the admin and Observatory. |
 
 ## Data Workflows
@@ -60,6 +63,8 @@ Registration creates a `user` role. An administrator must promote accounts expli
 
 Office users choose **Data and Report Visualization**, **Summary Cards**, or **Ranking History** before uploading a spreadsheet. General visualization uploads require an active analytics template and enter the regular record-review and charting workflow. Summary Card and Ranking History uploads use their active import profiles and remain separated from the general Review Editor dataset.
 
+Super Admin import profiles can define labeled custom fields and map additional workbook columns to them. Those values are preserved with supported Ranking History and Summary Card imports. Apply the custom-field storage migration before enabling these mappings.
+
 Parser and viewer modules for PDF, DOCX, and image OCR are present in the codebase, but the current Scanner upload widget accepts spreadsheets only. Smart Upload currently performs rule-based mapping for CSV files.
 
 ### Saved Graph Publish and Unpublish
@@ -75,9 +80,15 @@ Snapshot cards are maintained separately from Scanner graphs. Their title, value
 
 The Unified Summary Cards profile maps office spreadsheet headers to Summary Card fields, including Global Label (`summary_cards.import_key`), reporting period, card content, optional categories, and display precision. Imports compare every incoming period against database history. Older imports are backfills; only the latest explicitly published snapshot is public/current. New periods remain unpublished until an administrator publishes them. Blank cells preserve values; `__CLEAR__` explicitly clears a field. The Summary Card history manager supports correction, publication, provenance inspection, and read-only public history.
 
+Super Admins can create and manage categories, set the public default category, and manage cards in a dialog in Review Editor. The default selector lists all categories but only allows saving a category that has at least one published card.
+
 Ranking History imports match the full ranking identity, display a side-by-side preview, and reject ambiguous matches. The Super Admin must acknowledge the diff before applying selected rows. Optimistic row versions prevent applying stale previews.
 
 After successful database writes, open IRIS pages refresh automatically. Super Admin tabs synchronize promptly; other roles poll every five seconds. Pages with unsaved edits defer refresh and offer a manual refresh action.
+
+### File Archives and Record Merge
+
+Super Admins can compare two compatible spreadsheet records, explicitly select the source to merge and the surviving target, and review a preview before applying the merge. File History captures pre-merge and post-merge snapshots and keeps supported original workbooks in private upload storage. Authorized administrators can inspect/download versions and restore one while recording the pre-restore and restored states. The File History table migration is required before these actions are available.
 
 ## Important Publication Rules
 
@@ -148,6 +159,7 @@ For Scanner publication, a record is linked to its charts by `saved_graphs.recor
 | `summary_cards` | Independently managed Observatory snapshot cards and publication settings. |
 | `template_import_profiles` | Super Admin mappings, required fields, and defaults for office spreadsheet imports. |
 | `summary_card_snapshots` | Historical values for imported summary-card periods. |
+| `record_file_history` | Append-only record merge and restore snapshots, with references and checksums for private workbook copies. |
 | `import_batches`, `import_batch_rows` | Import audit records used to revert an applied batch. |
 | `app_change_state` | Shared write version polled by active pages for refresh synchronization. |
 
@@ -168,6 +180,12 @@ The runtime uses the normalized `iris_db_3nf` schema. `database.sql` and migrati
 | `POST /api/iris.php?resource=records&id={recordId}&action=unpublish` | Return one record to Pending Review and unpublish all linked saved graphs. |
 | `POST /api/iris.php?resource=records&action=bulk-publish` | Publish selected records and their linked saved graphs transactionally. |
 | `POST /api/iris.php?resource=records&action=bulk-unpublish` | Return selected records to Pending Review and unpublish their linked graphs transactionally. |
+| `POST /api/iris.php?resource=records&action=preview-record-merge` | Validate and preview a source-to-target spreadsheet merge. Super Admin only. |
+| `POST /api/iris.php?resource=records&action=merge-records` | Apply an explicitly directed merge and create File History snapshots. Super Admin only. |
+| `GET /api/iris.php?resource=record_file_history&action=list&record_id={recordId}` | List File History entries for a record or merge pair. Admin authenticated. |
+| `GET /api/iris.php?resource=record_file_history&action=version&id={versionId}` | Read an archived record snapshot. Admin authenticated. |
+| `GET /api/iris.php?resource=record_file_history&action=download&id={versionId}` | Download an archived source workbook. Admin authenticated. |
+| `POST /api/iris.php?resource=record_file_history&action=restore&id={versionId}` | Restore an archived record version and append restore history. Admin authenticated. |
 | `GET /api/iris.php?resource=graphs` | List saved graphs. |
 | `POST /api/iris.php?resource=graphs` | Save a graph and its chart data. |
 | `POST /api/iris.php?resource=graphs&id={graphId}&action=publish` | Set one graph's `is_published` flag to true. |
@@ -193,7 +211,7 @@ Graph publish/unpublish requests send JSON such as `{ "published": true }` or `{
 1. Place or clone the repository under `C:/xampp/htdocs/iris` (or another Apache document-root subdirectory).
 2. Start Apache and MySQL from the XAMPP Control Panel.
 3. Provision the supplied normalized schema and any required transformed data into `iris_db_3nf` before starting the application. Do not import [`database.sql`](database.sql) or run historical migrations that select `iris_db`; those describe the retired denormalized schema.
-4. Apply only explicit migrations documented for `iris_db_3nf`, such as the normalized Super Admin role seed and ranking-display migration. The application bootstrap does not create or alter tables.
+4. Apply only reviewed migrations documented for `iris_db_3nf`. V5.7.0 requires [`20261003_create_record_file_history.sql`](migrations/20261003_create_record_file_history.sql) for merge/history/restore and [`20261005_custom_import_fields.sql`](migrations/20261005_custom_import_fields.sql) for custom workbook mappings. Back up the database and verify the target schema before applying either. The application bootstrap does not create or alter tables.
 5. Set `IRIS_DB_HOST`, `IRIS_DB_PORT`, `IRIS_DB_NAME`, `IRIS_DB_USER`, and `IRIS_DB_PASS` in [`config/db.php`](config/db.php) for the environment. The current defaults are intended for local XAMPP development, not production.
 6. Provision the initial active `super_admin` account through the deployment's secure account-bootstrap process. Self-registration is disabled. Super Admins can manage subsequent Admin and User accounts from the application.
 7. Open the application under its Apache document-root URL and sign in. The application root redirects signed-in users according to their normalized role.
@@ -204,7 +222,7 @@ For production, configure a least-privilege MySQL account, a non-default passwor
 
 ```text
 auth/                    Registration, login, logout, and PHP sessions
-admin/                   File intake, record review, Smart Upload, saved graphs
+admin/                   File intake, record review, File Archives, Smart Upload, saved graphs
 api/                     Authenticated IRIS API and Observatory read endpoints
 config/db.php            PDO connection and Scanner schema compatibility setup
 includes/                Authentication, rank helpers, extractors, data inserts
@@ -213,7 +231,7 @@ scanner/js/              Browser app, charting, persistence, modules, parsers
 scanner/css/             Scanner styles
 scanner/test/            Dependency-free Node tests
 user/dashboard.php       Signed-in Observatory interface
-database.sql             Legacy schema reference; do not import for V5.3.0
+database.sql             Legacy schema reference; do not import for V5.7.0
 ```
 
 ## Tests
@@ -224,12 +242,13 @@ Node.js is not required to run the PHP application. To run the browser-logic and
 node --test scanner/test/*.test.js
 ```
 
-The suite covers graph/chart mapping, table filtering, document pagination, graph exports, publication wiring, and UI contracts. It does not replace an authenticated browser smoke test against Apache/MySQL for changes to login, upload, persistence, or publish/unpublish behavior. See [`scanner/test/README.md`](scanner/test/README.md) for test coverage details.
+The suite covers graph/chart mapping, record merge/File History behavior, table filtering, document pagination, graph exports, publication wiring, and UI contracts. PHP-specific File History and workbook-mapping checks are separate commands. Tests do not replace an authenticated browser smoke test against Apache/MySQL for login, upload, persistence, or publish/unpublish behavior. See [`scanner/test/README.md`](scanner/test/README.md) for test coverage details.
 
 ## Related Documentation
 
 - [`README_PHP.md`](README_PHP.md): PHP deployment notes.
-- [`README_V5.3.0.md`](README_V5.3.0.md): current release changes, migrations, and verification.
+- [`README_V5.7.0.md`](README_V5.7.0.md): current release changes, migrations, and verification.
+- [`README_V5.3.0.md`](README_V5.3.0.md): V5.3.0 release changes and migration steps.
 - [`README_V4.5.0.md`](README_V4.5.0.md): V4.5.0 release changes and migration steps.
 - [`README_V3.4.7.md`](README_V3.4.7.md): Historical V3.4.7 release details.
 - [`README_V3.4.5.md`](README_V3.4.5.md): Historical V3.4.5 release notes.

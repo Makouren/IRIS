@@ -100,10 +100,13 @@
     try {
       const { response, result } = await requestJson(fetch(`${api}?resource=profile_mapper_status&destination=${encodeURIComponent(destination)}&profile_id=${encodeURIComponent(profileId)}`, { headers: { Accept: 'application/json' }, cache: 'no-store' }));
       if (!response.ok) throw new Error(result.error || 'Unable to check the profile.');
+      panel.dataset.customFieldsReady = String(Boolean(result.custom_fields_ready));
       input.disabled = !result.ready;
       if (selectButton) selectButton.classList.toggle('pointer-events-none', !result.ready);
       if (selectButton) selectButton.classList.toggle('opacity-50', !result.ready);
-      statusMessage(panel, result.ready ? 'Upload a workbook to map its headers to this profile.' : (result.message || 'Workbook mapping is unavailable for this profile.'));
+      statusMessage(panel, result.ready
+        ? (result.custom_fields_ready ? 'Upload a workbook to map its headers to this profile.' : 'Workbook mapping is ready. Apply the custom import fields migration before adding custom fields.')
+        : (result.message || 'Workbook mapping is unavailable for this profile.'));
     } catch (error) {
       input.disabled = true;
       if (selectButton) selectButton.classList.add('pointer-events-none', 'opacity-50');
@@ -146,7 +149,7 @@
     const profile = profileJson(destination);
     const preferredSheet = String(profile.sheet_selector || '');
     const profileId = getProfileId(destination);
-    const state = { token: upload.token, profileId, destination, originalName: upload.original_filename, sheets: upload.sheets || [], preview: null, confirmed: false };
+    const state = { token: upload.token, profileId, destination, originalName: upload.original_filename, sheets: upload.sheets || [], preview: null, confirmed: false, addedFields: [], customFieldsReady: panel.dataset.customFieldsReady === 'true' };
     states.set(panel, state);
     panel.dataset.workbookToken = upload.token;
     const sheetSelect = panel.querySelector('[data-mapper-sheet]');
@@ -188,15 +191,31 @@
     const samples = data.samples || [];
     const required = new Set(data.required || []);
     body.replaceChildren();
-    for (const field of data.targets || []) {
+    const targetFields = [...(data.targets || []), ...state.addedFields.map(item => `custom_fields.${item.key}`)];
+    for (const field of targetFields) {
       const suggestion = suggestions[field] || { header: null, match_type: 'none' };
       const row = document.createElement('tr');
       row.dataset.field = field;
-      row.dataset.required = required.has(field) ? '1' : '0';
+      const customField = field.startsWith('custom_fields.');
+      row.dataset.required = required.has(field) || state.addedFields.some(item => `custom_fields.${item.key}` === field) ? '1' : '0';
       if (required.has(field) && !suggestion.header) row.className = 'bg-red-50 dark:bg-red-950/30';
       const targetCell = document.createElement('td');
       targetCell.className = 'p-2 font-semibold';
-      targetCell.textContent = labels[field] || field;
+      if (customField) {
+        const key = field.slice('custom_fields.'.length);
+        const input = document.createElement('input');
+        input.type = 'text';
+        input.maxLength = 80;
+        input.required = true;
+        input.placeholder = 'Custom field label';
+        input.value = state.addedFields.find(item => item.key === key)?.label || profileJson(state.destination).custom_fields?.[key] || '';
+        input.className = 'w-full rounded border border-gray-300 bg-white p-1.5 text-gray-900 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100';
+        input.dataset.customFieldLabel = key;
+        input.addEventListener('input', () => { state.confirmed = false; updateValidation(panel); });
+        targetCell.append(input);
+      } else {
+        targetCell.textContent = labels[field] || field;
+      }
       const selectCell = document.createElement('td');
       selectCell.className = 'p-2';
       const select = document.createElement('select');
@@ -212,6 +231,7 @@
         const closeIndex = initial?.suggested_header ? headers.findIndex(header => header === initial.suggested_header) : -1;
         typeCell.textContent = select.value === '' ? (initial?.match_type === 'close' ? 'close (needs confirmation)' : 'none')
           : (initial?.match_type === 'close' && closeIndex === Number(select.value) ? 'close (confirmed)' : initial?.index === Number(select.value) ? initial.match_type : 'manual');
+        sampleCell.textContent = select.value === '' ? '' : samples.map(sample => String(sample[Number(select.value)] ?? '').trim()).filter(Boolean).slice(0, 3).join(' · ');
         updateValidation(panel);
       });
       selectCell.append(select);
@@ -222,7 +242,7 @@
         ? `close (needs confirmation): ${suggestion.suggested_header || ''}`
         : suggestion.match_type;
       const sampleCell = document.createElement('td');
-      sampleCell.className = 'whitespace-pre-wrap p-2 text-gray-600 dark:text-slate-300';
+      sampleCell.className = 'whitespace-pre-wrap p-2 text-gray-700 dark:text-slate-200';
       const columnIndex = suggestion.index === null && suggestion.suggested_header
         ? headers.findIndex(header => header === suggestion.suggested_header)
         : suggestion.index;
@@ -246,19 +266,42 @@
     const messages = [];
     if (missing.length) messages.push(`Unmapped required fields: ${missing.join(', ')}.`);
     if (duplicate) messages.push('A worksheet column is assigned to more than one field.');
+    const invalidCustom = rows.some(row => row.dataset.field.startsWith('custom_fields.') && !String(row.querySelector('[data-custom-field-label]')?.value || '').trim());
+    if (invalidCustom) messages.push('Enter a label for every custom field.');
     summary.textContent = messages.length ? messages.join(' ') : 'All required fields are mapped. Unmapped columns will be ignored.';
     const duplicateValues = new Set(assigned.filter(value => assigned.indexOf(value) !== assigned.lastIndexOf(value)));
     selects.forEach(select => select.classList.toggle('border-red-500', duplicateValues.has(select.value)));
+    panel.querySelector('[data-mapper-add-field]').disabled = !state.customFieldsReady || rows.filter(row => row.dataset.field.startsWith('custom_fields.')).length >= 50;
     summary.className = `mb-2 rounded px-2 py-1 text-xs ${missing.length || duplicate ? 'bg-red-50 font-semibold text-red-700 dark:bg-red-950/30 dark:text-red-300' : 'text-gray-600 dark:text-slate-300'}`;
-    panel.querySelector('[data-mapper-confirm]').disabled = missing.length > 0 || duplicate;
+    panel.querySelector('[data-mapper-confirm]').disabled = missing.length > 0 || duplicate || invalidCustom;
     const saveButton = getSaveButton(state.destination);
-    if (saveButton) saveButton.disabled = missing.length > 0 || duplicate || !state.confirmed;
+    if (saveButton) saveButton.disabled = missing.length > 0 || duplicate || invalidCustom || !state.confirmed;
+  }
+
+  function addCustomField(panel) {
+    const state = states.get(panel);
+    if (!state?.preview || !state.customFieldsReady) return;
+    const existing = new Set([
+      ...Object.keys(profileJson(state.destination).custom_fields || {}),
+      ...state.addedFields.map(item => item.key)
+    ]);
+    if (existing.size >= 50) return;
+    let index = 1;
+    while (existing.has(`custom_field_${index}`)) index++;
+    const key = `custom_field_${index}`;
+    state.addedFields.push({ key, label: '' });
+    renderTable(panel, state.preview);
+    panel.querySelector(`[data-field-select="custom_fields.${key}"]`)?.focus();
   }
 
   async function upload(panel, file) {
     const destination = panel.dataset.profileMapper;
     const profileId = getProfileId(destination);
     if (!profileId) return;
+    if (panel.dataset.uploading === 'true') return;
+    panel.dataset.uploading = 'true';
+    const fileInput = panel.querySelector('[data-mapper-file]');
+    if (fileInput) fileInput.disabled = true;
     clearWorkbook(panel);
     const saveButton = getSaveButton(destination);
     if (saveButton) saveButton.disabled = true;
@@ -277,12 +320,17 @@
       if (saveButton) saveButton.disabled = false;
       showNotice(error.message);
       statusMessage(panel, error.message || 'Unable to read workbook.', true);
+    } finally {
+      panel.dataset.uploading = 'false';
+      if (fileInput) fileInput.disabled = false;
     }
   }
 
   async function preview(panel) {
     const state = states.get(panel);
-    if (!state) return;
+    const previewButton = panel.querySelector('[data-mapper-preview]');
+    if (!state || previewButton.disabled) return;
+    previewButton.disabled = true;
     const data = new FormData();
     data.set('action', 'preview-profile-workbook');
     data.set('destination', state.destination);
@@ -299,6 +347,8 @@
       panel.querySelector('[data-mapper-preview-panel]').classList.add('hidden');
       showNotice(error.message);
       statusMessage(panel, error.message || 'Unable to preview workbook headers.', true);
+    } finally {
+      previewButton.disabled = false;
     }
   }
 
@@ -312,8 +362,23 @@
     const profile = profileJson(state.destination);
     const mappings = { ...(profile.mapping_rules || {}) };
     const aliases = { ...(profile.header_aliases || {}) };
+    const customFields = { ...(profile.custom_fields || {}) };
+    for (const key of Object.keys(customFields)) {
+      delete mappings[`custom_fields.${key}`];
+      delete aliases[`custom_fields.${key}`];
+    }
     for (const select of selectors) {
       const field = select.dataset.fieldSelect;
+      if (field.startsWith('custom_fields.')) {
+        const key = field.slice('custom_fields.'.length);
+        const label = panel.querySelector(`[data-custom-field-label="${key}"]`)?.value.trim() || '';
+        if (!label) continue;
+        customFields[key] = label;
+        if (select.value === '') continue;
+        const header = preview.headers[Number(select.value)];
+        mappings[field] = header;
+        continue;
+      }
       if (select.value === '') { delete mappings[field]; delete aliases[field]; continue; }
       const header = preview.headers[Number(select.value)];
       mappings[field] = header;
@@ -322,6 +387,7 @@
     }
     profile.mapping_rules = mappings;
     profile.header_aliases = aliases;
+    profile.custom_fields = customFields;
     profile.sheet_selector = panel.querySelector('[data-mapper-sheet]').value;
     const editor = getEditor(state.destination);
     editor.value = JSON.stringify(profile, null, 2);
@@ -342,6 +408,7 @@
     select?.addEventListener('change', () => { clearWorkbook(panel); refreshPanel(panel); });
     panel.querySelector('[data-mapper-preview]').addEventListener('click', () => preview(panel));
     panel.querySelector('[data-mapper-confirm]').addEventListener('click', () => confirm(panel));
+    panel.querySelector('[data-mapper-add-field]').addEventListener('click', () => addCustomField(panel));
   });
 
   window.IRISProfileWorkbookMapper = {

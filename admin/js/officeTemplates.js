@@ -52,6 +52,25 @@
     updateTemplateOptions();
   }
 
+  const officeUploadForm = document.querySelector('form[action*="/admin/upload_process.php"]');
+  officeUploadForm?.addEventListener('submit', event => {
+    if (!officeUploadForm.reportValidity()) {
+      event.preventDefault();
+      return;
+    }
+    if (officeUploadForm.dataset.submitting === 'true') {
+      event.preventDefault();
+      return;
+    }
+    officeUploadForm.dataset.submitting = 'true';
+    officeUploadForm.setAttribute('aria-busy', 'true');
+    const submitButton = officeUploadForm.querySelector('[type="submit"]');
+    if (submitButton) {
+      submitButton.disabled = true;
+      submitButton.setAttribute('aria-disabled', 'true');
+    }
+  });
+
   const list = document.getElementById('activeTemplatesList');
   if (!list) return;
 
@@ -81,13 +100,13 @@
     title.className = 'text-sm font-bold text-gray-900 dark:text-white';
     title.textContent = selectedGroup.title;
     const count = document.createElement('span');
-    count.className = 'shrink-0 text-xs text-gray-500 dark:text-slate-400';
+    count.className = 'shrink-0 text-xs font-medium text-gray-700 dark:text-slate-300';
     count.textContent = `${templatesForGroup.length} template${templatesForGroup.length === 1 ? '' : 's'}`;
     heading.append(title, count);
     list.append(heading);
     if (!templatesForGroup.length) {
       const empty = document.createElement('p');
-      empty.className = 'py-4 text-sm text-gray-500 dark:text-slate-400';
+      empty.className = 'py-4 text-sm text-gray-700 dark:text-slate-300';
       empty.textContent = 'No active templates in this category.';
       list.append(empty);
       return;
@@ -103,12 +122,14 @@
       name.className = 'break-words text-sm font-semibold text-gray-900 dark:text-white';
       name.textContent = template.name;
       const originalName = document.createElement('p');
-      originalName.className = 'break-all text-xs text-gray-500 dark:text-slate-400';
+      originalName.className = 'break-all text-xs text-gray-700 dark:text-slate-300';
       originalName.textContent = template.original_filename;
       details.append(name, originalName);
       const download = document.createElement('a');
       download.className = 'inline-flex shrink-0 items-center gap-2 rounded-lg border border-gray-300 px-3 py-2 text-sm font-semibold hover:bg-gray-100 dark:border-slate-700 dark:hover:bg-slate-800';
-      download.href = `${downloadBase}?id=${encodeURIComponent(template.id)}`;
+      download.href = template.is_profile_workbook
+        ? `${downloadBase}?destination=${encodeURIComponent(template.import_destination)}`
+        : `${downloadBase}?id=${encodeURIComponent(template.id)}`;
       download.innerHTML = '<i class="fa-solid fa-download" aria-hidden="true"></i>Download';
       row.append(details, download);
       rows.append(row);
@@ -121,10 +142,15 @@
   async function refresh() {
     if (document.visibilityState !== 'visible') return;
     try {
-      const response = await fetch(api, { headers: { Accept: 'application/json' }, cache: 'no-store' });
-      const payload = await response.json();
-      if (!response.ok || !Array.isArray(payload)) throw new Error('Active templates are temporarily unavailable.');
-      render(payload);
+      const [response, profileResponse] = await Promise.all([
+        fetch(api, { headers: { Accept: 'application/json' }, cache: 'no-store' }),
+        fetch(`${api}?resource=office_import_profiles`, { headers: { Accept: 'application/json' }, cache: 'no-store' })
+      ]);
+      const [payload, profilePayload] = await Promise.all([response.json(), profileResponse.json()]);
+      if (!response.ok || !Array.isArray(payload) || !profileResponse.ok || !Array.isArray(profilePayload)) {
+        throw new Error('Active templates are temporarily unavailable.');
+      }
+      render([...payload, ...profilePayload]);
     } catch (error) {
       console.warn('Template list refresh failed:', error);
     }

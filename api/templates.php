@@ -11,6 +11,12 @@ function templates_fail(string $message, int $status = 400): never {
     exit;
 }
 
+function templates_custom_mapping_field(mixed $field, array $customFields): bool {
+    return is_string($field)
+        && preg_match('/^custom_fields\.([a-z][a-z0-9_]{0,47})$/', $field, $matches) === 1
+        && array_key_exists($matches[1], $customFields);
+}
+
 function templates_csv_has_null_byte(string $path): bool {
     $handle = fopen($path, 'rb');
     if ($handle === false) return true;
@@ -27,6 +33,7 @@ function templates_csv_has_null_byte(string $path): bool {
 try {
     require_once __DIR__ . '/../includes/functions.php';
     require_once __DIR__ . '/../includes/helpers/SummaryCardImportProfiles.php';
+    require_once __DIR__ . '/../includes/helpers/CustomImportFields.php';
     require_once __DIR__ . '/../includes/helpers/ProfileWorkbookService.php';
     $method = $_SERVER['REQUEST_METHOD'] ?? 'GET';
     if ($method === 'GET') {
@@ -50,6 +57,29 @@ try {
             echo json_encode(['active_profile_id' => SummaryCardImportProfiles::activeId(db(), $destination), 'profiles' => SummaryCardImportProfiles::available(db(), $destination)], JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT);
             exit;
         }
+        if (($_GET['resource'] ?? '') === 'office_import_profiles') {
+            requireRole(['super_admin', 'admin', 'user'], true);
+            $pdo = db();
+            if (!ProfileWorkbookService::metadataReady($pdo)) {
+                echo json_encode([]);
+                exit;
+            }
+            $profiles = [];
+            foreach (['summary_cards', 'ranking_history'] as $destination) {
+                foreach (SummaryCardImportProfiles::available($pdo, $destination) as $profile) {
+                    if (empty($profile['is_active']) || empty($profile['workbook_original_filename'])) continue;
+                    $profiles[] = [
+                        'id' => 'profile-' . (int)$profile['id'],
+                        'name' => (string)$profile['profile_name'],
+                        'original_filename' => (string)$profile['workbook_original_filename'],
+                        'import_destination' => $destination,
+                        'is_profile_workbook' => true
+                    ];
+                }
+            }
+            echo json_encode($profiles, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT);
+            exit;
+        }
         if (($_GET['resource'] ?? '') === 'import_profile') {
             requireRole(['super_admin'], true);
             $profileId = filter_var($_GET['profile_id'] ?? null, FILTER_VALIDATE_INT);
@@ -64,6 +94,7 @@ try {
                 'header_aliases' => $profile['header_aliases'],
                 'required_columns' => $profile['required_columns'],
                 'mapping_rules' => $profile['mapping_rules'],
+                'custom_fields' => $profile['custom_fields'] ?? [],
                 'defaults' => $profile['defaults_json'],
                 'workbook_header_row' => $profile['workbook_header_row'] ?? null,
                 'workbook_headers' => $profile['workbook_headers'] ?? [],
@@ -72,7 +103,7 @@ try {
             exit;
         }
         if (($_GET['resource'] ?? '') === 'active_import_profile') {
-            requireRole(['super_admin', 'admin'], true);
+            requireRole(['super_admin', 'admin', 'user'], true);
             $destination = (string)($_GET['destination'] ?? '');
             if (!in_array($destination, ['summary_cards', 'ranking_history'], true)) templates_fail('Choose a valid import destination.');
             $profile = SummaryCardImportProfiles::active(db(), $destination);
@@ -98,6 +129,7 @@ try {
                 'header_aliases' => $profile['header_aliases'],
                 'required_columns' => $profile['required_columns'],
                 'mapping_rules' => $profile['mapping_rules'],
+                'custom_fields' => $profile['custom_fields'] ?? [],
                 'defaults' => $profile['defaults_json'],
                 'workbook_header_row' => $profile['workbook_header_row'] ?? null,
                 'workbook_headers' => $profile['workbook_headers'] ?? [],
@@ -106,7 +138,7 @@ try {
             exit;
         }
         if (($_GET['resource'] ?? '') === 'active_summary_card_profile') {
-            requireRole(['super_admin', 'admin'], true);
+            requireRole(['super_admin', 'admin', 'user'], true);
             $profile = SummaryCardImportProfiles::active(db());
             echo json_encode([
                 'id' => (int)$profile['id'],
@@ -199,13 +231,18 @@ try {
         }
         requireRole(['super_admin', 'admin'], true);
         $pdo = db();
-        $query = $pdo->prepare(($_SESSION['role'] ?? '') === 'super_admin'
-            ? 'SELECT templates.template_id AS id, templates.name, templates.original_filename, templates.ranking_body_id, bodies.name AS ranking_body_name, templates.is_active, templates.created_at, profiles.destination AS import_destination, profiles.sheet_selector, profiles.header_aliases, profiles.required_columns, profiles.identity_fields, profiles.mapping_rules, profiles.defaults_json FROM templates LEFT JOIN ranking_bodies bodies ON bodies.ranking_body_id = templates.ranking_body_id LEFT JOIN template_import_profiles profiles ON profiles.template_id = templates.template_id ORDER BY templates.created_at DESC, templates.template_id DESC'
-            : 'SELECT templates.template_id AS id, templates.name, templates.original_filename, templates.ranking_body_id, bodies.name AS ranking_body_name, templates.is_active, templates.created_at, profiles.destination AS import_destination, profiles.sheet_selector, profiles.required_columns, profiles.identity_fields, profiles.mapping_rules, profiles.defaults_json FROM templates LEFT JOIN ranking_bodies bodies ON bodies.ranking_body_id = templates.ranking_body_id LEFT JOIN template_import_profiles profiles ON profiles.template_id = templates.template_id WHERE templates.is_active = 1 ORDER BY templates.name ASC, templates.template_id DESC');
+        $customFieldsColumn = CustomImportFields::columnExists($pdo, 'template_import_profiles')
+            ? 'profiles.custom_fields'
+            : 'NULL AS custom_fields';
+        $templateQuery = 'SELECT templates.template_id AS id, templates.name, templates.original_filename, templates.ranking_body_id, bodies.name AS ranking_body_name, templates.is_active, templates.created_at, profiles.destination AS import_destination, profiles.sheet_selector, profiles.header_aliases, profiles.required_columns, profiles.identity_fields, profiles.mapping_rules, ' . $customFieldsColumn . ', profiles.defaults_json FROM templates LEFT JOIN ranking_bodies bodies ON bodies.ranking_body_id = templates.ranking_body_id LEFT JOIN template_import_profiles profiles ON profiles.template_id = templates.template_id';
+        $templateQuery .= ($_SESSION['role'] ?? '') === 'super_admin'
+            ? ' ORDER BY templates.created_at DESC, templates.template_id DESC'
+            : ' WHERE templates.is_active = 1 ORDER BY templates.name ASC, templates.template_id DESC';
+        $query = $pdo->prepare($templateQuery);
         $query->execute();
         $templates = $query->fetchAll(PDO::FETCH_ASSOC);
         foreach ($templates as &$template) {
-            foreach (['header_aliases', 'required_columns', 'identity_fields', 'mapping_rules', 'defaults_json'] as $field) {
+            foreach (['header_aliases', 'required_columns', 'identity_fields', 'mapping_rules', 'custom_fields', 'defaults_json'] as $field) {
                 $template[$field] = json_decode((string)($template[$field] ?? ''), true) ?: [];
             }
             if (!$template['identity_fields'] && $template['import_destination'] === 'summary_cards') $template['identity_fields'] = ['import_key'];
@@ -272,6 +309,8 @@ try {
         $required = $profileData['required_columns'] ?? [];
         $identityFields = $profileData['identity_fields'] ?? ($destination === 'summary_cards' ? ['import_key'] : ['organization', 'ranking_type', 'year']);
         $defaults = $profileData['defaults'] ?? [];
+        try { $customFields = CustomImportFields::definitions($profileData['custom_fields'] ?? []); }
+        catch (InvalidArgumentException $exception) { templates_fail($exception->getMessage()); }
         $sheetSelector = $profileData['sheet_selector'] ?? '';
         if (!is_array($aliases) || !is_array($mapping) || !is_array($required) || !array_is_list($required) || !is_array($identityFields) || !array_is_list($identityFields) || !is_array($defaults)) {
             templates_fail('Aliases, mappings, required columns, identities, and defaults have invalid shapes.');
@@ -294,8 +333,15 @@ try {
             foreach (['import_key', 'period_key', 'main_value', 'main_label'] as $field) if (!isset($mapping[$field])) templates_fail('Required Summary Card mapping is missing: ' . $field);
             $required = array_values(array_unique(array_merge(['import_key', 'period_key', 'main_value', 'main_label'], $identityFields)));
         }
-        foreach (array_unique(array_merge(array_keys($aliases), array_keys($mapping), $required, array_keys($defaults), $identityFields)) as $field) {
+        foreach (array_unique(array_merge(array_keys($aliases), $required, array_keys($defaults), $identityFields)) as $field) {
             if (!is_string($field) || !in_array($field, $allowedFields, true)) templates_fail('Unsupported ' . $destination . ' import field: ' . (string)$field);
+        }
+        foreach (array_keys($mapping) as $field) {
+            if (!in_array($field, $allowedFields, true) && !templates_custom_mapping_field($field, $customFields)) templates_fail('Unsupported ' . $destination . ' import field: ' . (string)$field);
+        }
+        $hasCustomMapping = (bool)array_filter(array_keys($mapping), static fn($field): bool => templates_custom_mapping_field($field, $customFields));
+        if (($customFields || $hasCustomMapping) && !CustomImportFields::storageReady($pdo)) {
+            templates_fail('Apply the custom import fields migration before saving custom field mappings.', 409);
         }
         $assignedHeaders = [];
         foreach ($mapping as $header) {
@@ -341,16 +387,36 @@ try {
             }
         }
         try {
-            if ($workbook) {
-                $save = $pdo->prepare('UPDATE template_import_profiles SET profile_name = ?, sheet_selector = ?, header_aliases = ?, required_columns = ?, identity_fields = ?, mapping_rules = ?, defaults_json = ?, workbook_file_path = ?, workbook_original_filename = ?, workbook_headers = ?, workbook_header_row = ? WHERE import_profile_id = ? AND destination = ?');
-                $save->execute([$profileName, trim($sheetSelector) !== '' ? trim($sheetSelector) : null, json_encode($aliases), json_encode($required), json_encode($identityFields), json_encode($mapping), json_encode($defaults), $workbook['workbook_file_path'], $workbook['workbook_original_filename'], $workbook['workbook_headers'], $workbook['workbook_header_row'], (int)$profileId, $destination]);
-            } elseif ($clearWorkbook) {
-                $save = $pdo->prepare('UPDATE template_import_profiles SET profile_name = ?, sheet_selector = ?, header_aliases = ?, required_columns = ?, identity_fields = ?, mapping_rules = ?, defaults_json = ?, workbook_file_path = NULL, workbook_original_filename = NULL, workbook_headers = NULL, workbook_header_row = NULL WHERE import_profile_id = ? AND destination = ?');
-                $save->execute([$profileName, trim($sheetSelector) !== '' ? trim($sheetSelector) : null, json_encode($aliases), json_encode($required), json_encode($identityFields), json_encode($mapping), json_encode($defaults), (int)$profileId, $destination]);
-            } else {
-                $save = $pdo->prepare('UPDATE template_import_profiles SET profile_name = ?, sheet_selector = ?, header_aliases = ?, required_columns = ?, identity_fields = ?, mapping_rules = ?, defaults_json = ? WHERE import_profile_id = ? AND destination = ?');
-                $save->execute([$profileName, trim($sheetSelector) !== '' ? trim($sheetSelector) : null, json_encode($aliases), json_encode($required), json_encode($identityFields), json_encode($mapping), json_encode($defaults), (int)$profileId, $destination]);
+            $profileFields = [
+                'profile_name' => $profileName,
+                'sheet_selector' => trim($sheetSelector) !== '' ? trim($sheetSelector) : null,
+                'header_aliases' => json_encode($aliases),
+                'required_columns' => json_encode($required),
+                'identity_fields' => json_encode($identityFields),
+                'mapping_rules' => json_encode($mapping)
+            ];
+            if (CustomImportFields::columnExists($pdo, 'template_import_profiles')) {
+                $profileFields['custom_fields'] = json_encode($customFields);
             }
+            $profileFields['defaults_json'] = json_encode($defaults);
+            if ($workbook) {
+                $profileFields += [
+                    'workbook_file_path' => $workbook['workbook_file_path'],
+                    'workbook_original_filename' => $workbook['workbook_original_filename'],
+                    'workbook_headers' => $workbook['workbook_headers'],
+                    'workbook_header_row' => $workbook['workbook_header_row']
+                ];
+            } elseif ($clearWorkbook) {
+                $profileFields += [
+                    'workbook_file_path' => null,
+                    'workbook_original_filename' => null,
+                    'workbook_headers' => null,
+                    'workbook_header_row' => null
+                ];
+            }
+            $set = implode(', ', array_map(static fn(string $field): string => '`' . $field . '` = ?', array_keys($profileFields)));
+            $save = $pdo->prepare('UPDATE template_import_profiles SET ' . $set . ' WHERE import_profile_id = ? AND destination = ?');
+            $save->execute([...array_values($profileFields), (int)$profileId, $destination]);
         } catch (Throwable $exception) {
             if ($workbook) ProfileWorkbookService::abortCommit($workbook);
             throw $exception;
@@ -450,6 +516,8 @@ try {
         $required = $profileData['required_columns'] ?? [];
         $identityFields = $profileData['identity_fields'] ?? ['import_key'];
         $defaults = $profileData['defaults'] ?? [];
+        try { $customFields = CustomImportFields::definitions($profileData['custom_fields'] ?? []); }
+        catch (InvalidArgumentException $exception) { templates_fail($exception->getMessage()); }
         $sheetSelector = $profileData['sheet_selector'] ?? '';
         if (!is_array($aliases) || !is_array($mapping) || !is_array($required) || !array_is_list($required) || !is_array($identityFields) || !array_is_list($identityFields) || !is_array($defaults)) {
             templates_fail('Summary Card aliases, mappings, required columns, identities, and defaults have invalid shapes.');
@@ -457,8 +525,15 @@ try {
         if (!$identityFields || !in_array('import_key', $identityFields, true) || in_array('period_key', $identityFields, true)) {
             templates_fail('Summary Card identity fields must include import_key and exclude period_key.');
         }
-        foreach (array_unique(array_merge(array_keys($aliases), array_keys($mapping), $required, array_keys($defaults), $identityFields)) as $field) {
+        foreach (array_unique(array_merge(array_keys($aliases), $required, array_keys($defaults), $identityFields)) as $field) {
             if (!is_string($field) || !preg_match('/^[a-z][a-z0-9_]{0,63}$/', $field)) templates_fail('Summary Card canonical field names are invalid.');
+        }
+        foreach (array_keys($mapping) as $field) {
+            if (!is_string($field) || (!preg_match('/^[a-z][a-z0-9_]{0,63}$/', $field) && !templates_custom_mapping_field($field, $customFields))) templates_fail('Summary Card canonical field names are invalid.');
+        }
+        $hasCustomMapping = (bool)array_filter(array_keys($mapping), static fn($field): bool => templates_custom_mapping_field($field, $customFields));
+        if (($customFields || $hasCustomMapping) && !CustomImportFields::storageReady($pdo)) {
+            templates_fail('Apply the custom import fields migration before saving custom field mappings.', 409);
         }
         foreach ($identityFields as $field) if (!is_string($field)) templates_fail('Summary Card identity fields must be canonical names.');
         foreach ($mapping as $header) if (!is_string($header) || trim($header) === '') templates_fail('Each Summary Card mapping must name a worksheet header.');
@@ -469,8 +544,19 @@ try {
         $required = array_values(array_unique(array_merge($required, $identityFields)));
         foreach (['import_key', 'period_key', 'main_value', 'main_label'] as $field) if (!isset($mapping[$field])) templates_fail('Required Summary Card mapping is missing: ' . $field);
         SummaryCardImportProfiles::get($pdo, (int)$profileId, true);
-        $save = $pdo->prepare('UPDATE template_import_profiles SET profile_name = ?, sheet_selector = ?, header_aliases = ?, required_columns = ?, identity_fields = ?, mapping_rules = ?, defaults_json = ? WHERE import_profile_id = ? AND destination = \'summary_cards\'');
-        $save->execute([$profileName, trim($sheetSelector) !== '' ? trim($sheetSelector) : null, json_encode($aliases), json_encode($required), json_encode($identityFields), json_encode($mapping), json_encode($defaults), (int)$profileId]);
+        $profileFields = [
+            'profile_name' => $profileName,
+            'sheet_selector' => trim($sheetSelector) !== '' ? trim($sheetSelector) : null,
+            'header_aliases' => json_encode($aliases),
+            'required_columns' => json_encode($required),
+            'identity_fields' => json_encode($identityFields),
+            'mapping_rules' => json_encode($mapping)
+        ];
+        if (CustomImportFields::columnExists($pdo, 'template_import_profiles')) $profileFields['custom_fields'] = json_encode($customFields);
+        $profileFields['defaults_json'] = json_encode($defaults);
+        $set = implode(', ', array_map(static fn(string $field): string => '`' . $field . '` = ?', array_keys($profileFields)));
+        $save = $pdo->prepare('UPDATE template_import_profiles SET ' . $set . ' WHERE import_profile_id = ? AND destination = \'summary_cards\'');
+        $save->execute([...array_values($profileFields), (int)$profileId]);
         if (!$save->rowCount()) {
             $exists = $pdo->prepare('SELECT import_profile_id FROM template_import_profiles WHERE import_profile_id = ? AND destination = \'summary_cards\'');
             $exists->execute([(int)$profileId]);
@@ -495,6 +581,8 @@ try {
         $required = $profileData['required_columns'] ?? [];
         $identityFields = $profileData['identity_fields'] ?? ($destination === 'summary_cards' ? ['import_key'] : ['organization', 'ranking_type', 'year']);
         $defaults = $profileData['defaults'] ?? [];
+        try { $customFields = CustomImportFields::definitions($profileData['custom_fields'] ?? []); }
+        catch (InvalidArgumentException $exception) { templates_fail($exception->getMessage()); }
         if (!is_array($aliases) || !is_array($mapping) || !is_array($required) || !array_is_list($required) || !is_array($defaults)) {
             templates_fail('Aliases, mappings, required columns, and defaults must have the expected object/list shapes.');
         }
@@ -523,8 +611,15 @@ try {
         foreach ($minimumMappings as $field) {
             if (!isset($mapping[$field])) templates_fail('Required field mapping is missing: ' . $field);
         }
-        foreach (array_unique(array_merge(array_keys($aliases), array_keys($mapping), $required, array_keys($defaults))) as $field) {
+        foreach (array_unique(array_merge(array_keys($aliases), $required, array_keys($defaults))) as $field) {
             if (!in_array($field, $allowedFields, true)) templates_fail('Unsupported ' . $destination . ' import field: ' . (string)$field);
+        }
+        foreach (array_keys($mapping) as $field) {
+            if (!in_array($field, $allowedFields, true) && !templates_custom_mapping_field($field, $customFields)) templates_fail('Unsupported ' . $destination . ' import field: ' . (string)$field);
+        }
+        $hasCustomMapping = (bool)array_filter(array_keys($mapping), static fn($field): bool => templates_custom_mapping_field($field, $customFields));
+        if (($customFields || $hasCustomMapping) && !CustomImportFields::storageReady($pdo)) {
+            templates_fail('Apply the custom import fields migration before saving custom field mappings.', 409);
         }
         foreach ($mapping as $field => $header) {
             if (!is_string($header) || trim($header) === '') templates_fail('Each mapping must name a worksheet header.');
@@ -542,8 +637,25 @@ try {
         $sheetSelector = $profileData['sheet_selector'] ?? '';
         if (!is_string($sheetSelector) || strlen($sheetSelector) > 255) templates_fail('Worksheet selector must be a name under 256 characters.');
         $sheetSelector = trim($sheetSelector);
-        $save = $pdo->prepare('INSERT INTO template_import_profiles (template_id, destination, sheet_selector, header_aliases, required_columns, identity_fields, mapping_rules, defaults_json, created_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?) ON DUPLICATE KEY UPDATE destination = VALUES(destination), sheet_selector = VALUES(sheet_selector), header_aliases = VALUES(header_aliases), required_columns = VALUES(required_columns), identity_fields = VALUES(identity_fields), mapping_rules = VALUES(mapping_rules), defaults_json = VALUES(defaults_json), created_by = VALUES(created_by)');
-        $save->execute([$templateId, $destination, $sheetSelector !== '' ? $sheetSelector : null, json_encode($aliases), json_encode($required), json_encode($identityFields), json_encode($mapping), json_encode($defaults), (int)$_SESSION['user_id']]);
+        $profileFields = [
+            'template_id' => $templateId,
+            'destination' => $destination,
+            'sheet_selector' => $sheetSelector !== '' ? $sheetSelector : null,
+            'header_aliases' => json_encode($aliases),
+            'required_columns' => json_encode($required),
+            'identity_fields' => json_encode($identityFields),
+            'mapping_rules' => json_encode($mapping)
+        ];
+        if (CustomImportFields::columnExists($pdo, 'template_import_profiles')) $profileFields['custom_fields'] = json_encode($customFields);
+        $profileFields['defaults_json'] = json_encode($defaults);
+        $profileFields['created_by'] = (int)$_SESSION['user_id'];
+        $columns = array_keys($profileFields);
+        $quotedColumns = implode(', ', array_map(static fn(string $field): string => '`' . $field . '`', $columns));
+        $placeholders = implode(', ', array_fill(0, count($columns), '?'));
+        $updates = array_values(array_filter($columns, static fn(string $field): bool => $field !== 'template_id'));
+        $updateSql = implode(', ', array_map(static fn(string $field): string => '`' . $field . '` = VALUES(`' . $field . '`)', $updates));
+        $save = $pdo->prepare('INSERT INTO template_import_profiles (' . $quotedColumns . ') VALUES (' . $placeholders . ') ON DUPLICATE KEY UPDATE ' . $updateSql);
+        $save->execute(array_values($profileFields));
         echo json_encode(['success' => true]);
         exit;
     }

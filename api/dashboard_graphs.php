@@ -12,7 +12,7 @@ try {
         $sql = "SELECT sg.graph_id AS id, sg.record_id, sg.title, sg.scope, sg.chart_type, sg.orientation, sg.chart_options AS chart_data,
                    sg.value_axis_reversed, sg.value_axis_min, sg.value_axis_max,
                    sg.rank_semantic, sg.rank_value_min, sg.rank_value_max,
-                 sg.is_published, sg.created_at,
+                 sg.is_published, sg.created_at, sg.updated_at,
                    (SELECT COUNT(*) FROM saved_graphs versioned WHERE versioned.record_id = sg.record_id AND versioned.created_at <= sg.created_at) AS version,
                  r.file_name AS source_file_name, r.file_type AS source_file_type, r.status AS source_status
             FROM saved_graphs sg
@@ -70,12 +70,16 @@ try {
     }
     unset($row);
 
-    $fieldColorRows = $pdo->query('SELECT field_name AS field_key, color FROM field_colors')->fetchAll(PDO::FETCH_ASSOC);
+    $fieldColorRows = $pdo->query('SELECT field_name AS field_key, color, updated_at FROM field_colors')->fetchAll(PDO::FETCH_ASSOC);
     $fieldColors = [];
+    $fieldColorUpdatedAt = [];
     foreach ($fieldColorRows as $fieldColor) {
         if (preg_match('/^#[0-9A-Fa-f]{6}$/', (string)$fieldColor['color'])) {
             $key = strtolower(preg_replace('/\s+/', ' ', trim((string)$fieldColor['field_key'])) ?? '');
-            if ($key !== '') $fieldColors[$key] = strtoupper($fieldColor['color']);
+            if ($key !== '') {
+                $fieldColors[$key] = strtoupper($fieldColor['color']);
+                $fieldColorUpdatedAt[$key] = $fieldColor['updated_at'];
+            }
         }
     }
 
@@ -119,6 +123,13 @@ try {
             WHERE mapping.category_id = categories.category_id AND cards.is_published = 1
         )
         ORDER BY categories.sort_order ASC, categories.name ASC")->fetchAll(PDO::FETCH_ASSOC);
+    $applicationState = json_decode((string)$pdo->query('SELECT state_data FROM app_change_state WHERE id = 1')->fetchColumn(), true);
+    $summaryCardDefaultCategory = is_array($applicationState)
+        ? (string)($applicationState['summary_cards_default_category'] ?? '')
+        : '';
+    if ($summaryCardDefaultCategory !== '' && !in_array($summaryCardDefaultCategory, array_column($categoryRows, 'slug'), true)) {
+        $summaryCardDefaultCategory = '';
+    }
 
     $starCardRows = $pdo->query("SELECT cards.card_id AS id, cards.title,
             (SELECT setting_value FROM star_rating_settings WHERE card_id = cards.card_id AND setting_key = 'logo_path' LIMIT 1) AS logo_path,
@@ -179,7 +190,7 @@ try {
         )
         ORDER BY categories.sort_order ASC, categories.name ASC")->fetchAll(PDO::FETCH_ASSOC);
 
-    echo json_encode(['success' => true, 'graphs' => $rows, 'cards' => $cards, 'categories' => $categoryRows, 'star_rating_cards' => $starCardRows, 'star_rating_categories' => $starCategoryRows, 'field_colors' => $fieldColors], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT);
+    echo json_encode(['success' => true, 'graphs' => $rows, 'cards' => $cards, 'categories' => $categoryRows, 'summary_cards_default_category' => $summaryCardDefaultCategory ?: null, 'star_rating_cards' => $starCardRows, 'star_rating_categories' => $starCategoryRows, 'field_colors' => $fieldColors, 'field_color_updated_at' => $fieldColorUpdatedAt], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT);
 } catch (Throwable $e) {
     http_response_code(500);
     echo json_encode(['success' => false, 'error' => 'Unable to load published dashboard graphs.']);

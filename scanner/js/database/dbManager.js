@@ -6,11 +6,25 @@ const IRIS_BASE = (() => {
   return match ? match[1] : path.replace(/\/[^/]*$/, '');
 })();
 const IRIS_API = `${IRIS_BASE}/api/iris.php`;
+const csrfHeaders = headers => ({
+  ...headers,
+  'X-CSRF-Token': typeof document !== 'undefined'
+    ? document.getElementById('savedDashboardGraphsContainer')?.dataset.csrf
+      || document.querySelector('meta[name="csrf-token"]')?.content
+      || ''
+    : ''
+});
 const DEFAULT_API_ENDPOINTS = {
   records: `${IRIS_API}?resource=records`,
   recordById: id => `${IRIS_API}?resource=records&id=${encodeURIComponent(id)}`,
   recordsBulkDelete: `${IRIS_API}?resource=records&action=bulk-delete`,
   recordsBulkApprove: `${IRIS_API}?resource=records&action=bulk-approve`,
+  recordMergePreview: `${IRIS_API}?resource=records&action=preview-record-merge`,
+  recordMerge: `${IRIS_API}?resource=records&action=merge-records`,
+  fileHistoryList: recordId => `${IRIS_API}?resource=record_file_history&action=list&record_id=${encodeURIComponent(recordId)}`,
+  fileHistoryVersion: versionId => `${IRIS_API}?resource=record_file_history&action=version&id=${encodeURIComponent(versionId)}`,
+  fileHistoryDownload: versionId => `${IRIS_API}?resource=record_file_history&action=download&id=${encodeURIComponent(versionId)}`,
+  fileHistoryRestore: versionId => `${IRIS_API}?resource=record_file_history&action=restore&id=${encodeURIComponent(versionId)}`,
   fieldColors: `${IRIS_API}?resource=field_colors`,
   graphs: `${IRIS_API}?resource=graphs`,
   graphById: id => `${IRIS_API}?resource=graphs&id=${encodeURIComponent(id)}`,
@@ -181,7 +195,7 @@ class DatabaseManager {
   async updateRecord(id, updatedFields) {
     await this.initPromise;
     const response = await fetch(this.config.endpoints.recordById(id), {
-      method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updatedFields)
+      method: 'PUT', headers: csrfHeaders({ 'Content-Type': 'application/json' }), body: JSON.stringify(updatedFields)
     });
     const payload = await response.json().catch(() => ({}));
     if (!response.ok) throw new Error(payload.error || `Unable to update record (HTTP ${response.status})`);
@@ -196,7 +210,7 @@ class DatabaseManager {
    */
   async deleteRecord(id) {
     await this.initPromise;
-    const response = await fetch(this.config.endpoints.recordById(id), { method: 'DELETE' });
+    const response = await fetch(this.config.endpoints.recordById(id), { method: 'DELETE', headers: csrfHeaders({}) });
     const payload = await response.json().catch(() => ({}));
     if (!response.ok) throw new Error(payload.error || `Unable to delete record (HTTP ${response.status})`);
     if (this.db) { try { this.db.transaction('records', 'readwrite').objectStore('records').delete(id); } catch (e) {} }
@@ -264,7 +278,7 @@ class DatabaseManager {
   async stageRestore(oldId, officeId) {
     await this.initPromise;
     const response = await fetch(`${this.config.endpoints.recordById(oldId)}&action=stage-restore`, {
-      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ office_id: officeId })
+      method: 'POST', headers: csrfHeaders({ 'Content-Type': 'application/json' }), body: JSON.stringify({ office_id: officeId })
     });
     const payload = await response.json().catch(() => ({}));
     if (!response.ok) throw new Error(payload.error || `Unable to stage merge recovery (HTTP ${response.status})`);
@@ -274,7 +288,7 @@ class DatabaseManager {
   async trashStoredFile(oldId, trashId) {
     await this.initPromise;
     const response = await fetch(`${this.config.endpoints.recordById(oldId)}&action=trash-stored-file`, {
-      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ trash_id: trashId })
+      method: 'POST', headers: csrfHeaders({ 'Content-Type': 'application/json' }), body: JSON.stringify({ trash_id: trashId })
     });
     const payload = await response.json().catch(() => ({}));
     if (!response.ok) throw new Error(payload.error || `Unable to move the previous file to trash (HTTP ${response.status})`);
@@ -284,10 +298,57 @@ class DatabaseManager {
   async restoreMerge(oldId, trashId) {
     await this.initPromise;
     const response = await fetch(`${this.config.endpoints.recordById(oldId)}&action=restore-merge`, {
-      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ trash_id: trashId })
+      method: 'POST', headers: csrfHeaders({ 'Content-Type': 'application/json' }), body: JSON.stringify({ trash_id: trashId })
     });
     const payload = await response.json().catch(() => ({}));
     if (!response.ok) throw new Error(payload.error || `Unable to restore the previous file (HTTP ${response.status})`);
+    return payload;
+  }
+
+  async previewRecordMerge(request) {
+    return this.requestRecordMerge(this.config.endpoints.recordMergePreview, request, 'Unable to preview record merge.');
+  }
+
+  async mergeRecords(request) {
+    return this.requestRecordMerge(this.config.endpoints.recordMerge, request, 'Unable to merge records.');
+  }
+
+  async requestRecordMerge(endpoint, request, fallback) {
+    const response = await fetch(endpoint, {
+      method: 'POST',
+      headers: csrfHeaders({ 'Content-Type': 'application/json', Accept: 'application/json' }),
+      body: JSON.stringify(request)
+    });
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      const error = new Error(payload.error || `${fallback} (HTTP ${response.status})`);
+      error.payload = payload;
+      throw error;
+    }
+    return payload;
+  }
+
+  async getRecordFileHistory(recordId) {
+    const response = await fetch(this.config.endpoints.fileHistoryList(recordId), { headers: { Accept: 'application/json' } });
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(payload.error || `Unable to load File History (HTTP ${response.status})`);
+    return payload.versions || [];
+  }
+
+  async getFileHistoryVersion(versionId) {
+    const response = await fetch(this.config.endpoints.fileHistoryVersion(versionId), { headers: { Accept: 'application/json' } });
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(payload.error || `Unable to load archived version (HTTP ${response.status})`);
+    return payload.version;
+  }
+
+  async restoreFileHistoryVersion(versionId) {
+    const response = await fetch(this.config.endpoints.fileHistoryRestore(versionId), {
+      method: 'POST',
+      headers: csrfHeaders({ Accept: 'application/json' })
+    });
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(payload.error || `Unable to restore archived version (HTTP ${response.status})`);
     return payload;
   }
 

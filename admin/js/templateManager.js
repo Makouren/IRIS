@@ -28,10 +28,18 @@
   let activeSummaryProfileId = null;
   let rankingImportProfiles = [];
   let activeRankingProfileId = null;
+  const profileActionsPending = { summaryActivate: false, summarySave: false, rankingActivate: false, rankingSave: false };
 
   function showNotice(message, isError = false) {
     notice.textContent = message;
     notice.className = `mb-4 rounded-lg p-3 text-sm ${isError ? 'bg-red-50 text-red-800 dark:bg-red-950 dark:text-red-200' : 'bg-emerald-50 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-200'}`;
+  }
+
+  function updateProfileActionAvailability() {
+    summaryProfileActivate.disabled = profileActionsPending.summaryActivate || !summaryProfileSelect.value;
+    summaryProfileSave.disabled = profileActionsPending.summarySave || !summaryProfileSelect.value;
+    rankingProfileActivate.disabled = profileActionsPending.rankingActivate || !rankingProfileSelect.value;
+    rankingProfileSave.disabled = profileActionsPending.rankingSave || !rankingProfileSelect.value;
   }
 
   async function requestJson(url, options) {
@@ -120,6 +128,7 @@
         required_columns: template.required_columns,
         identity_fields: template.identity_fields,
         mapping_rules: template.mapping_rules,
+        custom_fields: template.custom_fields,
         defaults: template.defaults_json
       } : {};
       profileEditor.value = JSON.stringify(profile, null, 2);
@@ -172,6 +181,7 @@
       header_aliases: profile.header_aliases,
       required_columns: profile.required_columns,
       mapping_rules: profile.mapping_rules,
+      custom_fields: profile.custom_fields,
       defaults: profile.defaults,
       workbook_header_row: profile.workbook_header_row,
       workbook_headers: profile.workbook_headers
@@ -187,6 +197,7 @@
     } catch (error) {
       summaryProfileSelect.replaceChildren(new Option('Profiles unavailable. Reopen Manage Templates to retry.', ''));
       summaryProfileSelect.disabled = false;
+      updateProfileActionAvailability();
       showNotice(error.message, true);
       return;
     }
@@ -200,6 +211,7 @@
     if (!summaryImportProfiles.length) {
       summaryProfileSelect.add(new Option('No profiles available. Run the pending migrations.', ''));
       activeSummaryProfileLabel.textContent = 'No Summary Card import profile is configured. Run the pending migrations.';
+      updateProfileActionAvailability();
       return;
     }
     if (selectActive && activeSummaryProfileId) summaryProfileSelect.value = activeSummaryProfileId;
@@ -210,6 +222,7 @@
       : 'No active Summary Card profile is configured.';
     try { await loadSummaryProfileDetails(summaryProfileSelect.value); }
     catch (error) { showNotice(error.message, true); }
+    finally { updateProfileActionAvailability(); }
   }
 
   async function loadRankingProfileDetails(profileId) {
@@ -223,6 +236,7 @@
       header_aliases: profile.header_aliases,
       required_columns: profile.required_columns,
       mapping_rules: profile.mapping_rules,
+      custom_fields: profile.custom_fields,
       defaults: profile.defaults,
       workbook_header_row: profile.workbook_header_row,
       workbook_headers: profile.workbook_headers
@@ -238,6 +252,7 @@
     } catch (error) {
       rankingProfileSelect.replaceChildren(new Option('Profiles unavailable. Reopen Manage Templates to retry.', ''));
       rankingProfileSelect.disabled = false;
+      updateProfileActionAvailability();
       showNotice(error.message, true);
       return;
     }
@@ -250,6 +265,7 @@
     if (!rankingImportProfiles.length) {
       rankingProfileSelect.add(new Option('No profiles available. Run the pending migrations.', ''));
       activeRankingProfileLabel.textContent = 'No Ranking History import profile is configured. Run the pending migrations.';
+      updateProfileActionAvailability();
       return;
     }
     if (selectActive && activeRankingProfileId) rankingProfileSelect.value = activeRankingProfileId;
@@ -260,6 +276,7 @@
       : 'No active Ranking History profile is configured.';
     try { await loadRankingProfileDetails(rankingProfileSelect.value); }
     catch (error) { showNotice(error.message, true); }
+    finally { updateProfileActionAvailability(); }
   }
 
   async function postSummaryProfileAction(action, values) {
@@ -309,33 +326,56 @@
   modal.querySelectorAll('[data-template-manager-close]').forEach(element => element.addEventListener('click', closeModal));
   modal.addEventListener('click', event => { if (event.target === modal) closeModal(); });
   summaryProfileSelect.addEventListener('change', () => {
+    updateProfileActionAvailability();
     window.IRISProfileWorkbookMapper?.clear('summary_cards');
     window.IRISProfileWorkbookMapper?.refresh();
-    loadSummaryProfileDetails(summaryProfileSelect.value).catch(error => showNotice(error.message, true));
+    loadSummaryProfileDetails(summaryProfileSelect.value)
+      .catch(error => showNotice(error.message, true))
+      .finally(updateProfileActionAvailability);
   });
   rankingProfileSelect.addEventListener('change', () => {
+    updateProfileActionAvailability();
     window.IRISProfileWorkbookMapper?.clear('ranking_history');
     window.IRISProfileWorkbookMapper?.refresh();
-    loadRankingProfileDetails(rankingProfileSelect.value).catch(error => showNotice(error.message, true));
+    loadRankingProfileDetails(rankingProfileSelect.value)
+      .catch(error => showNotice(error.message, true))
+      .finally(updateProfileActionAvailability);
   });
+  summaryProfileName.addEventListener('input', () => {
+    summaryProfileName.setCustomValidity('');
+    updateProfileActionAvailability();
+  });
+  rankingProfileName.addEventListener('input', () => {
+    rankingProfileName.setCustomValidity('');
+    updateProfileActionAvailability();
+  });
+  updateProfileActionAvailability();
   summaryProfileActivate.addEventListener('click', async () => {
     if (!summaryProfileSelect.value) return;
-    summaryProfileActivate.disabled = true;
+    profileActionsPending.summaryActivate = true;
+    updateProfileActionAvailability();
     try {
       const result = await postSummaryProfileAction('activate-summary-card-profile', { profile_id: summaryProfileSelect.value });
       await loadSummaryProfiles();
       showNotice(`Active Summary Card profile: ${result.profile_name}`);
     } catch (error) { showNotice(error.message, true); }
-    finally { summaryProfileActivate.disabled = false; }
+    finally { profileActionsPending.summaryActivate = false; updateProfileActionAvailability(); }
   });
   summaryProfileSave.addEventListener('click', async () => {
-    if (!summaryProfileSelect.value) return;
+    if (!summaryProfileSelect.value) { showNotice('Choose a Summary Card profile first.', true); return; }
+    if (!summaryProfileName.value.trim()) {
+      summaryProfileName.setCustomValidity('Enter a profile name.');
+      summaryProfileName.reportValidity();
+      updateProfileActionAvailability();
+      return;
+    }
     let profile;
     try {
       profile = JSON.parse(summaryProfileEditor.value || '{}');
       if (!profile || typeof profile !== 'object' || Array.isArray(profile)) throw new Error('Profile must be a JSON object.');
     } catch (error) { showNotice(`Invalid Summary Card profile JSON: ${error.message}`, true); return; }
-    summaryProfileSave.disabled = true;
+    profileActionsPending.summarySave = true;
+    updateProfileActionAvailability();
     try {
       const workbookToken = window.IRISProfileWorkbookMapper?.workbookToken('summary_cards', summaryProfileSelect.value) || '';
       const values = {
@@ -354,26 +394,34 @@
       window.IRISProfileWorkbookMapper?.refresh();
       showNotice(`Saved Summary Card profile: ${result.profile_name}`);
     } catch (error) { showNotice(error.message, true); }
-    finally { summaryProfileSave.disabled = false; }
+    finally { profileActionsPending.summarySave = false; updateProfileActionAvailability(); }
   });
   rankingProfileActivate.addEventListener('click', async () => {
     if (!rankingProfileSelect.value) return;
-    rankingProfileActivate.disabled = true;
+    profileActionsPending.rankingActivate = true;
+    updateProfileActionAvailability();
     try {
       const result = await postProfileSettingsAction('activate-import-profile', { destination: 'ranking_history', profile_id: rankingProfileSelect.value });
       await loadRankingProfiles();
       showNotice(`Active Ranking History profile: ${result.profile_name}`);
     } catch (error) { showNotice(error.message, true); }
-    finally { rankingProfileActivate.disabled = false; }
+    finally { profileActionsPending.rankingActivate = false; updateProfileActionAvailability(); }
   });
   rankingProfileSave.addEventListener('click', async () => {
-    if (!rankingProfileSelect.value) return;
+    if (!rankingProfileSelect.value) { showNotice('Choose a Ranking History profile first.', true); return; }
+    if (!rankingProfileName.value.trim()) {
+      rankingProfileName.setCustomValidity('Enter a profile name.');
+      rankingProfileName.reportValidity();
+      updateProfileActionAvailability();
+      return;
+    }
     let profile;
     try {
       profile = JSON.parse(rankingProfileEditor.value || '{}');
       if (!profile || typeof profile !== 'object' || Array.isArray(profile)) throw new Error('Profile must be a JSON object.');
     } catch (error) { showNotice(`Invalid Ranking History profile JSON: ${error.message}`, true); return; }
-    rankingProfileSave.disabled = true;
+    profileActionsPending.rankingSave = true;
+    updateProfileActionAvailability();
     try {
       const workbookToken = window.IRISProfileWorkbookMapper?.workbookToken('ranking_history', rankingProfileSelect.value) || '';
       const values = {
@@ -394,11 +442,15 @@
       window.IRISProfileWorkbookMapper?.refresh();
       showNotice(`Saved Ranking History profile: ${result.profile_name}`);
     } catch (error) { showNotice(error.message, true); }
-    finally { rankingProfileSave.disabled = false; }
+    finally { profileActionsPending.rankingSave = false; updateProfileActionAvailability(); }
   });
 
   form.addEventListener('submit', async event => {
     event.preventDefault();
+    if (!form.reportValidity()) return;
+    const submitButton = form.querySelector('button[type="submit"]');
+    if (submitButton?.disabled) return;
+    if (submitButton) submitButton.disabled = true;
     const data = new FormData(form);
     data.set('action', 'upload');
     data.set('_csrf', token);
@@ -410,6 +462,7 @@
       await loadTemplates();
       renderTemplates();
     } catch (error) { showNotice(error.message, true); }
+    finally { if (submitButton) submitButton.disabled = false; }
   });
 
   list.addEventListener('click', async event => {

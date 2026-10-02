@@ -2,6 +2,8 @@
 require_once __DIR__ . '/../includes/functions.php';
 require_once __DIR__ . '/../includes/helpers/LatestYearResolver.php';
 require_once __DIR__ . '/../includes/helpers/SummaryCardHistory.php';
+require_once __DIR__ . '/../includes/helpers/RecordSheetMerge.php';
+require_once __DIR__ . '/../includes/helpers/RecordFileHistory.php';
 requireRole(['super_admin', 'admin', 'user'], true);
 header('Content-Type: application/json; charset=utf-8');
 
@@ -18,6 +20,11 @@ $resource = $_GET['resource'] ?? '';
 $action = $_GET['action'] ?? '';
 $id = $_GET['id'] ?? null;
 $recordId = $_GET['record_id'] ?? null;
+if (in_array($action, ['preview-record-merge', 'merge-records'], true) && ($_SESSION['role'] ?? '') !== 'super_admin') {
+    http_response_code(403);
+    echo json_encode(['error' => 'Only a Super Admin can merge records.']);
+    exit;
+}
 if (($_SERVER['REQUEST_METHOD'] ?? 'GET') !== 'GET') {
     requireRole(['super_admin'], true);
     ensure_json_csrf();
@@ -190,6 +197,72 @@ function stored_upload_path(?string $name): ?string {
     if (!$root) return null;
     $path = realpath($root . DIRECTORY_SEPARATOR . $name);
     return $path && dirname($path) === $root && is_file($path) ? $path : null;
+}
+function record_file_history_group_id(): string {
+    $bytes = random_bytes(16);
+    $bytes[6] = chr((ord($bytes[6]) & 0x0f) | 0x40);
+    $bytes[8] = chr((ord($bytes[8]) & 0x3f) | 0x80);
+    $hex = bin2hex($bytes);
+    return substr($hex, 0, 8) . '-' . substr($hex, 8, 4) . '-' . substr($hex, 12, 4) . '-' . substr($hex, 16, 4) . '-' . substr($hex, 20);
+}
+function record_merge_record_digest(array $record): string {
+    return hash('sha256', json_encode($record, JSON_THROW_ON_ERROR | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES));
+}
+function record_file_history_capture(PDO $pdo, array $record): array {
+    $recordId = (int)$record['record_id'];
+    $graphs = $pdo->prepare('SELECT * FROM saved_graphs WHERE record_id = ? ORDER BY graph_id');
+    $graphs->execute([$recordId]);
+    $savedGraphs = $graphs->fetchAll(PDO::FETCH_ASSOC);
+    foreach ($savedGraphs as &$graph) {
+        $seriesQuery = $pdo->prepare('SELECT * FROM graph_series WHERE graph_id = ? ORDER BY display_order, series_id');
+        $seriesQuery->execute([(int)$graph['graph_id']]);
+        $graph['_series'] = $seriesQuery->fetchAll(PDO::FETCH_ASSOC);
+        foreach ($graph['_series'] as &$series) {
+            $pointsQuery = $pdo->prepare('SELECT * FROM graph_points WHERE series_id = ? ORDER BY display_order, point_id');
+            $pointsQuery->execute([(int)$series['series_id']]);
+            $series['_points'] = $pointsQuery->fetchAll(PDO::FETCH_ASSOC);
+        }
+        unset($series);
+        $colorsQuery = $pdo->prepare('SELECT * FROM graph_colors WHERE graph_id = ? ORDER BY color_id');
+        $colorsQuery->execute([(int)$graph['graph_id']]);
+        $graph['_colors'] = $colorsQuery->fetchAll(PDO::FETCH_ASSOC);
+    }
+    unset($graph);
+    return ['record' => $record, 'saved_graphs' => $savedGraphs];
+}
+function record_file_history_copy_record_file(array $record): ?array {
+    $metadata = json_col($record['metadata'] ?? null, []);
+    $storedName = is_array($metadata) ? (string)($metadata['stored_file'] ?? '') : '';
+    if ($storedName === '') return null;
+    $sourcePath = stored_upload_path($storedName);
+    if (!$sourcePath) throw new RuntimeException('A record references a source file that cannot be read; the merge was not applied.');
+    $root = upload_storage_root();
+    if (!$root) throw new RuntimeException('Private File History storage is unavailable.');
+    return RecordFileHistory::storeFile($sourcePath, $root, (string)($record['file_name'] ?? 'source file'), (string)($record['file_type'] ?? ''));
+}
+function record_file_history_insert(
+    PDO $pdo,
+    string $mergeGroupId,
+    int $recordId,
+    int $sourceRecordId,
+    int $targetRecordId,
+    string $entryType,
+    string $method,
+    int $actorId,
+    array $snapshot,
+    ?array $file
+): int {
+    return RecordFileHistory::insertVersion($pdo, [
+        'merge_group_id' => $mergeGroupId,
+        'record_id' => $recordId,
+        'source_record_id' => $sourceRecordId,
+        'target_record_id' => $targetRecordId,
+        'entry_type' => $entryType,
+        'merge_method' => $method,
+        'acting_super_admin_id' => $actorId,
+        'snapshot' => $snapshot,
+        'file' => $file,
+    ]);
 }
 function merge_trash_directory(bool $create = false): ?string {
     $root = upload_storage_root();
@@ -448,8 +521,193 @@ function attach_summary_card_categories(PDO $pdo, array $cards): array {
     unset($card);
     return $cards;
 }
+function record_file_history_display_snapshot(string $snapshotJson): array {
+    $snapshot = json_decode($snapshotJson, true);
+    if (!is_array($snapshot) || !is_array($snapshot['record'] ?? null)) throw new RuntimeException('The archived version is invalid.');
+    $record = $snapshot['record'];
+    return [
+        'record' => [
+            'id' => (int)$record['record_id'],
+            'fileName' => $record['file_name'] ?? '',
+            'fileType' => $record['file_type'] ?? '',
+            'fileSize' => (int)($record['file_size'] ?? 0),
+            'scannedAt' => $record['scanned_at'] ?? null,
+            'status' => $record['status'] ?? '',
+            'docType' => $record['doc_type'] ?? '',
+            'rawText' => $record['raw_text'] ?? '',
+            'extractedData' => json_col($record['extracted_data'] ?? null, []),
+            'graphDrafts' => json_col($record['graph_drafts'] ?? null, []),
+            'adminNotes' => $record['admin_notes'] ?? '',
+            'metadata' => json_col($record['metadata'] ?? null, []),
+            'updatedAt' => $record['updated_at'] ?? null,
+            'template_id' => isset($record['template_id']) ? (int)$record['template_id'] : null,
+            'import_profile_id' => isset($record['import_profile_id']) ? (int)$record['import_profile_id'] : null,
+            'office_id' => isset($record['office_id']) ? (int)$record['office_id'] : null,
+        ],
+        'saved_graphs' => $snapshot['saved_graphs'] ?? [],
+    ];
+}
+function record_file_history_insert_generated_id(PDO $pdo, string $table, string $primaryKey, array $row): int {
+    unset($row[$primaryKey]);
+    $columns = array_keys($row);
+    if (!$columns) throw new RuntimeException('The archived graph data is empty.');
+    $quoted = implode(', ', array_map(static fn(string $column): string => '`' . str_replace('`', '``', $column) . '`', $columns));
+    $placeholders = implode(', ', array_fill(0, count($columns), '?'));
+    $statement = $pdo->prepare("INSERT INTO `$table` ($quoted) VALUES ($placeholders)");
+    $statement->execute(array_values($row));
+    return (int)$pdo->lastInsertId();
+}
+function record_file_history_restore_graphs(PDO $pdo, int $recordId, array $savedGraphs): void {
+    foreach ($savedGraphs as $graph) {
+        if (!is_array($graph)) continue;
+        $seriesRows = $graph['_series'] ?? [];
+        $colorRows = $graph['_colors'] ?? [];
+        unset($graph['_series'], $graph['_colors']);
+        $graph['record_id'] = $recordId;
+        $graphId = record_file_history_insert_generated_id($pdo, 'saved_graphs', 'graph_id', $graph);
+        $seriesIdMap = [];
+        foreach ($seriesRows as $series) {
+            if (!is_array($series)) continue;
+            $oldSeriesId = (int)($series['series_id'] ?? 0);
+            $points = $series['_points'] ?? [];
+            unset($series['_points']);
+            $series['graph_id'] = $graphId;
+            $seriesId = record_file_history_insert_generated_id($pdo, 'graph_series', 'series_id', $series);
+            if ($oldSeriesId > 0) $seriesIdMap[$oldSeriesId] = $seriesId;
+            foreach ($points as $point) {
+                if (!is_array($point)) continue;
+                $point['series_id'] = $seriesId;
+                record_file_history_insert_generated_id($pdo, 'graph_points', 'point_id', $point);
+            }
+        }
+        foreach ($colorRows as $color) {
+            if (!is_array($color)) continue;
+            $color['graph_id'] = $graphId;
+            if (isset($color['series_id']) && $color['series_id'] !== null) {
+                $color['series_id'] = $seriesIdMap[(int)$color['series_id']] ?? null;
+            }
+            record_file_history_insert_generated_id($pdo, 'graph_colors', 'color_id', $color);
+        }
+    }
+}
 
 try {
+    if ($resource === 'record_file_history') {
+        ensure_admin_for_mutation();
+        if ($_SERVER['REQUEST_METHOD'] === 'GET' && $action === 'list') {
+            $historyRecordId = filter_var($_GET['record_id'] ?? null, FILTER_VALIDATE_INT);
+            if (!$historyRecordId || $historyRecordId < 1) bad('A record id is required.');
+            echo json_encode(['versions' => RecordFileHistory::listForRecord($pdo, $historyRecordId)]);
+            exit;
+        }
+        if ($_SERVER['REQUEST_METHOD'] === 'GET' && $action === 'version') {
+            $versionId = filter_var($id, FILTER_VALIDATE_INT);
+            if (!$versionId || $versionId < 1) bad('A version id is required.');
+            $version = RecordFileHistory::loadVersion($pdo, $versionId);
+            if (!$version) bad('File History version not found.', 404);
+            $version['snapshot'] = record_file_history_display_snapshot((string)$version['snapshot_json']);
+            unset($version['snapshot_json']);
+            echo json_encode(['version' => $version]);
+            exit;
+        }
+        if ($_SERVER['REQUEST_METHOD'] === 'GET' && $action === 'download') {
+            $versionId = filter_var($id, FILTER_VALIDATE_INT);
+            if (!$versionId || $versionId < 1) bad('A version id is required.');
+            $version = RecordFileHistory::loadVersion($pdo, $versionId);
+            if (!$version || empty($version['file_snapshot_key'])) bad('Archived file not found.', 404);
+            $root = upload_storage_root();
+            $path = $root ? RecordFileHistory::resolveFile((string)$version['file_snapshot_key'], $root) : null;
+            if (!$path) bad('Archived file not found.', 404);
+            header('Content-Type: application/octet-stream');
+            header('Content-Disposition: attachment; filename="' . str_replace(['"', "\r", "\n"], '', (string)$version['original_file_name']) . '"');
+            header('Content-Length: ' . filesize($path));
+            readfile($path);
+            exit;
+        }
+        if ($_SERVER['REQUEST_METHOD'] === 'POST' && $action === 'restore') {
+            $versionId = filter_var($id, FILTER_VALIDATE_INT);
+            if (!$versionId || $versionId < 1) bad('A version id is required.');
+            $actorId = (int)($_SESSION['user_id'] ?? 0);
+            if ($actorId < 1) bad('A valid Super Admin session is required.', 403);
+            $version = RecordFileHistory::loadVersion($pdo, $versionId);
+            if (!$version) bad('File History version not found.', 404);
+            $payload = json_decode((string)$version['snapshot_json'], true);
+            if (!is_array($payload) || !is_array($payload['record'] ?? null)) bad('The archived version is invalid.', 409);
+            $restored = $payload['record'];
+            $restoredRecordId = (int)$version['record_id'];
+            $root = upload_storage_root();
+            $restoredUploadName = null;
+            $newHistoryFiles = [];
+            $apiRestoredRecord = null;
+            $pdo->beginTransaction();
+            try {
+                $currentQuery = $pdo->prepare('SELECT * FROM records WHERE record_id = ? FOR UPDATE');
+                $currentQuery->execute([$restoredRecordId]);
+                $current = $currentQuery->fetch(PDO::FETCH_ASSOC) ?: null;
+                if ($current) {
+                    $currentFile = record_file_history_copy_record_file($current);
+                    if ($currentFile) $newHistoryFiles[] = $currentFile['key'];
+                    $currentSnapshot = record_file_history_capture($pdo, $current);
+                    record_file_history_insert($pdo, (string)$version['merge_group_id'], $restoredRecordId, (int)$version['source_record_id'], (int)$version['target_record_id'], 'pre-restore', 'restore', $actorId, $currentSnapshot, $currentFile);
+                }
+
+                if (!empty($version['file_snapshot_key'])) {
+                    if (!$root) throw new RuntimeException('Private upload storage is unavailable.');
+                    $archivedPath = RecordFileHistory::resolveFile((string)$version['file_snapshot_key'], $root);
+                    if (!$archivedPath) throw new RuntimeException('The archived source file is unavailable.');
+                    $extension = strtolower(pathinfo($archivedPath, PATHINFO_EXTENSION));
+                    $restoredUploadName = bin2hex(random_bytes(24)) . '.' . $extension;
+                    $destination = $root . DIRECTORY_SEPARATOR . $restoredUploadName;
+                    if (!copy($archivedPath, $destination)) throw new RuntimeException('Unable to restore the archived source file.');
+                    chmod($destination, 0640);
+                    $restored['metadata'] = json_encode(array_merge(json_col($restored['metadata'] ?? null, []), ['stored_file' => $restoredUploadName]), JSON_THROW_ON_ERROR);
+                    $restored['file_size'] = filesize($destination);
+                } else {
+                    $metadata = json_col($restored['metadata'] ?? null, []);
+                    if (is_array($metadata)) unset($metadata['stored_file']);
+                    $restored['metadata'] = json_encode($metadata, JSON_THROW_ON_ERROR);
+                }
+
+                $pdo->prepare('DELETE FROM saved_graphs WHERE record_id = ?')->execute([$restoredRecordId]);
+                if ($current) {
+                    $fields = array_values(array_diff($pdo->query('SHOW COLUMNS FROM records')->fetchAll(PDO::FETCH_COLUMN), ['record_id']));
+                    $setParts = [];
+                    $values = [];
+                    foreach ($fields as $field) {
+                        if (!array_key_exists($field, $restored)) continue;
+                        $setParts[] = '`' . str_replace('`', '``', $field) . '` = ?';
+                        $values[] = $restored[$field];
+                    }
+                    $values[] = $restoredRecordId;
+                    $pdo->prepare('UPDATE records SET ' . implode(', ', $setParts) . ' WHERE record_id = ?')->execute($values);
+                } else {
+                    $restored['record_id'] = $restoredRecordId;
+                    insert_row_from_snapshot($pdo, 'records', $restored);
+                }
+                record_file_history_restore_graphs($pdo, $restoredRecordId, $payload['saved_graphs'] ?? []);
+                $finalQuery = $pdo->prepare('SELECT * FROM records WHERE record_id = ?');
+                $finalQuery->execute([$restoredRecordId]);
+                $finalRecord = $finalQuery->fetch(PDO::FETCH_ASSOC);
+                if (!$finalRecord) throw new RuntimeException('The restored record could not be verified.');
+                $finalFile = record_file_history_copy_record_file($finalRecord);
+                if ($finalFile) $newHistoryFiles[] = $finalFile['key'];
+                record_file_history_insert($pdo, (string)$version['merge_group_id'], $restoredRecordId, (int)$version['source_record_id'], (int)$version['target_record_id'], 'restore-result', 'restore', $actorId, record_file_history_capture($pdo, $finalRecord), $finalFile);
+                $loadedRestoredRecord = load_record($pdo, $restoredRecordId);
+                if (!$loadedRestoredRecord) throw new RuntimeException('The restored record could not be reloaded.');
+                $apiRestoredRecord = output_record($loadedRestoredRecord);
+                $pdo->commit();
+            } catch (Throwable $exception) {
+                if ($pdo->inTransaction()) $pdo->rollBack();
+                foreach ($newHistoryFiles as $fileKey) RecordFileHistory::removeFile($fileKey, (string)$root);
+                if ($restoredUploadName && $root) @unlink($root . DIRECTORY_SEPARATOR . $restoredUploadName);
+                throw $exception;
+            }
+            echo json_encode(['success' => true, 'record' => $apiRestoredRecord]);
+            exit;
+        }
+        bad('Unsupported File History action.', 404);
+    }
+
     if ($resource === 'field_colors') {
         if ($_SERVER['REQUEST_METHOD'] === 'GET') {
             $rows = $pdo->query('SELECT field_name AS field_key, field_name AS label, color, updated_at FROM field_colors ORDER BY field_name ASC')->fetchAll(PDO::FETCH_ASSOC);
@@ -489,6 +747,11 @@ try {
 
     if ($resource === 'summary_card_categories') {
         if ($_SERVER['REQUEST_METHOD'] === 'GET') {
+            if ($action === 'public-default') {
+                $state = json_col($pdo->query('SELECT state_data FROM app_change_state WHERE id = 1')->fetchColumn(), []);
+                echo json_encode(['default_category_slug' => is_array($state) ? ($state['summary_cards_default_category'] ?? null) : null], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT);
+                exit;
+            }
             $rows = ($_SESSION['role'] ?? '') === 'super_admin'
                 ? $pdo->query('SELECT category_id AS id, name, slug, sort_order FROM summary_card_categories ORDER BY sort_order ASC, name ASC')->fetchAll(PDO::FETCH_ASSOC)
                 : $pdo->query("SELECT DISTINCT categories.category_id AS id, categories.name, categories.slug, categories.sort_order
@@ -502,15 +765,40 @@ try {
         ensure_admin_for_mutation();
         ensure_json_csrf();
         $data = json_input();
+        if ($_SERVER['REQUEST_METHOD'] === 'POST' && $action === 'save-public-default') {
+            if (($_SESSION['role'] ?? '') !== 'super_admin') bad('Only a Super Admin can change the public summary-card default.', 403);
+            $slug = trim((string)($data['default_category_slug'] ?? ''));
+            if ($slug !== '') {
+                $check = $pdo->prepare('SELECT 1 FROM summary_card_categories categories
+                    WHERE categories.slug = ? AND EXISTS (
+                        SELECT 1 FROM summary_card_category_map mapping
+                        INNER JOIN summary_cards cards ON cards.card_id = mapping.card_id
+                        WHERE mapping.category_id = categories.category_id AND cards.is_published = 1
+                    ) LIMIT 1');
+                $check->execute([$slug]);
+                if (!$check->fetchColumn()) bad('Choose a category with at least one published summary card.', 404);
+            }
+            $value = $slug !== '' ? $slug : null;
+            $save = $pdo->prepare("UPDATE app_change_state SET state_data = JSON_SET(COALESCE(state_data, JSON_OBJECT()),
+                '$.summary_cards_default_category', ?) WHERE id = 1");
+            $save->execute([$value]);
+            echo json_encode(['success' => true, 'default_category_slug' => $value], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT);
+            exit;
+        }
         if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $name = trim((string)($data['name'] ?? ''));
             $slug = summary_category_slug($name);
+            $sortOrder = 0;
+            if (array_key_exists('sort_order', $data)) {
+                $sortOrder = filter_var($data['sort_order'], FILTER_VALIDATE_INT);
+                if ($sortOrder === false || $sortOrder < 0) bad('Category sort order must be a non-negative whole number.');
+            }
             $existing = $pdo->prepare('SELECT category_id AS id, name, slug, sort_order FROM summary_card_categories WHERE slug = ? LIMIT 1');
             $existing->execute([$slug]);
             $category = $existing->fetch(PDO::FETCH_ASSOC);
             if (!$category) {
                 $insert = $pdo->prepare('INSERT INTO summary_card_categories (name, slug, sort_order) VALUES (?, ?, ?)');
-                $insert->execute([$name, $slug, isset($data['sort_order']) ? (int)$data['sort_order'] : 0]);
+                $insert->execute([$name, $slug, $sortOrder]);
                 $id = (int)$pdo->lastInsertId();
                 $existing->execute([$slug]);
                 $category = $existing->fetch(PDO::FETCH_ASSOC);
@@ -531,8 +819,10 @@ try {
                 $values[] = $slug;
             }
             if (array_key_exists('sort_order', $data)) {
+                $sortOrder = filter_var($data['sort_order'], FILTER_VALIDATE_INT);
+                if ($sortOrder === false || $sortOrder < 0) bad('Category sort order must be a non-negative whole number.');
                 $sets[] = 'sort_order = ?';
-                $values[] = (int)$data['sort_order'];
+                $values[] = $sortOrder;
             }
             if (!$sets) bad('No category fields to update.');
             $values[] = (int)$id;
@@ -576,6 +866,7 @@ try {
             foreach ($changeRows->fetchAll(PDO::FETCH_ASSOC) as $change) $changesByPeriod[$change['period_key']][] = $change;
             $periods = $showAdminHistory ? $allPeriods : array_values(array_filter($allPeriods, static fn(array $period): bool => !empty($period['is_published'])));
             foreach ($periods as &$period) {
+                $period['custom_fields'] = CustomImportFields::decode($period['custom_fields'] ?? []);
                 $period['is_current_public'] = $current && $current['period_key'] === $period['period_key'];
                 $period['row_version'] = $historyVersion;
                 $period['changes'] = $changesByPeriod[$period['period_key']] ?? [];
@@ -682,9 +973,19 @@ try {
             $data = json_input();
             $importKey = summary_card_import_key($data['import_key'] ?? bin2hex(random_bytes(12)));
             $title = trim((string)($data['title'] ?? ''));
-            if ($title === '') bad('title is required');
+            if ($title === '' || strlen($title) > 255) bad('title is required and must not exceed 255 characters.');
             $mainValue = trim((string)($data['main_value'] ?? ''));
-            if ($mainValue === '') bad('main_value cannot be blank.');
+            if ($mainValue === '' || strlen($mainValue) > 255) bad('main_value is required and must not exceed 255 characters.');
+            $mainLabel = trim((string)($data['main_label'] ?? ''));
+            if ($mainLabel === '' || strlen($mainLabel) > 255) bad('main_label is required and must not exceed 255 characters.');
+            foreach (['year_date', 'secondary_label', 'secondary_value'] as $field) {
+                if (strlen((string)($data[$field] ?? '')) > 255) bad($field . ' must not exceed 255 characters.');
+            }
+            foreach (['description', 'secondary_description', 'info_text'] as $field) {
+                if (strlen((string)($data[$field] ?? '')) > 65535) bad($field . ' exceeds its storage limit.');
+            }
+            $displayOrder = filter_var($data['display_order'] ?? 0, FILTER_VALIDATE_INT);
+            if ($displayOrder === false || $displayOrder < 0) bad('display_order must be a non-negative whole number.');
             $secondaryValue = trim((string)($data['secondary_value'] ?? ''));
 
             $displayPrecision = isset($data['display_precision']) ? (int)$data['display_precision'] : 2;
@@ -701,7 +1002,7 @@ try {
                 $stmt->execute([
                     $importKey,
                     $title,
-                    isset($data['display_order']) ? (int)$data['display_order'] : 0,
+                    $displayOrder,
                     $displayPrecision,
                     $published ? 1 : 0
                 ]);
@@ -732,6 +1033,10 @@ try {
             $data = json_input();
             $contentFields = ['title','main_value','main_label','year_date','secondary_label','secondary_value','description','secondary_description','info_text'];
             $configFields = ['display_order', 'display_precision'];
+            if (array_key_exists('display_order', $data)) {
+                $displayOrder = filter_var($data['display_order'], FILTER_VALIDATE_INT);
+                if ($displayOrder === false || $displayOrder < 0) bad('display_order must be a non-negative whole number.');
+            }
             $hasIdentityUpdate = array_key_exists('import_key', $data);
             $importKey = $hasIdentityUpdate ? summary_card_import_key($data['import_key']) : null;
             $hasContentUpdate = (bool)array_intersect($contentFields, array_keys($data));
@@ -740,7 +1045,11 @@ try {
             $hasCategoryUpdate = array_key_exists('category_ids', $data) || array_key_exists('category_names', $data) || array_key_exists('category_id', $data) || array_key_exists('category_name', $data);
             $categoryIds = $hasCategoryUpdate ? resolve_summary_categories($pdo, $data) : [];
             if (!$hasIdentityUpdate && !$hasContentUpdate && !$hasConfigUpdate && !$hasPublicationUpdate && !$hasCategoryUpdate) bad('No fields to update');
-            if (array_key_exists('main_value', $data) && trim((string)$data['main_value']) === '') bad('main_value cannot be blank');
+            foreach (['title', 'main_value', 'main_label'] as $requiredField) {
+                if (array_key_exists($requiredField, $data) && trim((string)$data[$requiredField]) === '') {
+                    bad($requiredField . ' cannot be blank.');
+                }
+            }
             $pdo->beginTransaction();
             try {
                 $locked = $pdo->prepare('SELECT summary_cards.*, card_id AS id FROM summary_cards WHERE card_id = ? FOR UPDATE');
@@ -799,7 +1108,7 @@ try {
                 $cardSets = [];
                 $cardValues = [];
                 if ($hasIdentityUpdate) { $cardSets[] = 'import_key = ?'; $cardValues[] = $importKey; }
-                if (array_key_exists('display_order', $data)) { $cardSets[] = 'display_order = ?'; $cardValues[] = (int)$data['display_order']; }
+                if (array_key_exists('display_order', $data)) { $cardSets[] = 'display_order = ?'; $cardValues[] = $displayOrder; }
                 if (array_key_exists('display_precision', $data)) { $cardSets[] = 'display_precision = ?'; $cardValues[] = max(0, min(2, (int)$data['display_precision'])); }
                 if ($cardSets) $pdo->prepare('UPDATE summary_cards SET ' . implode(', ', $cardSets) . ' WHERE card_id = ?')->execute([...$cardValues, $id]);
                 if ($hasCategoryUpdate) save_summary_card_categories($pdo, (string)$id, $categoryIds);
@@ -835,6 +1144,214 @@ try {
     }
 
     if ($resource === 'records') {
+        if ($_SERVER['REQUEST_METHOD'] === 'POST' && in_array($action, ['preview-record-merge', 'merge-records'], true)) {
+            $data = json_input();
+            $sourceId = filter_var($data['source_id'] ?? null, FILTER_VALIDATE_INT);
+            $targetId = filter_var($data['target_id'] ?? null, FILTER_VALIDATE_INT);
+            if (!$sourceId || $sourceId < 1 || !$targetId || $targetId < 1) bad('Choose an explicit source record and target record.');
+            if ($sourceId === $targetId) bad('The source and target records must be different.');
+            if (($data['method'] ?? 'merge') !== 'merge') bad('IRIS supports the merge method only.');
+            $sourceSheetName = trim((string)($data['source_sheet_name'] ?? $data['sheet_name'] ?? ''));
+            $targetSheetName = trim((string)($data['target_sheet_name'] ?? $data['sheet_name'] ?? ''));
+            if ($sourceSheetName === '' || $targetSheetName === '') bad('Choose a worksheet to merge.');
+            $keyColumns = $data['key_columns'] ?? null;
+            if (!is_array($keyColumns) || !$keyColumns) bad('Select at least one key column.');
+            foreach ($keyColumns as &$keyColumn) {
+                $keyColumn = filter_var($keyColumn, FILTER_VALIDATE_INT);
+                if ($keyColumn === false || $keyColumn < 0) bad('A selected key column is invalid.');
+            }
+            unset($keyColumn);
+            $readPair = static function (bool $lock) use ($pdo, $sourceId, $targetId): array {
+                $query = $pdo->prepare('SELECT records.*, offices.office_name FROM records LEFT JOIN offices ON offices.office_id = records.office_id
+                    WHERE records.record_id IN (?, ?) ORDER BY records.record_id' . ($lock ? ' FOR UPDATE' : ''));
+                $query->execute([$sourceId, $targetId]);
+                $records = [];
+                foreach ($query->fetchAll(PDO::FETCH_ASSOC) as $record) $records[(int)$record['record_id']] = $record;
+                if (!isset($records[$sourceId]) || !isset($records[$targetId])) bad('Source or target record not found.', 404);
+                $source = $records[$sourceId];
+                $target = $records[$targetId];
+                if (empty($source['template_id']) || empty($target['template_id']) || (string)$source['template_id'] !== (string)$target['template_id']) bad('Both records must be assigned to the same template.', 409);
+                foreach ([$source, $target] as $record) {
+                    if (!in_array(strtolower((string)($record['file_type'] ?? '')), ['xlsx', 'csv', 'tsv'], true)) bad('Both records must use a supported spreadsheet type.', 409);
+                }
+                return [$source, $target];
+            };
+            [$source, $target] = $readPair(false);
+            $sourceDigest = record_merge_record_digest($source);
+            $targetDigest = record_merge_record_digest($target);
+            $sourceData = json_col($source['extracted_data'] ?? null, []);
+            $targetData = json_col($target['extracted_data'] ?? null, []);
+            if (!is_array($sourceData) || !is_array($targetData)
+                || !is_array($sourceData[$sourceSheetName] ?? null) || !is_array($targetData[$targetSheetName] ?? null)) {
+                bad('The selected worksheet must exist in both records.', 409);
+            }
+            $resolutions = $data['resolutions'] ?? [];
+            if (!is_array($resolutions)) bad('Conflict resolutions must be an object.');
+            $mergeResult = record_merge_sheet($targetData[$targetSheetName], $sourceData[$sourceSheetName], $keyColumns, $resolutions);
+            if (!empty($mergeResult['error'])) bad((string)$mergeResult['error'], 409);
+            if ($action === 'preview-record-merge') {
+                echo json_encode([
+                    'success' => true,
+                    'source_id' => $sourceId,
+                    'target_id' => $targetId,
+                    'source_sheet_name' => $sourceSheetName,
+                    'target_sheet_name' => $targetSheetName,
+                    'source_digest' => $sourceDigest,
+                    'target_digest' => $targetDigest,
+                    'conflicts' => $mergeResult['conflicts'],
+                    'unresolved' => $mergeResult['unresolved'],
+                    'stats' => $mergeResult['stats'] ?? null,
+                    'sheet' => $mergeResult['sheet'],
+                ]);
+                exit;
+            }
+            if (!hash_equals((string)($data['source_digest'] ?? ''), $sourceDigest)
+                || !hash_equals((string)($data['target_digest'] ?? ''), $targetDigest)) bad('The records changed after preview. Refresh the merge preview.', 409);
+            if (!empty($mergeResult['unresolved']) || !is_array($mergeResult['sheet'] ?? null)) {
+                http_response_code(409);
+                echo json_encode(['error' => 'Resolve every conflict before merging.', 'conflicts' => $mergeResult['conflicts'], 'unresolved' => $mergeResult['unresolved']]);
+                exit;
+            }
+
+            $mergeGroupId = record_file_history_group_id();
+            $actorId = (int)($_SESSION['user_id'] ?? 0);
+            if ($actorId < 1) bad('A valid Super Admin session is required.', 403);
+            $consumeSource = ($data['consume_source'] ?? false) === true;
+            $historyFiles = [];
+            $movedTargetFile = null;
+            $trashPath = null;
+            $manifestPath = null;
+            $temporaryManifestPath = null;
+            $trashId = null;
+            $apiResultRecord = null;
+            $pdo->beginTransaction();
+            try {
+                [$source, $target] = $readPair(true);
+                $lockedSourceDigest = record_merge_record_digest($source);
+                $lockedTargetDigest = record_merge_record_digest($target);
+                if (!hash_equals($sourceDigest, $lockedSourceDigest) || !hash_equals($targetDigest, $lockedTargetDigest)) {
+                    throw new RuntimeException('The records changed after preview. Refresh the merge preview.');
+                }
+                $sourceData = json_col($source['extracted_data'] ?? null, []);
+                $targetData = json_col($target['extracted_data'] ?? null, []);
+                $mergeResult = record_merge_sheet($targetData[$targetSheetName], $sourceData[$sourceSheetName], $keyColumns, $resolutions);
+                if (!empty($mergeResult['error'])) throw new RuntimeException((string)$mergeResult['error']);
+                if (!empty($mergeResult['unresolved']) || !is_array($mergeResult['sheet'] ?? null)) {
+                    throw new RuntimeException('Resolve every conflict before merging.');
+                }
+
+                $targetSnapshot = record_file_history_capture($pdo, $target);
+                $sourceSnapshot = record_file_history_capture($pdo, $source);
+                $targetFile = record_file_history_copy_record_file($target);
+                if ($targetFile) $historyFiles[] = $targetFile['key'];
+                $sourceFile = record_file_history_copy_record_file($source);
+                if ($sourceFile) $historyFiles[] = $sourceFile['key'];
+                record_file_history_insert($pdo, $mergeGroupId, $targetId, $sourceId, $targetId, 'pre-merge-target', 'merge', $actorId, $targetSnapshot, $targetFile);
+                record_file_history_insert($pdo, $mergeGroupId, $sourceId, $sourceId, $targetId, 'source-at-merge', 'merge', $actorId, $sourceSnapshot, $sourceFile);
+
+                if ($consumeSource) {
+                    $trashDirectory = merge_trash_directory(true);
+                    if (!$trashDirectory) throw new RuntimeException('Private merge recovery storage is unavailable.');
+                    cleanup_expired_merge_trash($trashDirectory);
+                    $trashId = bin2hex(random_bytes(12));
+                    $manifestPath = $trashDirectory . DIRECTORY_SEPARATOR . $trashId . '.json';
+                    $temporaryManifestPath = $manifestPath . '.tmp';
+                    $targetMetadataBefore = json_col($target['metadata'] ?? null, []);
+                    $oldStoredFile = is_array($targetMetadataBefore) ? (string)($targetMetadataBefore['stored_file'] ?? '') : '';
+                    if (!preg_match('/^[a-f0-9]{48}\.(xlsx|csv|tsv)$/', $oldStoredFile)) $oldStoredFile = null;
+                    $sourceGraphs = $sourceSnapshot['saved_graphs'] ?? [];
+                    $manifest = [
+                        'trash_id' => $trashId,
+                        'created_at' => gmdate('c'),
+                        'old_id' => (string)$targetId,
+                        'office_id' => (string)$sourceId,
+                        'old_row' => $target,
+                        'office_row' => $source,
+                        'office_saved_graphs' => $sourceGraphs,
+                        'old_stored_file' => $oldStoredFile,
+                    ];
+                    $encodedManifest = json_encode($manifest, JSON_THROW_ON_ERROR);
+                    if (file_put_contents($temporaryManifestPath, $encodedManifest, LOCK_EX) === false || !rename($temporaryManifestPath, $manifestPath)) {
+                        throw new RuntimeException('Unable to write merge recovery manifest.');
+                    }
+                    chmod($manifestPath, 0640);
+                }
+
+                $mergedData = $targetData;
+                $mergedData[$targetSheetName] = $mergeResult['sheet'];
+                $sourceMetadata = json_col($source['metadata'] ?? null, []);
+                $targetMetadata = is_array($sourceMetadata) ? $sourceMetadata : [];
+                $mergeMetadata = [
+                    'merged_at' => gmdate('c'),
+                    'replaced_file' => (string)($target['file_name'] ?? 'previous file'),
+                    'source_record_id' => $sourceId,
+                    'source_office' => (string)($source['office_name'] ?? ''),
+                    'trash_id' => $trashId,
+                    'merge_group_id' => $mergeGroupId,
+                ];
+                $targetMetadata['merge'] = $mergeMetadata;
+                $adminNotes = array_values(array_filter([
+                    (string)($target['admin_notes'] ?? ''),
+                    'Merged from ' . (string)($source['file_name'] ?? 'source record') . ' on ' . $mergeMetadata['merged_at'],
+                ], static fn(string $note): bool => $note !== ''));
+                $pdo->prepare('UPDATE records SET file_name = ?, file_type = ?, file_size = ?, extracted_data = ?, metadata = ?, admin_notes = ?, updated_at = NOW() WHERE record_id = ?')
+                    ->execute([
+                        $source['file_name'],
+                        $source['file_type'],
+                        $source['file_size'],
+                        json_encode($mergedData, JSON_THROW_ON_ERROR | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
+                        json_encode($targetMetadata, JSON_THROW_ON_ERROR | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
+                        implode("\n", $adminNotes),
+                        $targetId,
+                    ]);
+                if ($consumeSource) {
+                    $pdo->prepare('DELETE FROM saved_graphs WHERE record_id = ?')->execute([$sourceId]);
+                    $pdo->prepare('DELETE FROM records WHERE record_id = ?')->execute([$sourceId]);
+                    $oldStoredFile = (string)($manifest['old_stored_file'] ?? '');
+                    $newStoredFile = (string)($targetMetadata['stored_file'] ?? '');
+                    if ($oldStoredFile !== '' && $oldStoredFile !== $newStoredFile && !stored_file_in_use($pdo, $oldStoredFile, (string)$targetId)) {
+                        $sourcePath = stored_upload_path($oldStoredFile);
+                        $extension = pathinfo($oldStoredFile, PATHINFO_EXTENSION);
+                        $trashPath = $trashDirectory . DIRECTORY_SEPARATOR . $trashId . '.' . $extension;
+                        if ($sourcePath && !file_exists($trashPath)) {
+                            if (!rename($sourcePath, $trashPath)) throw new RuntimeException('Unable to move the previous target file to recovery storage.');
+                            chmod($trashPath, 0640);
+                            $movedTargetFile = $sourcePath;
+                        }
+                    }
+                }
+                $resultQuery = $pdo->prepare('SELECT * FROM records WHERE record_id = ?');
+                $resultQuery->execute([$targetId]);
+                $resultRecord = $resultQuery->fetch(PDO::FETCH_ASSOC);
+                if (!$resultRecord) throw new RuntimeException('The merge result could not be verified.');
+                $resultFile = record_file_history_copy_record_file($resultRecord);
+                if ($resultFile) $historyFiles[] = $resultFile['key'];
+                record_file_history_insert($pdo, $mergeGroupId, $targetId, $sourceId, $targetId, 'post-merge-result', 'merge', $actorId, record_file_history_capture($pdo, $resultRecord), $resultFile);
+                $loadedResult = load_record($pdo, $targetId);
+                if (!$loadedResult) throw new RuntimeException('The merge result could not be reloaded.');
+                $apiResultRecord = output_record($loadedResult);
+                $pdo->commit();
+            } catch (Throwable $exception) {
+                if ($pdo->inTransaction()) $pdo->rollBack();
+                if ($movedTargetFile && $trashPath && is_file($trashPath)) @rename($trashPath, $movedTargetFile);
+                if ($manifestPath) @unlink($manifestPath);
+                if ($temporaryManifestPath) @unlink($temporaryManifestPath);
+                $historyRoot = upload_storage_root();
+                if ($historyRoot) foreach ($historyFiles as $fileKey) RecordFileHistory::removeFile($fileKey, $historyRoot);
+                http_response_code(str_contains($exception->getMessage(), 'changed after preview') || str_contains($exception->getMessage(), 'conflict') ? 409 : 500);
+                echo json_encode(['error' => $exception->getMessage()]);
+                exit;
+            }
+            echo json_encode([
+                'success' => true,
+                'merge_group_id' => $mergeGroupId,
+                'trash_id' => $trashId,
+                'source_deleted' => $consumeSource,
+                'stats' => $mergeResult['stats'] ?? null,
+                'record' => $apiResultRecord,
+            ]);
+            exit;
+        }
         if ($_SERVER['REQUEST_METHOD'] === 'GET') {
             $excludeImportRecords = ($_GET['exclude_import_records'] ?? '') === '1';
             $importRecordExclusion = $excludeImportRecords
@@ -1152,6 +1669,17 @@ try {
         if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             ensure_admin_for_mutation();
             if (!ALLOW_SUPER_ADMIN_UPLOAD && ($data['fileType'] ?? $data['type'] ?? '') !== 'manual') bad('File uploads are disabled for Super Admin.', 403);
+            $fileName = trim((string)($data['fileName'] ?? $data['name'] ?? 'Untitled'));
+            $fileType = trim((string)($data['fileType'] ?? $data['type'] ?? 'unknown'));
+            $docType = trim((string)($data['docType'] ?? 'General Institutional Data'));
+            $status = (string)($data['status'] ?? 'Pending Review');
+            $fileNameLength = function_exists('mb_strlen') ? mb_strlen($fileName, 'UTF-8') : strlen($fileName);
+            $fileTypeLength = function_exists('mb_strlen') ? mb_strlen($fileType, 'UTF-8') : strlen($fileType);
+            $docTypeLength = function_exists('mb_strlen') ? mb_strlen($docType, 'UTF-8') : strlen($docType);
+            if ($fileName === '' || $fileNameLength > 255) bad('File name is required and must not exceed 255 characters.');
+            if ($fileType === '' || $fileTypeLength > 100) bad('File type is required and must not exceed 100 characters.');
+            if ($docType === '' || $docTypeLength > 100) bad('Classification category is required and must not exceed 100 characters.');
+            if (!in_array($status, ['Pending Review', 'Approved', 'Needs Revision'], true)) bad('Invalid record status.');
             $account = $pdo->prepare('SELECT office_id FROM users WHERE user_id = ?');
             $account->execute([(int)$_SESSION['user_id']]);
             $officeId = $account->fetchColumn();
@@ -1159,12 +1687,12 @@ try {
             $stmt = $pdo->prepare('INSERT INTO records (file_name, file_type, file_size, scanned_at, status, uploaded_by, office_id, uploaded_at, template_id, import_profile_id, doc_type, raw_text, extracted_data, graph_drafts, admin_notes, metadata, updated_at)
                 VALUES (?, ?, ?, ?, ?, ?, ?, NOW(), ?, ?, ?, ?, ?, ?, ?, ?, NOW())');
             $stmt->execute([
-                $data['fileName'] ?? $data['name'] ?? 'Untitled', $data['fileType'] ?? $data['type'] ?? 'unknown',
+                $fileName, $fileType,
                 max(0, (int)($data['fileSize'] ?? $data['size'] ?? 0)), date('Y-m-d H:i:s', $scannedAt === false ? time() : $scannedAt),
-                $data['status'] ?? 'Pending Review', (int)$_SESSION['user_id'], $officeId ?: null,
+                $status, (int)$_SESSION['user_id'], $officeId ?: null,
                 filter_var($data['template_id'] ?? null, FILTER_VALIDATE_INT) ?: null,
                 filter_var($data['import_profile_id'] ?? null, FILTER_VALIDATE_INT) ?: null,
-                $data['docType'] ?? 'General Institutional Data', $data['rawText'] ?? '',
+                $docType, $data['rawText'] ?? '',
                 json_encode($data['extractedData'] ?? $data['sheetsData'] ?? []), json_encode($data['graphDrafts'] ?? []),
                 $data['adminNotes'] ?? '', json_encode($data['metadata'] ?? [])
             ]);
@@ -1178,7 +1706,17 @@ try {
             $fieldMap = ['fileName' => 'file_name', 'fileType' => 'file_type', 'fileSize' => 'file_size', 'status' => 'status', 'docType' => 'doc_type', 'rawText' => 'raw_text', 'adminNotes' => 'admin_notes'];
             $sets=[];$vals=[];
             if (array_key_exists('status',$data) && !in_array($data['status'], ['Pending Review','Approved','Needs Revision'], true)) bad('Invalid record status');
-            foreach($fieldMap as $field => $column) if(array_key_exists($field,$data)){ $sets[]="`$column`=?";$vals[]=$field === 'fileSize' ? max(0, (int)$data[$field]) : $data[$field]; }
+            foreach (['fileName' => 255, 'fileType' => 100, 'docType' => 100] as $field => $maximum) {
+                if (!array_key_exists($field, $data)) continue;
+                $value = trim((string)$data[$field]);
+                $length = function_exists('mb_strlen') ? mb_strlen($value, 'UTF-8') : strlen($value);
+                $label = $field === 'fileName' ? 'File name' : ($field === 'docType' ? 'Classification category' : 'File type');
+                if ($value === '' || $length > $maximum) bad("$label is required and must not exceed $maximum characters.");
+                $data[$field] = $value;
+            }
+            if (array_key_exists('fileSize', $data) && (!is_numeric($data['fileSize']) || (float)$data['fileSize'] < 0 || (float)$data['fileSize'] > PHP_INT_MAX)) bad('File size must be a non-negative number.');
+            if (array_key_exists('adminNotes', $data) && strlen((string)$data['adminNotes']) > 65535) bad('Admin verification notes must not exceed 65,535 bytes.');
+            foreach($fieldMap as $field => $column) if(array_key_exists($field,$data)){ $sets[]="`$column`=?";$vals[]=$field === 'fileSize' ? (int)$data[$field] : $data[$field]; }
             foreach(['extractedData' => 'extracted_data', 'graphDrafts' => 'graph_drafts', 'metadata' => 'metadata'] as $field => $column) if(array_key_exists($field,$data)){ $sets[]="`$column`=?";$vals[]=json_encode($data[$field]); }
             if(array_key_exists('scannedAt',$data)){ $timestamp = strtotime((string)$data['scannedAt']); if ($timestamp === false) bad('Invalid scannedAt value.'); $sets[]='scanned_at=?';$vals[]=date('Y-m-d H:i:s',$timestamp); }
             if(!$sets) bad('No fields to update'); $sets[]='updated_at=NOW()';$vals[]=$recordId;$stmt=$pdo->prepare('UPDATE records SET '.implode(',',$sets).' WHERE record_id=?');$stmt->execute($vals);if(!$stmt->rowCount() && !load_record($pdo, $recordId))bad('Record not found',404);

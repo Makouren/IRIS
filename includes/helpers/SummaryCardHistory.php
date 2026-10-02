@@ -1,6 +1,8 @@
 <?php
 declare(strict_types=1);
 
+require_once __DIR__ . '/CustomImportFields.php';
+
 final class SummaryCardHistory
 {
     public static function periods(PDO $pdo, string $cardId, bool $lock = false): array
@@ -51,15 +53,20 @@ final class SummaryCardHistory
             $target['period_precision'] ?? null, $target['main_value'] ?? null, $target['main_label'] ?? null,
             $target['secondary_label'] ?? null, $target['secondary_value'] ?? null, $date,
             $target['description'] ?? null, $target['secondary_description'] ?? null, $target['info_text'] ?? null,
-            $target['source_info'] ?? null, $published ? 1 : 0
+            $target['source_info'] ?? null
         ];
-        $pdo->prepare('INSERT INTO summary_card_periods (card_id, period_key, period_label, period_sort, period_precision, main_value, main_label, secondary_label, secondary_value, year_date, description, secondary_description, info_text, source_info, is_published)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            ON DUPLICATE KEY UPDATE period_label = VALUES(period_label), period_sort = VALUES(period_sort), period_precision = VALUES(period_precision),
-                main_value = VALUES(main_value), main_label = VALUES(main_label), secondary_label = VALUES(secondary_label),
-                secondary_value = VALUES(secondary_value), year_date = VALUES(year_date), description = VALUES(description),
-                secondary_description = VALUES(secondary_description), info_text = VALUES(info_text), source_info = VALUES(source_info),
-                is_published = VALUES(is_published)')->execute($values);
+        $columns = ['card_id', 'period_key', 'period_label', 'period_sort', 'period_precision', 'main_value', 'main_label', 'secondary_label', 'secondary_value', 'year_date', 'description', 'secondary_description', 'info_text', 'source_info'];
+        if (CustomImportFields::columnExists($pdo, 'summary_card_periods')) {
+            $columns[] = 'custom_fields';
+            $values[] = CustomImportFields::encode($target['custom_fields'] ?? []);
+        }
+        $columns[] = 'is_published';
+        $values[] = $published ? 1 : 0;
+        $updates = array_values(array_filter($columns, static fn(string $column): bool => !in_array($column, ['card_id', 'period_key'], true)));
+        $sql = 'INSERT INTO summary_card_periods (' . implode(', ', array_map(static fn(string $column): string => '`' . $column . '`', $columns)) . ')
+            VALUES (' . implode(', ', array_fill(0, count($columns), '?')) . ')
+            ON DUPLICATE KEY UPDATE ' . implode(', ', array_map(static fn(string $column): string => '`' . $column . '` = VALUES(`' . $column . '`)', $updates));
+        $pdo->prepare($sql)->execute($values);
         $pdo->prepare('UPDATE summary_cards SET title = ?, is_published = ? WHERE card_id = ?')->execute([$target['title'] ?? $card['title'], $published ? 1 : 0, $cardId]);
         $cardQuery->execute([$cardId]);
         return $cardQuery->fetch(PDO::FETCH_ASSOC);
@@ -70,7 +77,15 @@ final class SummaryCardHistory
         $snapshotFilter = $publishedOnly ? ' AND candidate.is_published = 1' : '';
         $cardFilter = $publishedOnly ? 'WHERE cards.is_published = 1' : '';
         $historyFilter = $publishedOnly ? ' AND history.is_published = 1' : '';
-        return $pdo->query("SELECT cards.card_id AS id, cards.import_key,
+        $snapshotCustomFields = CustomImportFields::columnExists($pdo, 'summary_card_snapshots');
+        $periodCustomFields = CustomImportFields::columnExists($pdo, 'summary_card_periods');
+        $customFieldsExpression = match (true) {
+            $snapshotCustomFields && $periodCustomFields => 'COALESCE(periods.custom_fields, live.custom_fields)',
+            $snapshotCustomFields => 'periods.custom_fields',
+            $periodCustomFields => 'live.custom_fields',
+            default => 'NULL'
+        };
+        $cards = $pdo->query("SELECT cards.card_id AS id, cards.import_key,
                 COALESCE(periods.title, cards.title) AS title,
                 COALESCE(periods.main_value, live.main_value) AS main_value,
                 COALESCE(periods.main_label, live.main_label) AS main_label,
@@ -80,6 +95,7 @@ final class SummaryCardHistory
                 COALESCE(periods.description, live.description) AS description,
                 COALESCE(periods.secondary_description, live.secondary_description) AS secondary_description,
                 COALESCE(periods.info_text, live.info_text) AS info_text,
+                {$customFieldsExpression} AS custom_fields,
                 cards.display_order, cards.display_precision, cards.is_published,
                 cards.created_at, cards.updated_at,
                 COALESCE(periods.period_key, live.period_key) AS current_period_key,
@@ -97,5 +113,8 @@ final class SummaryCardHistory
             LEFT JOIN summary_card_periods live ON live.card_id = cards.card_id AND live.period_key = periods.period_key
             {$cardFilter}
             ORDER BY cards.display_order ASC, cards.created_at DESC")->fetchAll(PDO::FETCH_ASSOC);
+        foreach ($cards as &$card) $card['custom_fields'] = CustomImportFields::decode($card['custom_fields'] ?? []);
+        unset($card);
+        return $cards;
     }
 }

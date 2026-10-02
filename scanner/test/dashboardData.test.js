@@ -14,7 +14,82 @@ const publicDashboardSource = fs.readFileSync(path.join(__dirname, '..', '..', '
 const graphApiSource = fs.readFileSync(path.join(__dirname, '..', '..', 'api', 'iris.php'), 'utf8');
 const publicGraphApiSource = fs.readFileSync(path.join(__dirname, '..', '..', 'api', 'dashboard_graphs.php'), 'utf8');
 const reviewEditorSource = fs.readFileSync(path.join(__dirname, '..', '..', 'admin', 'review_editor.php'), 'utf8');
+const chartEngineSource = fs.readFileSync(path.join(__dirname, '..', 'js', 'modules', 'chartEngine.js'), 'utf8');
 const rankingHistoryControllerSource = fs.readFileSync(path.join(__dirname, '..', '..', 'user', 'js', 'rankingHistory.js'), 'utf8');
+
+test('newer saved field colors override graph colors without changing older graph snapshots', () => {
+  const graphColor = '#112233';
+  const sharedColor = '#AABBCC';
+  assert.equal(resolveFieldColors(['Highlights'], {
+    chartColors: [graphColor],
+    fieldColors: { highlights: sharedColor },
+    fieldColorUpdatedAt: { highlights: '2026-10-01T00:00:00Z' },
+    chartUpdatedAt: '2026-10-02T00:00:00Z'
+  })[0], graphColor);
+  assert.equal(resolveFieldColors(['Highlights'], {
+    chartColors: [graphColor],
+    fieldColors: { highlights: sharedColor },
+    fieldColorUpdatedAt: { highlights: '2026-10-03T00:00:00Z' },
+    chartUpdatedAt: '2026-10-02T00:00:00Z'
+  })[0], sharedColor);
+  assert.equal(resolveFieldColors(['Highlights'], {
+    chartColors: [graphColor],
+    fieldColors: { highlights: sharedColor },
+    fieldColorUpdatedAt: { highlights: '2026-10-03T00:00:00Z' },
+    chartUpdatedAt: '2026-10-02T00:00:00Z',
+    chartColorsOverrideShared: true
+  })[0], graphColor);
+});
+
+test('nested-pie shared colors override explicit graph colors only when newly saved', () => {
+  const originalWindow = global.window;
+  const originalDocument = global.document;
+  const originalFieldColors = global.IRISFieldColors;
+  const originalFieldColorUpdatedAt = global.IRISFieldColorUpdatedAt;
+  let option;
+  global.window = { echarts: { init: () => ({ setOption: value => { option = value; } }) } };
+  global.document = { documentElement: { classList: { contains: () => false } } };
+  global.IRISFieldColors = { 'group a': '#AABBCC', item: '#DDEEFF' };
+  global.IRISFieldColorUpdatedAt = { 'group a': '2026-10-03T00:00:00Z', item: '2026-10-03T00:00:00Z' };
+
+  try {
+    createChart({}, 'nestedPie', {
+      updated_at: '2026-10-02T00:00:00Z',
+      chart_type: 'nestedPie',
+      irisConfig: {
+        type: 'nestedPie',
+        nestedGroups: [{ label: 'Group A', value: 10, children: [{ label: 'Item', value: 10 }] }],
+        groupColors: ['#112233'],
+        sliceColors: { 'Group A::Item': '#445566' }
+      }
+    });
+    assert.equal(option.series[0].data[0].itemStyle.color, '#AABBCC');
+    assert.equal(option.series[1].data[0].itemStyle.color, '#DDEEFF');
+
+    global.IRISFieldColorUpdatedAt = { 'group a': '2026-10-01T00:00:00Z', item: '2026-10-01T00:00:00Z' };
+    createChart({}, 'nestedPie', {
+      updated_at: '2026-10-02T00:00:00Z',
+      chart_type: 'nestedPie',
+      irisConfig: {
+        type: 'nestedPie',
+        nestedGroups: [{ label: 'Group A', value: 10, children: [{ label: 'Item', value: 10 }] }],
+        groupColors: ['#112233'],
+        sliceColors: { 'Group A::Item': '#445566' }
+      }
+    });
+    assert.equal(option.series[0].data[0].itemStyle.color, '#112233');
+    assert.equal(option.series[1].data[0].itemStyle.color, '#445566');
+  } finally {
+    if (originalWindow === undefined) delete global.window;
+    else global.window = originalWindow;
+    if (originalDocument === undefined) delete global.document;
+    else global.document = originalDocument;
+    if (originalFieldColors === undefined) delete global.IRISFieldColors;
+    else global.IRISFieldColors = originalFieldColors;
+    if (originalFieldColorUpdatedAt === undefined) delete global.IRISFieldColorUpdatedAt;
+    else global.IRISFieldColorUpdatedAt = originalFieldColorUpdatedAt;
+  }
+});
 
 test('saved chart options use readable colors in dark mode', () => {
   let option;
@@ -210,7 +285,9 @@ test('Studio color picker is local and exposes synced HEX, RGB, preset, and rese
   assert.match(reviewEditorSource, /id="studioColorPresets"/);
   assert.match(reviewEditorSource, /id="studioColorReset"/);
   assert.match(studioWorkbenchSource, /colors: \$\('studioColorApplyAll'\)\?\.checked \? null : ctx\.state\.studioChartOverrides/);
-  assert.match(studioWorkbenchSource, /persistStudioFieldColors/);
+  assert.doesNotMatch(studioWorkbenchSource, /persistStudioFieldColors/);
+  assert.match(studioColorCustomizerSource, /ctx\.dbManager\.saveFieldColor\(fieldKey, label, color\)/);
+  assert.match(studioColorCustomizerSource, /chartColorsOverrideShared: Array\.isArray\(overrides\)/);
 });
 
 test('saved pie and doughnut charts restore stored per-slice colors', () => {
@@ -254,16 +331,19 @@ test('saved pie options use shared field colors when no chart override exists', 
 test('graph API validates and persists custom colors', () => {
   assert.match(graphApiSource, /function valid_graph_colors/);
   assert.ok(graphApiSource.includes("preg_match('/^#[0-9A-Fa-f]{6}$/', $color)"));
-  assert.match(graphApiSource, /colors,chart_data|chart_data,colors,is_published/);
+  assert.match(graphApiSource, /function save_graph_relations/);
+  assert.match(graphApiSource, /INSERT INTO graph_colors \(graph_id, series_id, color\)/);
   assert.match(graphApiSource, /normalize_field_key/);
-  assert.match(graphApiSource, /ON DUPLICATE KEY UPDATE label = VALUES\(label\), color = VALUES\(color\)/);
+  assert.match(graphApiSource, /INSERT INTO field_colors \(field_name, color\) VALUES \(\?, \?\) ON DUPLICATE KEY UPDATE color = VALUES\(color\)/);
 });
 
 test('public Observatory receives the shared field-color map', () => {
-  assert.match(publicGraphApiSource, /SELECT field_key, color FROM field_colors/);
+  assert.match(publicGraphApiSource, /SELECT field_name AS field_key, color, updated_at FROM field_colors/);
   assert.match(publicGraphApiSource, /'field_colors' => \$fieldColors/);
   assert.match(publicDashboardSource, /window\.IRISFieldColors =/);
-  assert.match(publicDashboardSource, /IRISChartColors\.resolveFieldColors/);
+  assert.match(publicDashboardSource, /window\.IRISFieldColorUpdatedAt =/);
+  assert.match(chartEngineSource, /resolveFieldColors\(colorFields/);
+  assert.match(chartEngineSource, /fieldColorUpdatedAt/);
 });
 
 test('admin pie previews show slice percentages without hovering', () => {

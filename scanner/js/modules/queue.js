@@ -49,12 +49,14 @@ export function initQueue(ctx) {
       const removeButton = element.querySelector('.queue-remove');
       removeButton?.addEventListener('click', event => {
         event.stopPropagation();
+        if (!window.confirm(`Remove "${item.name}" from the upload queue?`)) return;
         removeQueueItem(item.id);
       });
       element.addEventListener('click', () => ctx.api.setActiveScan(item)); list.appendChild(element);
     });
   };
   $('btnClearQueue')?.addEventListener('click', () => {
+    if (!ctx.state.queue.length || !window.confirm(`Clear all ${ctx.state.queue.length} queued upload(s)?`)) return;
     ctx.state.queue = [];
     ctx.state.activeScan = null;
     updateVisibility();

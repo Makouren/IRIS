@@ -171,7 +171,23 @@ export function initSavedGraphsTab(ctx) {
     modal.innerHTML = `<div class="modal-card" style="max-width:650px;"><div class="modal-header"><h3 class="modal-title">Confirm saved graph deletion</h3><button type="button" class="export-cancel-button" data-close-saved-delete>Cancel</button></div><p>Delete ${selected.length} selected chart${selected.length === 1 ? '' : 's'} permanently?</p>${[...groups].map(([recordId, graphs]) => `<section><h4>${escapeHtml(graphs[0].source_file_name || recordId)} (${graphs.length})</h4><ul>${graphs.map(graph => `<li>${escapeHtml(graph.title || 'Saved Chart')} (v${escapeHtml(graph.version || '?')})</li>`).join('')}</ul>${graphs.length === (ctx.api.savedGraphsVisible || []).filter(item => item.record_id === recordId).length ? '<p><strong>Warning:</strong> this will remove every saved version for this file.</p>' : ''}</section>`).join('')}<div style="display:flex;justify-content:flex-end;margin-top:1rem;"><button type="button" class="archive-delete-button" data-confirm-saved-delete><i class="fa-solid fa-trash" aria-hidden="true"></i> Delete selected</button></div></div>`;
     document.body.appendChild(modal);
     modal.querySelector('[data-close-saved-delete]').onclick = () => modal.remove();
-    modal.querySelector('[data-confirm-saved-delete]').onclick = async event => { event.currentTarget.disabled = true; const ids = selected.map(graph => graph.id); const result = await ctx.dbManager.deleteGraphs(ids); if (!result || !Array.isArray(result.results)) { event.currentTarget.disabled = false; showSavedGraphToast('Bulk delete failed: invalid server response'); return; } state.savedGraphIds.clear(); modal.remove(); await ctx.api.renderSavedGraphsTab(); showSavedGraphToast(`${result.successCount} of ${ids.length} charts deleted`); };
+    modal.querySelector('[data-confirm-saved-delete]').onclick = async event => {
+      const button = event.currentTarget;
+      if (button.disabled) return;
+      button.disabled = true;
+      const ids = selected.map(graph => graph.id);
+      try {
+        const result = await ctx.dbManager.deleteGraphs(ids);
+        if (!result || !Array.isArray(result.results)) throw new Error('The server returned an invalid delete response.');
+        state.savedGraphIds.clear();
+        modal.remove();
+        await ctx.api.renderSavedGraphsTab();
+        showSavedGraphToast(`${result.successCount} of ${ids.length} charts deleted`);
+      } catch (error) {
+        button.disabled = false;
+        showSavedGraphToast(`Bulk delete failed: ${error.message || error}`);
+      }
+    };
   };
 
   const renderCard = (graph, version, records) => {
@@ -262,13 +278,31 @@ export function initSavedGraphsTab(ctx) {
       if (event.target.checked) state.savedGraphIds.add(graph.id); else state.savedGraphIds.delete(graph.id);
       refreshSelectionUi(ctx.api.savedGraphsVisible || []);
     };
-    card.querySelector('.graph-action-publish').onclick = () => publishSelectedGraphs([graph]);
-    card.querySelector('.export-saved-mysql').onclick = () => exportGraphs([graph.id], 'database', graph, [graph]);
+    card.querySelector('.graph-action-publish').onclick = async event => {
+      const button = event.currentTarget;
+      button.disabled = true;
+      try { await publishSelectedGraphs([graph]); }
+      catch (error) { console.error('Single graph publish failed:', error); }
+      finally { button.disabled = false; }
+    };
+    card.querySelector('.export-saved-mysql').onclick = async event => {
+      const button = event.currentTarget;
+      button.disabled = true;
+      try { await exportGraphs([graph.id], 'database', graph, [graph]); }
+      finally { button.disabled = false; }
+    };
     card.querySelector('.export-saved-print').onclick = () => ctx.dbManager.printGraphSheet(graph, { recordName: sourceName });
     card.querySelector('.delete-saved-graph').onclick = async () => {
-      if (await ctx.dbManager.deleteGraph(graph.id)) {
+      const button = card.querySelector('.delete-saved-graph');
+      if (!window.confirm(`Delete "${graph.title || 'this saved chart'}" permanently?`)) return;
+      button.disabled = true;
+      try {
+        if (!await ctx.dbManager.deleteGraph(graph.id)) throw new Error('The server did not confirm chart deletion.');
         state.savedGraphIds.delete(graph.id);
         await ctx.api.renderSavedGraphsTab();
+      } catch (error) {
+        showSavedGraphToast(`Delete failed: ${error.message || error}`);
+        button.disabled = false;
       }
     };
     return { card, canvasId, render };
@@ -339,14 +373,23 @@ export function initSavedGraphsTab(ctx) {
     document.querySelectorAll('.saved-graph-checkbox').forEach(checkbox => { checkbox.checked = event.target.checked; });
     refreshSelectionUi(ctx.api.savedGraphsVisible || []);
   });
-  $('savedGraphsExportSelected')?.addEventListener('click', () => {
+  $('savedGraphsExportSelected')?.addEventListener('click', async event => {
     const ids = [...state.savedGraphIds];
     const selectedGraphs = (ctx.api.savedGraphsVisible || []).filter(graph => state.savedGraphIds.has(graph.id));
-    if (ids.length) exportGraphs(ids, 'database', null, selectedGraphs);
+    const button = event.currentTarget;
+    if (!ids.length || button.disabled) return;
+    button.disabled = true;
+    try { await exportGraphs(ids, 'database', null, selectedGraphs); }
+    finally { button.disabled = false; }
   });
-  $('savedGraphsPublishSelected')?.addEventListener('click', () => {
+  $('savedGraphsPublishSelected')?.addEventListener('click', async event => {
     const selectedGraphs = (ctx.api.savedGraphsVisible || []).filter(graph => state.savedGraphIds.has(graph.id));
-    publishSelectedGraphs(selectedGraphs);
+    const button = event.currentTarget;
+    if (!selectedGraphs.length || button.disabled) return;
+    button.disabled = true;
+    try { await publishSelectedGraphs(selectedGraphs); }
+    catch (error) { showSavedGraphToast(`Publish failed: ${error.message || error}`); }
+    finally { button.disabled = false; }
   });
   $('savedGraphsDeleteSelected')?.addEventListener('click', confirmBulkDelete);
   $('savedGraphsPrintAll')?.addEventListener('click', () => {

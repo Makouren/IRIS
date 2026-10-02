@@ -94,7 +94,7 @@
   }
 
   function addInformationControl(wrapper, chartRows) {
-    const infoRows = chartRows.filter(row => String(row.info_text || '').trim());
+    const infoRows = chartRows.filter(row => String(row.info_text || '').trim() || Object.keys(row.custom_fields || {}).length);
     if (!infoRows.length) return;
     const control = document.createElement('div');
     control.className = 'absolute right-3 top-3 z-40';
@@ -114,7 +114,15 @@
       entry.className = 'whitespace-pre-wrap';
       const year = document.createElement('strong');
       year.textContent = `${row.year}: `;
-      entry.append(year, document.createTextNode(String(row.info_text).trim()));
+      entry.append(year);
+      if (String(row.info_text || '').trim()) entry.append(document.createTextNode(String(row.info_text).trim()));
+      for (const field of Object.values(row.custom_fields || {})) {
+        if (!field?.value) continue;
+        const detail = document.createElement('span');
+        detail.className = 'block pl-2';
+        detail.textContent = `${field.label}: ${field.value}`;
+        entry.append(detail);
+      }
       panel.append(entry);
     }
     const open = () => { panel.hidden = false; trigger.setAttribute('aria-expanded', 'true'); };

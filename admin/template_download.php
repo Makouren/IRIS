@@ -3,7 +3,7 @@ ini_set('display_errors', '0');
 ini_set('html_errors', '0');
 try {
 require_once __DIR__ . '/../includes/functions.php';
-requireRole(['super_admin', 'admin'], true);
+requireRole(['super_admin', 'admin', 'user'], true);
 require_once __DIR__ . '/../includes/helpers/ProfileWorkbookService.php';
 
 if (($_GET['ranking_history'] ?? '') === '1') $_GET['destination'] = 'ranking_history';

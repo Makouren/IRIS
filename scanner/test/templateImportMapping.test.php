@@ -6,6 +6,7 @@ require_once __DIR__ . '/../../includes/helpers/ImportSheetReader.php';
 require_once __DIR__ . '/../../includes/helpers/TemplateImportSupport.php';
 require_once __DIR__ . '/../../includes/helpers/ProfileWorkbookService.php';
 require_once __DIR__ . '/../../includes/helpers/SummaryCardImportService.php';
+require_once __DIR__ . '/../../includes/helpers/CustomImportFields.php';
 
 function assertTrue(bool $condition, string $message): void
 {
@@ -51,6 +52,30 @@ $resolvedLiteral = TemplateImportSupport::resolveFieldIndexes(
 assertSame(0, $resolvedLiteral['import_key'], 'literal canonical field should resolve to the literal column.');
 assertSame(1, $resolvedLiteral['period_key'], 'literal period_key should resolve to the literal column.');
 assertSame(2, $resolvedLiteral['main_value'], 'literal main_value should resolve to the literal column.');
+
+$customDefinition = CustomImportFields::definitions(['campus_rank' => 'Campus Rank']);
+assertSame('Campus Rank', $customDefinition['campus_rank'], 'custom field labels should be normalized.');
+$customProfile = [
+    'mapping_rules' => ['custom_fields.campus_rank' => 'Campus Rank'],
+    'header_aliases' => [],
+    'custom_fields' => $customDefinition,
+];
+$customIndexes = TemplateImportSupport::resolveFieldIndexes(['Campus Rank'], $customProfile, ['custom_fields.campus_rank']);
+assertSame(0, $customIndexes['custom_fields.campus_rank'], 'custom mapping targets should resolve to configured headers.');
+$customValues = CustomImportFields::merge(
+    ['campus_rank' => ['label' => 'Campus Rank', 'value' => '12']],
+    ['campus_rank' => ['label' => 'Campus Rank', 'value' => '']]
+);
+assertSame('12', $customValues['campus_rank']['value'], 'blank custom values should preserve prior imported values.');
+$customValues = CustomImportFields::merge($customValues, ['campus_rank' => ['label' => 'Campus Rank', 'value' => '__CLEAR__']]);
+assertSame([], $customValues, 'the clear marker should remove a stored custom value.');
+$customRejected = false;
+try {
+    CustomImportFields::definitions(['Unsafe-Key' => 'Invalid']);
+} catch (InvalidArgumentException) {
+    $customRejected = true;
+}
+assertTrue($customRejected, 'custom field keys should reject unsafe identifiers.');
 
 $profileMapped = [
     'mapping_rules' => [

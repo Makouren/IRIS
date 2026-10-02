@@ -1,6 +1,6 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { mergeSheet, defaultKeyColumns, validateSheet, isRecentMerge } = require('../js/sheetMerge.js');
+const { mergeSheet, resolveMergeConflicts, defaultKeyColumns, validateSheet, isRecentMerge } = require('../js/sheetMerge.js');
 const ChartMapping = require('../js/chartMapping.js');
 const ChartData = require('../js/chartData.js');
 
@@ -35,6 +35,33 @@ test('updates changed non-blank fields and leaves unchanged rows alone', () => {
   assert.equal(result.stats.unchanged, 1);
   assert.deepEqual(result.stats.updatedByColumn, { Rank: 1 });
   assert.deepEqual(result.stats.rowStatus, ['updated', 'unchanged']);
+});
+
+test('conflict preview blocks differing values until each conflict is resolved', () => {
+  const target = makeSheet(['Category', 'Rank'], [['A', 5], ['Target only', 3]]);
+  const source = makeSheet(['Category', 'Rank'], [['A', 4], ['Source only', 2]]);
+  const targetBefore = structuredClone(target);
+  const preview = resolveMergeConflicts(target, source, { keyColumns: [0] });
+  assert.equal(preview.conflicts.length, 1);
+  assert.equal(preview.conflicts[0].columnName, 'Rank');
+  assert.equal(preview.conflicts[0].targetValue, 5);
+  assert.equal(preview.conflicts[0].sourceValue, 4);
+  assert.equal(preview.sheet, null);
+  assert.equal(preview.unresolved, 1);
+  assert.deepEqual(target, targetBefore);
+});
+
+test('explicit source and target conflict choices retain both new and existing rows', () => {
+  const target = makeSheet(['Category', 'Rank'], [['A', 5], ['Target only', 3]]);
+  const source = makeSheet(['Category', 'Rank'], [['A', 4], ['Source only', 2]]);
+  const preview = resolveMergeConflicts(target, source, { keyColumns: [0] });
+  const conflictId = preview.conflicts[0].id;
+  const keepTarget = resolveMergeConflicts(target, source, { keyColumns: [0], resolutions: { [conflictId]: 'target' } });
+  const takeSource = resolveMergeConflicts(target, source, { keyColumns: [0], resolutions: { [conflictId]: 'source' } });
+  assert.deepEqual(keepTarget.sheet.rows, [['A', 5], ['Target only', 3], ['Source only', 2]]);
+  assert.deepEqual(takeSource.sheet.rows, [['A', 4], ['Target only', 3], ['Source only', 2]]);
+  assert.equal(keepTarget.unresolved, 0);
+  assert.equal(takeSource.unresolved, 0);
 });
 
 test('blank new values do not overwrite existing data', () => {
