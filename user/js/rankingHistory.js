@@ -48,7 +48,7 @@
       return;
     }
     const types = [...new Set(rowsForOrganization().filter(inSelectedRange).map(row => String(row.ranking_type || '')))]
-      .filter(Boolean).sort((left, right) => left.localeCompare(right));
+      .filter(Boolean);
     const previous = selectedList();
     listSelect.replaceChildren(new Option('All lists', 'all'));
     for (const type of types) listSelect.add(new Option(type, type));
@@ -96,15 +96,19 @@
   function addInformationControl(wrapper, chartRows) {
     const infoRows = chartRows.filter(row => String(row.info_text || '').trim());
     if (!infoRows.length) return;
-    const details = document.createElement('details');
-    details.className = 'absolute right-2 top-2 z-20';
-    const summary = document.createElement('summary');
-    summary.className = 'flex h-7 w-7 cursor-pointer list-none items-center justify-center rounded-full border border-gray-500/40 bg-white/90 text-sm text-gray-500 shadow-sm hover:bg-gray-100 dark:bg-gray-800/90 dark:text-gray-300 dark:hover:bg-gray-700';
-    summary.setAttribute('aria-label', 'More ranking information');
-    summary.title = 'More information';
-    summary.innerHTML = '<i class="fa-solid fa-circle-info" aria-hidden="true"></i>';
+    const control = document.createElement('div');
+    control.className = 'absolute right-3 top-3 z-40';
+    const trigger = document.createElement('button');
+    trigger.type = 'button';
+    trigger.className = 'flex h-7 w-7 cursor-pointer items-center justify-center rounded-full border border-gray-500/40 bg-white/90 text-sm text-gray-500 shadow-sm hover:bg-gray-100 dark:bg-gray-800/90 dark:text-gray-300 dark:hover:bg-gray-700';
+    trigger.setAttribute('aria-label', 'More ranking information');
+    trigger.setAttribute('aria-expanded', 'false');
+    trigger.title = 'More information';
+    trigger.innerHTML = '<i class="fa-solid fa-circle-info" aria-hidden="true"></i>';
     const panel = document.createElement('div');
-    panel.className = 'absolute right-0 top-full mt-2 max-h-56 w-72 max-w-[75vw] overflow-y-auto rounded-lg border border-gray-200 bg-white p-3 text-xs text-gray-700 shadow-xl dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200';
+    panel.hidden = true;
+    panel.setAttribute('role', 'tooltip');
+    panel.className = 'absolute right-0 top-full z-40 mt-2 max-h-56 w-72 max-w-[75vw] overflow-y-auto rounded-lg border border-gray-200 bg-white p-3 text-xs text-gray-700 shadow-xl dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200';
     for (const row of [...infoRows].sort((left, right) => Number(left.year) - Number(right.year))) {
       const entry = document.createElement('p');
       entry.className = 'whitespace-pre-wrap';
@@ -113,8 +117,26 @@
       entry.append(year, document.createTextNode(String(row.info_text).trim()));
       panel.append(entry);
     }
-    details.append(summary, panel);
-    wrapper.append(details);
+    const open = () => { panel.hidden = false; trigger.setAttribute('aria-expanded', 'true'); };
+    const close = () => { panel.hidden = true; trigger.setAttribute('aria-expanded', 'false'); };
+    let touchToggleHandled = false;
+    trigger.addEventListener('mouseenter', open);
+    trigger.addEventListener('focus', open);
+    control.addEventListener('mouseleave', close);
+    trigger.addEventListener('blur', close);
+    trigger.addEventListener('keydown', event => { if (event.key === 'Escape') { close(); trigger.blur(); } });
+    trigger.addEventListener('pointerdown', event => {
+      if (event.pointerType !== 'touch') return;
+      event.preventDefault();
+      touchToggleHandled = true;
+      panel.hidden ? open() : close();
+    });
+    trigger.addEventListener('click', event => {
+      if (touchToggleHandled) { touchToggleHandled = false; return; }
+      if (event.detail === 0) return;
+    });
+    control.append(trigger, panel);
+    wrapper.append(control);
   }
 
   function changeFor(row) {
@@ -131,14 +153,17 @@
 
   function makeChart(title, rowsForChart, color, index) {
     const wrapper = document.createElement('div');
-    wrapper.className = selectedList() !== 'all' ? 'col-span-full w-full' : 'w-full';
+    wrapper.className = 'ranking-history-card relative min-w-0 overflow-visible rounded-xl border border-gray-200 bg-white p-3 shadow-sm dark:border-gray-700 dark:bg-gray-800';
     wrapper.style.position = 'relative';
-    wrapper.style.minHeight = '320px';
+    wrapper.style.minHeight = '360px';
     wrapper.style.width = '100%';
+    const heading = document.createElement('h3');
+    heading.className = 'mb-2 min-h-6 pr-10 text-sm font-bold text-gray-700 dark:text-gray-200';
+    heading.textContent = title;
     const surface = document.createElement('div');
     surface.style.height = '320px';
     surface.style.width = '100%';
-    wrapper.append(surface);
+    wrapper.append(heading, surface);
     addInformationControl(wrapper, rowsForChart);
     chartHost.append(wrapper);
     const chart = echarts.init(surface);
@@ -153,7 +178,6 @@
     });
     const theme = chartTheme();
     chart.setOption({
-      title: { text: title, left: 'center', textStyle: { color: theme.textColor, fontSize: 14 } },
       color: [color],
       tooltip: {
         trigger: 'item',
@@ -166,7 +190,7 @@
           return `<b>${escapeHtml(title)}</b><br>Year: ${escapeHtml(point.row.year)}<br>Rank: <b>${escapeHtml(point.row.global_rank || point.row.rank_value)}</b><br>Change: <span style="color:${point.movement.color}">${escapeHtml(point.movement.label)}</span>`;
         }
       },
-      grid: { left: '12%', right: '6%', top: '18%', bottom: '14%', containLabel: true },
+      grid: { left: '12%', right: '6%', top: '12%', bottom: '14%', containLabel: true },
       xAxis: {
         type: 'category', data: years,
         axisLabel: { color: theme.textColor, interval: 0, hideOverlap: true },
@@ -190,21 +214,23 @@
     if (!selectedRows.length) return;
     const title = `${selectedOrganization() === 'all' ? `${organization} ` : ''}THE Impact SDG - ${targetYear}`;
     const wrapper = document.createElement('div');
-    wrapper.className = selectedList() !== 'all' ? 'col-span-full w-full' : 'w-full';
+    wrapper.className = 'ranking-history-card relative min-w-0 overflow-visible rounded-xl border border-gray-200 bg-white p-3 shadow-sm dark:border-gray-700 dark:bg-gray-800';
     wrapper.style.position = 'relative';
-    wrapper.style.minHeight = '320px';
+    wrapper.style.minHeight = '360px';
     wrapper.style.width = '100%';
+    const heading = document.createElement('h3');
+    heading.className = 'mb-2 min-h-6 pr-10 text-sm font-bold text-gray-700 dark:text-gray-200';
+    heading.textContent = title;
     const surface = document.createElement('div');
     surface.style.height = '320px';
     surface.style.width = '100%';
-    wrapper.append(surface);
+    wrapper.append(heading, surface);
     addInformationControl(wrapper, selectedRows);
     chartHost.append(wrapper);
     const chart = echarts.init(surface);
     charts.push(chart);
     const theme = chartTheme();
     chart.setOption({
-      title: { text: title, left: 'center', textStyle: { color: theme.textColor, fontSize: 14 } },
       tooltip: {
         trigger: 'item', backgroundColor: theme.tooltipBackground, borderColor: theme.tooltipBorder,
         textStyle: { color: theme.labelColor },
@@ -214,7 +240,7 @@
           return `<b>${escapeHtml(params.name)}</b><br>Year: ${escapeHtml(row.year)}<br>Rank: <b>${escapeHtml(row.global_rank || row.rank_value)}</b><br>Change: <span style="color:${movement.color}">${escapeHtml(movement.label)}</span>`;
         }
       },
-      grid: { left: '18%', right: '12%', top: '16%', bottom: '10%', containLabel: true },
+      grid: { left: '18%', right: '12%', top: '12%', bottom: '10%', containLabel: true },
       xAxis: { type: 'value', inverse: true, show: false },
       yAxis: { type: 'category', data: selectedRows.map(row => row.ranking_type.split(' - ').at(-1)).reverse(), axisLabel: { color: theme.textColor } },
       series: [{
@@ -276,7 +302,7 @@
 
   function populate(payload) {
     rows = Array.isArray(payload.rankings) ? payload.rankings : [];
-    const organizations = [...new Set(rows.map(row => String(row.organization || '')).filter(Boolean))].sort((left, right) => left.localeCompare(right));
+    const organizations = [...new Set(rows.map(row => String(row.organization || '')).filter(Boolean))];
     organizationSelect.replaceChildren(new Option('All organizations', 'all'));
     organizations.forEach(organization => organizationSelect.add(new Option(organization, organization)));
     const defaults = payload.chart_defaults || {};
@@ -288,7 +314,10 @@
     render();
   }
 
-  organizationSelect.addEventListener('change', render);
+  organizationSelect.addEventListener('change', () => {
+    listSelect.value = 'all';
+    render();
+  });
   listSelect.addEventListener('change', render);
   fromSelect.addEventListener('change', setRangeChanged);
   toSelect.addEventListener('change', setRangeChanged);

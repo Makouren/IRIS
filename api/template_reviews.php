@@ -1,5 +1,6 @@
 <?php
 require_once __DIR__ . '/../includes/functions.php';
+require_once __DIR__ . '/../includes/helpers/RankBoundsParser.php';
 header('Content-Type: application/json; charset=utf-8');
 header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
 requireRole(['super_admin'], true);
@@ -22,14 +23,16 @@ function template_review_csrf(): void {
 }
 
 function template_review_record(PDO $pdo, string $recordId, bool $lock = false): array {
-    $sql = 'SELECT records.id, records.fileName, records.fileType, records.fileSize, records.status,
-                   records.office_name, records.uploaded_by, records.template_id,
+    $sql = 'SELECT records.record_id AS id, records.file_name AS fileName, records.file_type AS fileType,
+                   records.file_size AS fileSize, records.status, offices.office_name,
+                   records.uploaded_by, records.template_id,
                    templates.name AS template_name, templates.ranking_body_id,
                    bodies.name AS ranking_body_name, bodies.short_name AS ranking_body_short_name
             FROM records
-            LEFT JOIN templates ON templates.id = records.template_id
-            LEFT JOIN ranking_bodies bodies ON bodies.id = templates.ranking_body_id
-            WHERE records.id = ?' . ($lock ? ' FOR UPDATE' : '');
+            LEFT JOIN offices ON offices.office_id = records.office_id
+            LEFT JOIN templates ON templates.template_id = records.template_id
+            LEFT JOIN ranking_bodies bodies ON bodies.ranking_body_id = templates.ranking_body_id
+            WHERE records.record_id = ?' . ($lock ? ' FOR UPDATE' : '');
     $query = $pdo->prepare($sql);
     $query->execute([$recordId]);
     $record = $query->fetch(PDO::FETCH_ASSOC);
@@ -53,8 +56,11 @@ function template_review_rows(array $inputRows): array {
         $year = filter_var($rawYear, FILTER_VALIDATE_INT);
         if ($year === false || $year < 1900 || $year > 2200) template_review_fail('A row has an invalid year. Use a whole year from 1900 to 2200.');
         if ($rankDisplay === '' || strlen($rankDisplay) > 50) template_review_fail('A row has an empty or overlong rank value.');
-        $rankValue = parse_rank_to_value($rankDisplay);
-        if ($rankValue === null) template_review_fail('A row has a rank value that contains no number.');
+        try {
+            [$rankLow, $rankHigh, $rankValue] = RankBoundsParser::parse($rankDisplay);
+        } catch (InvalidArgumentException) {
+            template_review_fail('A row has an invalid rank value.');
+        }
         $category = trim((string)($input['category'] ?? ''));
         if (strlen($category) > 100) template_review_fail('Category must not exceed 100 characters.');
         $category = $category !== '' ? $category : null;
@@ -66,6 +72,8 @@ function template_review_rows(array $inputRows): array {
             'year' => (int)$year,
             'category' => $category,
             'global_rank' => $rankDisplay,
+            'rank_low' => $rankLow,
+            'rank_high' => $rankHigh,
             'rank_value' => $rankValue,
         ];
     }
@@ -75,10 +83,17 @@ function template_review_rows(array $inputRows): array {
 function template_review_diff(PDO $pdo, int $rankingBodyId, array $rows, bool $lock = false): array {
     $result = [];
     $suffix = $lock ? ' FOR UPDATE' : '';
-    $query = $pdo->prepare('SELECT id, global_rank, rank_value FROM rankings
-        WHERE ranking_body_id = ? AND year = ? AND (category <=> ?) ORDER BY id ASC LIMIT 1' . $suffix);
+    $query = $pdo->prepare("SELECT rankings.ranking_id AS id,
+            COALESCE(rankings.global_rank_display, CASE WHEN rankings.rank_low IS NOT NULL AND rankings.rank_high IS NOT NULL AND rankings.rank_low <> rankings.rank_high
+                THEN CONCAT(rankings.rank_low, '-', rankings.rank_high) ELSE CAST(rankings.global_rank AS CHAR) END) AS global_rank,
+            rankings.rank_value
+        FROM rankings
+        LEFT JOIN ranking_categories categories ON categories.category_id = rankings.category_id AND categories.ranking_body_id = ?
+        WHERE rankings.ranking_body_id = ? AND rankings.ranking_type_id IS NULL AND rankings.year = ?
+            AND categories.name <=> ?
+        ORDER BY rankings.ranking_id ASC LIMIT 1" . $suffix);
     foreach ($rows as $row) {
-        $query->execute([$rankingBodyId, $row['year'], $row['category']]);
+        $query->execute([$rankingBodyId, $rankingBodyId, $row['year'], $row['category']]);
         $existing = $query->fetch(PDO::FETCH_ASSOC);
         if (!$existing) {
             $row['kind'] = 'new';
@@ -98,6 +113,24 @@ function template_review_diff(PDO $pdo, int $rankingBodyId, array $rows, bool $l
     return $result;
 }
 
+function template_review_category_id(PDO $pdo, int $rankingBodyId, string $name, bool $create): ?int {
+    $query = $pdo->prepare('SELECT category_id FROM ranking_categories WHERE ranking_body_id = ? AND LOWER(name) = LOWER(?) LIMIT 1');
+    $query->execute([$rankingBodyId, $name]);
+    $categoryId = $query->fetchColumn();
+    if ($categoryId) return (int)$categoryId;
+    if (!$create) return null;
+    try {
+        $insert = $pdo->prepare('INSERT INTO ranking_categories (ranking_body_id, name) VALUES (?, ?)');
+        $insert->execute([$rankingBodyId, $name]);
+        return (int)$pdo->lastInsertId();
+    } catch (PDOException $exception) {
+        $query->execute([$rankingBodyId, $name]);
+        $categoryId = $query->fetchColumn();
+        if ($categoryId) return (int)$categoryId;
+        throw $exception;
+    }
+}
+
 try {
     $pdo = db();
     $method = $_SERVER['REQUEST_METHOD'] ?? 'GET';
@@ -105,10 +138,10 @@ try {
         $recordId = trim((string)($_GET['record_id'] ?? ''));
         if ($recordId === '') template_review_fail('Record id is required.');
         $record = template_review_record($pdo, $recordId);
-        $templates = $pdo->prepare('SELECT templates.id, templates.name, templates.ranking_body_id,
+        $templates = $pdo->prepare('SELECT templates.template_id AS id, templates.name, templates.ranking_body_id,
                 bodies.name AS ranking_body_name, bodies.short_name AS ranking_body_short_name
-            FROM templates INNER JOIN ranking_bodies bodies ON bodies.id = templates.ranking_body_id
-            ORDER BY templates.is_active DESC, templates.name ASC, templates.id DESC');
+            FROM templates INNER JOIN ranking_bodies bodies ON bodies.ranking_body_id = templates.ranking_body_id
+            ORDER BY templates.is_active DESC, templates.name ASC, templates.template_id DESC');
         $templates->execute();
         echo json_encode(['record' => $record, 'templates' => $templates->fetchAll(PDO::FETCH_ASSOC)], JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT);
         exit;
@@ -123,11 +156,11 @@ try {
     if ($action === 'assign-template') {
         $templateId = filter_var($data['template_id'] ?? null, FILTER_VALIDATE_INT);
         if (!$templateId || $templateId < 1) template_review_fail('Choose a template linked to a ranking body.');
-        $templateQuery = $pdo->prepare('SELECT id FROM templates WHERE id = ? AND ranking_body_id IS NOT NULL');
+        $templateQuery = $pdo->prepare('SELECT template_id FROM templates WHERE template_id = ? AND ranking_body_id IS NOT NULL');
         $templateQuery->execute([$templateId]);
         if (!$templateQuery->fetchColumn()) template_review_fail('Choose a template linked to a ranking body.');
         template_review_record($pdo, $recordId);
-        $pdo->prepare('UPDATE records SET template_id = ?, updatedAt = NOW() WHERE id = ?')->execute([$templateId, $recordId]);
+        $pdo->prepare('UPDATE records SET template_id = ?, updated_at = NOW() WHERE record_id = ?')->execute([$templateId, $recordId]);
         echo json_encode(['success' => true]);
         exit;
     }
@@ -155,21 +188,24 @@ try {
         if (empty($record['template_id']) || empty($record['ranking_body_id'])) template_review_fail('Assign a template linked to a ranking body first.', 409);
         $diff = template_review_diff($pdo, (int)$record['ranking_body_id'], $rows, true);
         $source = trim((string)($record['office_name'] ?? '')) ?: 'Office Upload';
-        $insert = $pdo->prepare('INSERT INTO rankings (ranking_body_id, year, category, global_rank, rank_value, source, verification_status) VALUES (?, ?, ?, ?, ?, ?, ?)');
-        $update = $pdo->prepare('UPDATE rankings SET global_rank = ?, rank_value = ?, rank_low = NULL, rank_high = NULL, source = ?, verification_status = ? WHERE id = ?');
+        $insert = $pdo->prepare('INSERT INTO rankings (ranking_body_id, category_id, year, global_rank, global_rank_display, rank_low, rank_high, rank_value, source, verification_status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
+        $update = $pdo->prepare('UPDATE rankings SET global_rank = ?, global_rank_display = ?, rank_low = ?, rank_high = ?, rank_value = ?, source = ?, verification_status = ? WHERE ranking_id = ?');
         $inserted = 0;
         $updated = 0;
         foreach ($diff as $row) {
             if (!isset($acceptedKeys[$row['key']])) continue;
+            $categoryId = $row['category'] !== null
+                ? template_review_category_id($pdo, (int)$record['ranking_body_id'], $row['category'], true)
+                : null;
             if ($row['kind'] === 'new') {
-                $insert->execute([(int)$record['ranking_body_id'], $row['year'], $row['category'], $row['global_rank'], $row['rank_value'], $source, 'verified']);
+                $insert->execute([(int)$record['ranking_body_id'], $categoryId, $row['year'], $row['rank_low'], $row['global_rank'], $row['rank_low'], $row['rank_high'], $row['rank_value'], $source, 'verified']);
                 $inserted++;
             } elseif ($row['kind'] === 'changed') {
-                $update->execute([$row['global_rank'], $row['rank_value'], $source, 'verified', $row['existing_id']]);
+                $update->execute([$row['rank_low'], $row['global_rank'], $row['rank_low'], $row['rank_high'], $row['rank_value'], $source, 'verified', $row['existing_id']]);
                 $updated++;
             }
         }
-        $pdo->prepare("UPDATE records SET status = 'Approved', updatedAt = NOW() WHERE id = ?")->execute([$recordId]);
+        $pdo->prepare("UPDATE records SET status = 'Approved', updated_at = NOW() WHERE record_id = ?")->execute([$recordId]);
         if ($record['uploaded_by'] !== null) {
             $log = $pdo->prepare('INSERT INTO uploads_log (uploaded_by, filename, file_type, upload_type, rows_inserted) VALUES (?, ?, ?, ?, ?)');
             $log->execute([(int)$record['uploaded_by'], (string)$record['fileName'], (string)$record['fileType'], 'ranking_history_review', $inserted + $updated]);

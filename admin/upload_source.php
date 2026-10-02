@@ -8,7 +8,7 @@ if ($recordId === '') {
     exit('Record id is required.');
 }
 
-$query = db()->prepare('SELECT fileName, fileType, metadata FROM records WHERE id = ? LIMIT 1');
+$query = db()->prepare('SELECT file_name AS fileName, file_type AS fileType, metadata FROM records WHERE record_id = ? LIMIT 1');
 $query->execute([$recordId]);
 $record = $query->fetch(PDO::FETCH_ASSOC);
 if (!$record) {
@@ -32,7 +32,7 @@ if (!$realStorage || !$filePath || dirname($filePath) !== $realStorage || !is_fi
 }
 
 $pdo = db();
-$pdo->prepare('UPDATE records SET opened_at = COALESCE(opened_at, NOW()) WHERE id = ?')->execute([$recordId]);
+$pdo->prepare('UPDATE records SET opened_at = COALESCE(opened_at, NOW()) WHERE record_id = ?')->execute([(int)$recordId]);
 $mime = (new finfo(FILEINFO_MIME_TYPE))->file($filePath) ?: 'application/octet-stream';
 $inline = in_array($record['fileType'], ['pdf', 'png', 'jpg', 'jpeg', 'webp'], true);
 $disposition = $inline ? 'inline' : 'attachment';

@@ -33,23 +33,25 @@
 
   <!-- App Header — CLSU Institutional Style -->
   <header class="app-header">
-    <div class="brand-container">
-      <div class="brand-logo-seal"><i class="fa-solid fa-seedling" aria-hidden="true"></i></div>
-      <div>
-        <div style="display: flex; align-items: center; gap: 0.6rem;">
-          <span class="brand-title">CLSU Performance Observatory</span>
-          <span class="brand-badge">IRIS File Ingestion</span>
+    <div class="app-header-inner">
+      <div class="brand-container">
+        <div class="brand-logo-seal"><i class="fa-solid fa-seedling" aria-hidden="true"></i></div>
+        <div>
+          <div style="display: flex; align-items: center; gap: 0.6rem;">
+            <span class="brand-title">CLSU Performance Observatory</span>
+            <span class="brand-badge">IRIS File Ingestion</span>
+          </div>
+          <div class="brand-subline">Central Luzon State University • International Rapport Insight System</div>
         </div>
-        <div class="brand-subline">Central Luzon State University • International Rapport Insight System</div>
       </div>
-    </div>
 
-    <nav class="header-nav">
-      <a href="../user/dashboard.php" class="nav-btn"><i class="fa-solid fa-chart-column" aria-hidden="true"></i> Observatory</a>
-      <button id="navScannerBtn" class="nav-btn active">
-        <span><i class="fa-solid fa-magnifying-glass" aria-hidden="true"></i></span> Review Workspace
-      </button>
-    </nav>
+      <nav class="header-nav">
+        <a href="../user/dashboard.php" class="nav-btn"><i class="fa-solid fa-chart-column" aria-hidden="true"></i> Observatory</a>
+        <button id="navScannerBtn" class="nav-btn active">
+          <span><i class="fa-solid fa-magnifying-glass" aria-hidden="true"></i></span> Review Workspace
+        </button>
+      </nav>
+    </div>
   </header>
 
   <button id="uploadWidgetTrigger" class="floating-upload-trigger" type="button" aria-label="Open institutional upload window">
@@ -237,6 +239,9 @@
         <button class="admin-tab-btn" data-admin-tab="adminSavedGraphsPanel">
           <span><i class="fa-solid fa-folder-tree" aria-hidden="true"></i></span> Saved Dashboard Graphs
         </button>
+        <button class="admin-tab-btn" data-admin-tab="adminFileArchivesPanel">
+          <span><i class="fa-solid fa-box-archive" aria-hidden="true"></i></span> File Archives
+        </button>
       </div>
 
       <div id="adminSavedGraphsPanel" class="admin-tab-panel" style="display: none;">
@@ -265,7 +270,7 @@
           <button id="savedGraphsDeleteSelected" type="button" class="archive-delete-button" disabled><i class="fa-solid fa-trash" aria-hidden="true"></i> Delete</button>
         </div>
 
-        <div id="savedDashboardGraphsContainer">
+        <div id="savedDashboardGraphsContainer" data-csrf="<?= e(csrf_token()) ?>">
           <!-- Saved graph cards dynamically populated -->
         </div>
       </div>
@@ -555,49 +560,52 @@
 
       </div>
 
-      <!-- Database Archive Section Title -->
-      <div class="clsu-section-title" style="margin-top: 2rem;">
-        <span><i class="fa-solid fa-folder" aria-hidden="true"></i></span> Scanned Records Archive & Ingestion Logs
       </div>
 
-      <!-- Admin Search & Filter Bar -->
-      <div style="display: flex; gap: 1rem; margin-bottom: 1rem; flex-wrap: wrap;">
-        <input type="text" id="adminSearchInput" class="form-input" placeholder="Search records by filename, category, or values..." style="flex: 1; min-width: 250px;">
-        <select id="adminStatusFilter" class="form-input" style="width: auto;">
-          <option value="all">All Statuses</option>
-          <option value="Pending Review">Pending Review</option>
-          <option value="Approved">Published</option>
-          <option value="Needs Revision">Needs Revision</option>
-        </select>
-      </div>
-
-      <!-- Database Records Table -->
-      <div class="table-container" style="box-shadow: var(--card-shadow);">
-        <div id="adminBulkActions" class="admin-bulk-actions" hidden>
-          <span id="adminBulkSelectionCount">0 records selected</span>
-          <button id="adminBulkPublish" type="button" class="archive-load-button" disabled><i class="fa-solid fa-circle-check" aria-hidden="true"></i> Publish</button>
-          <button id="adminBulkUnpublish" type="button" class="export-cancel-button" disabled><i class="fa-solid fa-eye-slash" aria-hidden="true"></i> Unpublish</button>
-          <button id="adminBulkDelete" type="button" class="archive-delete-button" disabled><i class="fa-solid fa-trash" aria-hidden="true"></i> Bulk Delete</button>
-          <button id="adminClearSelection" type="button" class="export-cancel-button">Clear selection</button>
+      <div id="adminFileArchivesPanel" class="admin-tab-panel" style="display: none;">
+        <div class="clsu-section-title" style="margin-bottom: 1rem;">
+          <span><i class="fa-solid fa-box-archive" aria-hidden="true"></i></span> File Archives
         </div>
-        <table class="data-table">
-          <thead>
-            <tr>
-              <th><input id="adminSelectAll" type="checkbox" aria-label="Select all visible records"></th>
-              <th>Record ID</th>
-              <th>File Name</th>
-              <th>Format</th>
-              <th>Review Status</th>
-              <th>Scanned Date</th>
-              <th>Actions</th>
-            </tr>
-          </thead>
-          <tbody id="adminRecordsTableBody">
-            <!-- Records dynamically populated -->
-          </tbody>
-        </table>
-      </div>
-
+        <div style="display: flex; gap: 1rem; margin-bottom: 1rem; flex-wrap: wrap; align-items: end;">
+          <input type="search" id="fileArchiveSearchInput" class="form-input" placeholder="Search archived files..." aria-label="Search file archives" style="flex: 1; min-width: 250px;">
+          <label class="grid gap-1 text-xs font-bold text-gray-600 dark:text-slate-300">Purpose
+            <select id="fileArchivePurposeFilter" class="form-input" style="width: auto; min-width: 220px;">
+              <option value="all">All purposes</option>
+              <option value="analytics">Data &amp; Report Visualization</option>
+              <option value="summary_cards">Summary Cards</option>
+              <option value="ranking_history">Ranking History</option>
+            </select>
+          </label>
+          <label class="grid gap-1 text-xs font-bold text-gray-600 dark:text-slate-300">Office
+            <select id="fileArchiveOfficeFilter" class="form-input" style="width: auto; min-width: 150px;"><option value="all">All offices</option></select>
+          </label>
+          <label class="grid gap-1 text-xs font-bold text-gray-600 dark:text-slate-300">Status
+            <select id="fileArchiveStatusFilter" class="form-input" style="width: auto; min-width: 150px;">
+              <option value="all">All statuses</option>
+              <option value="Pending Review">Pending Review</option>
+              <option value="Approved">Published</option>
+              <option value="Needs Revision">Needs Revision</option>
+            </select>
+          </label>
+        </div>
+        <div class="table-container" style="box-shadow: var(--card-shadow);">
+          <div id="fileArchivesBulkActions" class="admin-bulk-actions" hidden>
+            <span id="fileArchivesBulkSelectionCount">0 records selected</span>
+            <button id="fileArchivesBulkPublish" type="button" class="archive-load-button" disabled><i class="fa-solid fa-circle-check" aria-hidden="true"></i> Publish</button>
+            <button id="fileArchivesBulkUnpublish" type="button" class="export-cancel-button" disabled><i class="fa-solid fa-eye-slash" aria-hidden="true"></i> Unpublish</button>
+            <button id="fileArchivesBulkDelete" type="button" class="archive-delete-button" disabled><i class="fa-solid fa-trash" aria-hidden="true"></i> Bulk Delete</button>
+            <button id="fileArchivesClearSelection" type="button" class="export-cancel-button">Clear selection</button>
+          </div>
+          <div class="overflow-x-auto">
+            <table class="data-table">
+              <thead><tr>
+                <th><input id="fileArchivesSelectAll" type="checkbox" aria-label="Select all visible archived files"></th>
+                <th>Record ID</th><th>File Name</th><th>Uploaded By</th><th>Format</th><th>Review Status</th><th>Scanned Date</th><th>Actions</th>
+              </tr></thead>
+              <tbody id="fileArchivesTableBody"><tr><td colspan="8">Loading file archives...</td></tr></tbody>
+            </table>
+          </div>
+        </div>
       </div>
 
     </section>

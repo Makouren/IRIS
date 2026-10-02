@@ -2,9 +2,11 @@
 
 This repository is the framework-free PHP application. Pages and APIs are served by Apache/PHP and use PDO to access the shared MySQL database. Tailwind CSS, Flowbite, Font Awesome, Apache ECharts, and browser parsing libraries are loaded by the frontend pages.
 
+For the current V5.3.0 release changes and schema migrations, see [`README_V5.3.0.md`](README_V5.3.0.md).
+
 ## Local XAMPP
 
-Follow the full setup in [`README.md`](README.md). In brief: create `iris_db`, import `database.sql`, adjust `config/db.php` for the local connection, start Apache/MySQL, then open `http://localhost/iris/`.
+Follow the full setup in [`README.md`](README.md). In brief: provision the supplied normalized `iris_db_3nf` database, configure `config/db.php`, start Apache/MySQL, and open the application under its document-root URL. Do not import the legacy `database.sql` or run historical migrations targeting `iris_db` against the normalized database.
 
 The server-side runtime does not require Laravel, Composer, Node.js, or Python. Node.js is optional and is used only to run the tests with `node --test scanner/test/*.test.js`.
 
@@ -16,7 +18,7 @@ The Scanner uses browser-side JavaScript for spreadsheet ingestion and charting.
 
 - `api/iris.php` handles authenticated record and saved-graph operations.
 - `api/dashboard_graphs.php` supplies only explicitly published (`saved_graphs.is_published = 1`) graphs to the public Observatory and sends no-cache headers.
-- `config/db.php` centralizes PDO setup and scanner table creation/compatibility migration.
+- `config/db.php` centralizes PDO setup and change tracking; it does not create or alter schema objects.
 - `api/templates.php` and `api/imports/` provide Super Admin template-driven import profiles, previews, guarded applies, audit batches, and recovery.
 - `api/change_signal.php` exposes the authenticated shared write version used by active-page refresh polling.
 
@@ -24,7 +26,7 @@ The Scanner uses browser-side JavaScript for spreadsheet ingestion and charting.
 
 Office uploads are parsed server-side as CSV, TSV, or XLSX by the existing native reader. The office upload form separates **Data and Report Visualization** from the Summary Cards and Ranking History import destinations. General visualization uploads require an active analytics template and enter the normal record-review workflow; the other destinations use their active import profiles. Summary Card imports require a stable `import_key` Global Label and merge against complete database history. Backfills never replace newer periods. Blank cells preserve values; `__CLEAR__` clears explicitly. New periods are unpublished and only explicit period publication changes the public current period. Ranking rows use their complete identity and block ambiguous matches. Workbook profiles can store expected headers and header-row configuration. Row versions reject stale previews, and import audit rows support recovery. No Composer dependency is required by the current reader.
 
-Apply migrations in filename order. V4.5.0 adds `20261003_simplify_ranking_history.sql`, `20261003_template_profile_workbooks.sql`, `20261003_ranking_history_display_defaults.sql`, and `20261003_ranking_history_information.sql` after the earlier template-import and Summary Card history migrations. Unified Summary Card imports need a stable Global Label column or a configured profile default. Equal period end dates sort by granularity (day, month, quarter, year). `config/db.php` also ensures the app change-state table exists on connection.
+Historical migrations in this repository target the retired `iris_db` schema and must not be run against `iris_db_3nf`. Apply only reviewed additive migrations explicitly targeting `iris_db_3nf`. Unified Summary Card imports need a stable Global Label column or a configured profile default. Equal period end dates sort by granularity (day, month, quarter, year).
 
 The shared refresh client watches successful data changes on open pages. Super Admin tabs synchronize promptly; other roles poll every five seconds. A page with unsaved form or Studio edits defers the reload and displays a refresh prompt.
 
@@ -34,4 +36,4 @@ Record approval and graph publication are independent. The Studio Publish action
 
 Graph publish/unpublish requests use `POST /api/iris.php?resource=graphs&id={graphId}&action=publish` or `action=unpublish` with JSON `{ "published": true|false }`. `api/iris.php` requires authentication and checks for the `admin` role before mutation. The public dashboard endpoint is read-only and exposes only rows with `is_published = 1`.
 
-The records archive also supports file-level publication. `POST /api/iris.php?resource=records&id={recordId}&action=unpublish` returns the record to `Pending Review` and sets every linked saved graph (`saved_graphs.record_id = records.id`) to unpublished in one transaction. Bulk archive actions use `POST /api/iris.php?resource=records&action=bulk-publish` or `action=bulk-unpublish` with JSON `{ "ids": ["record-id"] }`; each action updates selected records and their linked graphs atomically. These actions do not delete chart data. Summary cards are managed independently in `summary_cards` and are not linked to Scanner records.
+The records archive also supports file-level publication. `POST /api/iris.php?resource=records&id={recordId}&action=unpublish` returns the record to `Pending Review` and sets every linked saved graph (`saved_graphs.record_id = records.record_id`) to unpublished in one transaction. Bulk archive actions use `POST /api/iris.php?resource=records&action=bulk-publish` or `action=bulk-unpublish` with JSON `{ "ids": ["record-id"] }`; each action updates selected records and their linked graphs atomically. These actions do not delete chart data. Summary cards are managed independently and are not linked to Scanner records.

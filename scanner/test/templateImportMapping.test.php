@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 require_once __DIR__ . '/../../includes/helpers/ImportSheetReader.php';
 require_once __DIR__ . '/../../includes/helpers/TemplateImportSupport.php';
+require_once __DIR__ . '/../../includes/helpers/ProfileWorkbookService.php';
+require_once __DIR__ . '/../../includes/helpers/SummaryCardImportService.php';
 
 function assertTrue(bool $condition, string $message): void
 {
@@ -73,6 +75,36 @@ $resolvedMapped = TemplateImportSupport::resolveFieldIndexes(
 assertSame(1, $resolvedMapped['import_key'], 'mapped Global Label -> import_key should resolve.');
 assertSame(2, $resolvedMapped['period_key'], 'mapped Year -> period_key should resolve.');
 assertSame(3, $resolvedMapped['main_value'], 'mapped Main Value -> main_value should resolve.');
+
+ProfileWorkbookService::assertHeadersMatch(
+    ['Global Label', 'Year', 'Main Value', 'Main Label', 'Display Order'],
+    ['Global Label', 'Year', 'Main Value', 'Main Label'],
+    'summary_cards'
+);
+$expectedSummaryHeaders = ProfileWorkbookService::expectedHeaders([
+    'mapping_rules' => ['import_key' => 'Global Label', 'period_key' => 'Year', 'main_value' => 'Value', 'display_order' => 'Display Order'],
+    'workbook_headers' => ['Global Label', 'Year', 'Value', 'Display Order'],
+], 'summary_cards');
+assertSame(['Global Label', 'Year', 'Value'], $expectedSummaryHeaders, 'Manual display order must not become a required Summary Card import header.');
+$mergeState = new ReflectionMethod(SummaryCardImportService::class, 'mergedState');
+$rankingSummaryValues = $mergeState->invoke(null, [
+    'title' => 'University Ranking',
+    'main_value' => '601-650',
+    'main_label' => 'QS Asia Rank',
+    'secondary_value' => 'Reporter Status'
+], [], false, 'university-ranking', ['period_label' => '2026'], 'ranking.xlsx', 14);
+assertSame('601-650', $rankingSummaryValues['main_value'], 'Rank brackets should remain text in Summary Card main values.');
+assertSame('Reporter Status', $rankingSummaryValues['secondary_value'], 'Ranking statuses should remain text in Summary Card secondary values.');
+try {
+    ProfileWorkbookService::assertHeadersMatch(
+        ['Global Label', 'Year', 'Display Order'],
+        ['Global Label', 'Year', 'Main Value'],
+        'summary_cards'
+    );
+    throw new RuntimeException('A missing active-profile header should be rejected.');
+} catch (InvalidArgumentException $exception) {
+    assertContains('Main Value', $exception->getMessage(), 'Missing active-profile headers should remain errors.');
+}
 
 $rankingProfile = [
     'mapping_rules' => [

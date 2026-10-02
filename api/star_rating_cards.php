@@ -37,7 +37,7 @@ function star_rating_category_slug(string $name): string {
 function star_rating_create_or_find_category(PDO $pdo, string $name): int {
     $name = trim($name);
     $slug = star_rating_category_slug($name);
-    $query = $pdo->prepare('SELECT id FROM star_rating_categories WHERE slug = ? LIMIT 1');
+    $query = $pdo->prepare('SELECT category_id FROM star_rating_categories WHERE slug = ? LIMIT 1');
     $query->execute([$slug]);
     $id = $query->fetchColumn();
     if ($id !== false) return (int)$id;
@@ -72,8 +72,13 @@ function star_rating_rows(PDO $pdo, array $cards): array {
     if (!$cards) return [];
     $ids = array_column($cards, 'id');
     $placeholders = implode(',', array_fill(0, count($ids), '?'));
-    $query = $pdo->prepare("SELECT card_id, label, max_stars, score, display_order
-        FROM star_rating_rows WHERE card_id IN ($placeholders) ORDER BY display_order ASC, id ASC");
+    $query = $pdo->prepare("SELECT rating_rows.row_id AS id, rating_rows.card_id, rating_rows.label,
+            COALESCE(CAST(row_settings.setting_value AS UNSIGNED), 5) AS max_stars,
+            rating_rows.value AS score, rating_rows.display_order
+        FROM star_rating_rows rating_rows
+        LEFT JOIN star_rating_settings row_settings ON row_settings.card_id = rating_rows.card_id
+            AND row_settings.setting_key = CONCAT('row:', rating_rows.row_id, ':max_stars')
+        WHERE rating_rows.card_id IN ($placeholders) ORDER BY rating_rows.display_order ASC, rating_rows.row_id ASC");
     $query->execute($ids);
     $rowsByCard = [];
     foreach ($query->fetchAll(PDO::FETCH_ASSOC) as $row) {
@@ -82,9 +87,9 @@ function star_rating_rows(PDO $pdo, array $cards): array {
         $row['display_order'] = (int)$row['display_order'];
         $rowsByCard[$row['card_id']][] = $row;
     }
-    $categoryQuery = $pdo->prepare("SELECT mapping.card_id, categories.id, categories.name, categories.slug
+    $categoryQuery = $pdo->prepare("SELECT mapping.card_id, categories.category_id AS id, categories.name, categories.slug
         FROM star_rating_card_category_map mapping
-        INNER JOIN star_rating_categories categories ON categories.id = mapping.category_id
+        INNER JOIN star_rating_categories categories ON categories.category_id = mapping.category_id
         WHERE mapping.card_id IN ($placeholders)
         ORDER BY categories.sort_order ASC, categories.name ASC");
     $categoryQuery->execute($ids);
@@ -173,11 +178,11 @@ try {
     if (($_GET['resource'] ?? '') === 'categories') {
         if ($method === 'GET') {
             $isAdmin = !empty($_SESSION['user_id']) && ($_SESSION['role'] ?? '') === 'super_admin';
-            $sql = 'SELECT categories.id, categories.name, categories.slug, categories.sort_order
+            $sql = 'SELECT categories.category_id AS id, categories.name, categories.slug, categories.sort_order
                 FROM star_rating_categories categories ' . ($isAdmin ? '' : 'WHERE EXISTS (
                     SELECT 1 FROM star_rating_card_category_map mapping
-                    INNER JOIN star_rating_cards cards ON cards.id = mapping.card_id
-                    WHERE mapping.category_id = categories.id AND cards.is_published = 1
+                    INNER JOIN star_rating_cards cards ON cards.card_id = mapping.card_id
+                    WHERE mapping.category_id = categories.category_id AND cards.is_published = 1
                 ) ') . 'ORDER BY categories.sort_order ASC, categories.name ASC';
             $query = $pdo->query($sql);
             echo json_encode($query->fetchAll(PDO::FETCH_ASSOC), JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT);
@@ -190,7 +195,7 @@ try {
         if ($method === 'POST') {
             $name = trim((string)($data['name'] ?? ''));
             $slug = star_rating_category_slug($name);
-            $query = $pdo->prepare('SELECT id, name, slug, sort_order FROM star_rating_categories WHERE slug = ? LIMIT 1');
+            $query = $pdo->prepare('SELECT category_id AS id, name, slug, sort_order FROM star_rating_categories WHERE slug = ? LIMIT 1');
             $query->execute([$slug]);
             $category = $query->fetch(PDO::FETCH_ASSOC);
             if (!$category) {
@@ -230,11 +235,11 @@ try {
             if (!$sets) star_rating_bad('No category fields to update.');
             $values[] = $categoryId;
             try {
-                $pdo->prepare('UPDATE star_rating_categories SET ' . implode(', ', $sets) . ' WHERE id = ?')->execute($values);
+                $pdo->prepare('UPDATE star_rating_categories SET ' . implode(', ', $sets) . ' WHERE category_id = ?')->execute($values);
             } catch (PDOException $exception) {
                 star_rating_bad('A category with that name or slug already exists.', 409);
             }
-            $query = $pdo->prepare('SELECT id, name, slug, sort_order FROM star_rating_categories WHERE id = ?');
+            $query = $pdo->prepare('SELECT category_id AS id, name, slug, sort_order FROM star_rating_categories WHERE category_id = ?');
             $query->execute([$categoryId]);
             $category = $query->fetch(PDO::FETCH_ASSOC);
             if (!$category) star_rating_bad('Category not found.', 404);
@@ -244,7 +249,7 @@ try {
         if ($method === 'DELETE') {
             $categoryId = filter_var($_GET['id'] ?? null, FILTER_VALIDATE_INT);
             if ($categoryId === false || $categoryId === null) star_rating_bad('Category id is required.');
-            $delete = $pdo->prepare('DELETE FROM star_rating_categories WHERE id = ?');
+            $delete = $pdo->prepare('DELETE FROM star_rating_categories WHERE category_id = ?');
             $delete->execute([$categoryId]);
             echo json_encode(['success' => true, 'deleted' => $delete->rowCount() > 0]);
             exit;
@@ -254,8 +259,12 @@ try {
 
     if ($method === 'GET') {
         $isAdmin = !empty($_SESSION['user_id']) && ($_SESSION['role'] ?? '') === 'super_admin';
-        $query = $pdo->prepare('SELECT id, title, logo_path, year, display_order, is_published, created_at, updated_at
-            FROM star_rating_cards ' . ($isAdmin ? '' : 'WHERE is_published = 1 ') . 'ORDER BY display_order ASC, created_at DESC');
+        $query = $pdo->prepare("SELECT cards.card_id AS id, cards.title,
+                (SELECT setting_value FROM star_rating_settings WHERE card_id = cards.card_id AND setting_key = 'logo_path' LIMIT 1) AS logo_path,
+                cards.year,
+                CAST(COALESCE((SELECT setting_value FROM star_rating_settings WHERE card_id = cards.card_id AND setting_key = 'display_order' LIMIT 1), cards.card_id) AS UNSIGNED) AS display_order,
+                cards.is_published, cards.created_at, cards.updated_at
+            FROM star_rating_cards cards " . ($isAdmin ? '' : 'WHERE cards.is_published = 1 ') . 'ORDER BY display_order ASC, cards.created_at DESC');
         $query->execute();
         echo json_encode(star_rating_rows($pdo, $query->fetchAll(PDO::FETCH_ASSOC)), JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT);
         exit;
@@ -281,7 +290,7 @@ try {
         $categoryIds = array_values(array_unique(array_map('intval', $categoryIds)));
         if ($categoryIds) {
             $placeholders = implode(',', array_fill(0, count($categoryIds), '?'));
-            $categoryCheck = $pdo->prepare("SELECT id FROM star_rating_categories WHERE id IN ($placeholders)");
+            $categoryCheck = $pdo->prepare("SELECT category_id FROM star_rating_categories WHERE category_id IN ($placeholders)");
             $categoryCheck->execute($categoryIds);
             if (count($categoryCheck->fetchAll(PDO::FETCH_COLUMN)) !== count($categoryIds)) star_rating_bad('One or more categories were not found.');
         }
@@ -296,29 +305,34 @@ try {
 
         $existing = null;
         if ($id !== null) {
-            $query = $pdo->prepare('SELECT id, logo_path FROM star_rating_cards WHERE id = ?');
+            $query = $pdo->prepare('SELECT card_id AS id FROM star_rating_cards WHERE card_id = ?');
             $query->execute([$id]);
             $existing = $query->fetch(PDO::FETCH_ASSOC);
             if (!$existing) star_rating_bad('Star rating card not found.', 404);
         }
-        $oldLogo = $existing['logo_path'] ?? null;
+        $oldLogo = $existing ? star_rating_setting($pdo, (int)$id, 'logo_path') : null;
         $newLogo = star_rating_save_logo($_FILES['logo'] ?? null, $logoDirectory);
         $logoPath = $newLogo ?? (!empty($_POST['remove_logo']) ? null : $oldLogo);
         $pdo->beginTransaction();
         try {
             if ($existing) {
-                $save = $pdo->prepare('UPDATE star_rating_cards SET title = ?, logo_path = ?, year = ?, display_order = ?, is_published = ? WHERE id = ?');
-                $save->execute([$title, $logoPath, $year !== '' ? $year : null, $displayOrder, $isPublished, $id]);
+                $save = $pdo->prepare('UPDATE star_rating_cards SET title = ?, year = ?, is_published = ? WHERE card_id = ?');
+                $save->execute([$title, $year !== '' ? $year : null, $isPublished, $id]);
                 $cardId = (int)$id;
+                $pdo->prepare("DELETE FROM star_rating_settings WHERE card_id = ? AND setting_key LIKE 'row:%:max_stars'")->execute([$cardId]);
                 $pdo->prepare('DELETE FROM star_rating_rows WHERE card_id = ?')->execute([$cardId]);
             } else {
-                $save = $pdo->prepare('INSERT INTO star_rating_cards (title, logo_path, year, display_order, is_published) VALUES (?, ?, ?, ?, ?)');
-                $save->execute([$title, $logoPath, $year !== '' ? $year : null, $displayOrder, $isPublished]);
+                $save = $pdo->prepare('INSERT INTO star_rating_cards (title, year, is_published) VALUES (?, ?, ?)');
+                $save->execute([$title, $year !== '' ? $year : null, $isPublished]);
                 $cardId = (int)$pdo->lastInsertId();
             }
-            $insertRow = $pdo->prepare('INSERT INTO star_rating_rows (card_id, label, max_stars, score, display_order) VALUES (?, ?, ?, ?, ?)');
+            star_rating_save_setting($pdo, $cardId, 'logo_path', $logoPath);
+            star_rating_save_setting($pdo, $cardId, 'display_order', (string)$displayOrder);
+            $insertRow = $pdo->prepare('INSERT INTO star_rating_rows (card_id, label, value, display_order) VALUES (?, ?, ?, ?)');
             foreach ($rows as $row) {
-                $insertRow->execute([$cardId, $row['label'], $row['max_stars'], $row['score'], $row['display_order']]);
+                $insertRow->execute([$cardId, $row['label'], $row['score'], $row['display_order']]);
+                $rowId = (int)$pdo->lastInsertId();
+                star_rating_save_setting($pdo, $cardId, 'row:' . $rowId . ':max_stars', (string)$row['max_stars']);
             }
             if ($newCategoryName !== '') $categoryIds[] = star_rating_create_or_find_category($pdo, $newCategoryName);
             $categoryIds = array_values(array_unique($categoryIds));
@@ -332,7 +346,12 @@ try {
             throw $exception;
         }
         if ($oldLogo && $oldLogo !== $logoPath) star_rating_remove_logo($oldLogo, $logoDirectory);
-        $query = $pdo->prepare('SELECT id, title, logo_path, year, display_order, is_published, created_at, updated_at FROM star_rating_cards WHERE id = ?');
+        $query = $pdo->prepare("SELECT cards.card_id AS id, cards.title,
+                (SELECT setting_value FROM star_rating_settings WHERE card_id = cards.card_id AND setting_key = 'logo_path' LIMIT 1) AS logo_path,
+                cards.year,
+                CAST(COALESCE((SELECT setting_value FROM star_rating_settings WHERE card_id = cards.card_id AND setting_key = 'display_order' LIMIT 1), cards.card_id) AS UNSIGNED) AS display_order,
+                cards.is_published, cards.created_at, cards.updated_at
+            FROM star_rating_cards cards WHERE cards.card_id = ?");
         $query->execute([$cardId]);
         $cards = star_rating_rows($pdo, $query->fetchAll(PDO::FETCH_ASSOC));
         echo json_encode($cards[0], JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT);
@@ -342,10 +361,10 @@ try {
     if ($method === 'DELETE') {
         $id = filter_var($_GET['id'] ?? null, FILTER_VALIDATE_INT);
         if ($id === false || $id === null) star_rating_bad('Star rating card id is required.');
-        $query = $pdo->prepare('SELECT logo_path FROM star_rating_cards WHERE id = ?');
+        $query = $pdo->prepare("SELECT setting_value FROM star_rating_settings WHERE card_id = ? AND setting_key = 'logo_path' LIMIT 1");
         $query->execute([$id]);
         $logoPath = $query->fetchColumn();
-        $delete = $pdo->prepare('DELETE FROM star_rating_cards WHERE id = ?');
+        $delete = $pdo->prepare('DELETE FROM star_rating_cards WHERE card_id = ?');
         $delete->execute([$id]);
         if ($delete->rowCount()) star_rating_remove_logo($logoPath ?: null, $logoDirectory);
         echo json_encode(['success' => true, 'deleted' => $delete->rowCount() > 0]);
@@ -356,4 +375,20 @@ try {
 } catch (Throwable $exception) {
     if (!headers_sent()) http_response_code(500);
     echo json_encode(['error' => 'Unable to process star rating cards.']);
+}
+
+function star_rating_setting(PDO $pdo, int $cardId, string $key): ?string {
+    $query = $pdo->prepare('SELECT setting_value FROM star_rating_settings WHERE card_id = ? AND setting_key = ? LIMIT 1');
+    $query->execute([$cardId, $key]);
+    $value = $query->fetchColumn();
+    return $value === false ? null : (string)$value;
+}
+
+function star_rating_save_setting(PDO $pdo, int $cardId, string $key, ?string $value): void {
+    if ($value === null || $value === '') {
+        $pdo->prepare('DELETE FROM star_rating_settings WHERE card_id = ? AND setting_key = ?')->execute([$cardId, $key]);
+        return;
+    }
+    $pdo->prepare('INSERT INTO star_rating_settings (card_id, setting_key, setting_value) VALUES (?, ?, ?)
+        ON DUPLICATE KEY UPDATE setting_value = VALUES(setting_value)')->execute([$cardId, $key, $value]);
 }

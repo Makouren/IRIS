@@ -6,6 +6,7 @@ if (PHP_SAPI !== 'cli') {
 
 require_once __DIR__ . '/../includes/functions.php';
 require_once __DIR__ . '/../includes/helpers/RankBoundsParser.php';
+require_once __DIR__ . '/../includes/helpers/SummaryCardHistory.php';
 
 $sources = [
     'CLSU news' => 'CLSU news (https://clsu.edu.ph)',
@@ -67,11 +68,53 @@ $skipped = 0;
 $summaryCardsUpdated = 0;
 $summaryCardsSkipped = 0;
 
+function seed_summary_card_period(PDO $pdo, string $title, string $baselineValue, string $baselineYear, ?string $baselineLabel, string $nextValue, string $nextYear, ?string $nextLabel): bool
+{
+    $query = $pdo->prepare('SELECT card_id FROM summary_cards WHERE title = ? ORDER BY created_at DESC, card_id DESC LIMIT 1');
+    $query->execute([$title]);
+    $cardId = $query->fetchColumn();
+    if ($cardId === false) return false;
+
+    $periods = SummaryCardHistory::periods($pdo, (string)$cardId, true);
+    $latest = SummaryCardHistory::latest($periods);
+    if (!$latest) return false;
+    $currentYear = substr((string)($latest['period_label'] ?: $latest['year_date'] ?? ''), 0, 4);
+    $currentValue = (float)($latest['main_value'] ?? 0);
+    $currentLabel = (string)($latest['main_label'] ?? '');
+    $matchesBaseline = $currentValue === (float)$baselineValue && $currentYear === $baselineYear
+        && ($baselineLabel === null || $currentLabel === $baselineLabel);
+    $matchesSeeded = $currentValue === (float)$nextValue && $currentYear === $nextYear
+        && ($nextLabel === null || $currentLabel === $nextLabel);
+    if (!$matchesBaseline || $matchesSeeded) return false;
+
+    $existingPeriod = $pdo->prepare('SELECT snapshot_id FROM summary_card_snapshots WHERE card_id = ? AND period_key = ? FOR UPDATE');
+    $existingPeriod->execute([(int)$cardId, $nextYear]);
+    if ($existingPeriod->fetchColumn()) return false;
+
+    $snapshot = $pdo->prepare('INSERT INTO summary_card_snapshots (
+            card_id, period_key, period_label, period_sort, period_precision, is_published,
+            main_value, main_label, secondary_label, secondary_value, year_date, title,
+            description, secondary_description, info_text, source_info, source_record_id,
+            last_source_record_id, batch_id, last_batch_id
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
+    $snapshot->execute([
+        (int)$cardId, $nextYear, $nextYear, (int)$nextYear, 0, (int)($latest['is_published'] ?? 0),
+        $nextValue, $nextLabel ?? $currentLabel, $latest['secondary_label'], $latest['secondary_value'],
+        $nextYear . '-01-01', $latest['title'] ?? $title, $latest['description'],
+        $latest['secondary_description'], $latest['info_text'], $latest['source_info'],
+        $latest['source_record_id'], $latest['last_source_record_id'], $latest['batch_id'], $latest['last_batch_id']
+    ]);
+    SummaryCardHistory::syncLive($pdo, (string)$cardId);
+    return true;
+}
+
 try {
     $pdo->beginTransaction();
     $bodyIds = [];
-    $findBody = $pdo->prepare('SELECT id FROM ranking_bodies WHERE short_name = ? LIMIT 1');
+    $findBody = $pdo->prepare('SELECT ranking_body_id FROM ranking_bodies WHERE short_name = ? LIMIT 1');
     $insertBody = $pdo->prepare('INSERT INTO ranking_bodies (name, short_name) VALUES (?, ?)');
+    $findType = $pdo->prepare('SELECT ranking_type_id FROM ranking_types WHERE ranking_body_id = ? AND LOWER(name) = LOWER(?) LIMIT 1');
+    $insertType = $pdo->prepare('INSERT INTO ranking_types (ranking_body_id, name) VALUES (?, ?) ON DUPLICATE KEY UPDATE ranking_type_id = LAST_INSERT_ID(ranking_type_id)');
     foreach ([
         'QS' => 'QS World University Rankings',
         'THE' => 'Times Higher Education',
@@ -91,11 +134,21 @@ try {
         $bodyIds[$shortName] = (int)$bodyId;
     }
 
-    $findRows = $pdo->prepare('SELECT id, seed_managed FROM rankings WHERE ranking_body_id = ? AND LOWER(ranking_type) = LOWER(?) AND year = ? ORDER BY id FOR UPDATE');
-    $insertRow = $pdo->prepare('INSERT INTO rankings (ranking_body_id, ranking_type, year, global_rank, rank_low, rank_high, rank_value, ph_rank, ph_rank_value, source, seed_managed) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)');
-    $updateRow = $pdo->prepare('UPDATE rankings SET ranking_type = ?, global_rank = ?, rank_low = ?, rank_high = ?, rank_value = ?, ph_rank = ?, ph_rank_value = ?, source = ?, seed_managed = 1 WHERE id = ? AND seed_managed = 1');
+    $findRows = $pdo->prepare('SELECT rankings.ranking_id AS id, rankings.seed_managed
+        FROM rankings INNER JOIN ranking_types ON ranking_types.ranking_type_id = rankings.ranking_type_id
+        WHERE rankings.ranking_body_id = ? AND LOWER(ranking_types.name) = LOWER(?) AND rankings.year = ?
+        ORDER BY rankings.ranking_id FOR UPDATE');
+    $insertRow = $pdo->prepare('INSERT INTO rankings (ranking_body_id, ranking_type_id, year, global_rank, global_rank_display, rank_low, rank_high, rank_value, ph_rank, ph_rank_display, ph_rank_value, source, seed_managed)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)');
+    $updateRow = $pdo->prepare('UPDATE rankings SET ranking_type_id = ?, global_rank = ?, global_rank_display = ?, rank_low = ?, rank_high = ?, rank_value = ?, ph_rank = ?, ph_rank_display = ?, ph_rank_value = ?, source = ?, seed_managed = 1 WHERE ranking_id = ? AND seed_managed = 1');
     foreach ($rows as [$organization, $type, $year, $rank, $phRank, $sourceKey]) {
         $bodyId = $bodyIds[$organization];
+        $findType->execute([$bodyId, $type]);
+        $typeId = $findType->fetchColumn();
+        if ($typeId === false) {
+            $insertType->execute([$bodyId, $type]);
+            $typeId = (int)$pdo->lastInsertId();
+        }
         $findRows->execute([$bodyId, $type, $year]);
         $matches = $findRows->fetchAll(PDO::FETCH_ASSOC);
         if (count($matches) > 1 || ($matches && !(int)$matches[0]['seed_managed'])) {
@@ -106,32 +159,18 @@ try {
         $phValue = $phRank === null ? null : parse_rank_to_value($phRank);
         $source = $sources[$sourceKey];
         if ($matches) {
-            $updateRow->execute([$type, $rank, $rankLow, $rankHigh, $rankValue, $phRank, $phValue, $source, (int)$matches[0]['id']]);
+            $updateRow->execute([(int)$typeId, $rankLow, $rank, $rankLow, $rankHigh, $rankValue, $phValue, $phRank, $phValue, $source, (int)$matches[0]['id']]);
             $updated++;
         } else {
-            $insertRow->execute([$bodyId, $type, $year, $rank, $rankLow, $rankHigh, $rankValue, $phRank, $phValue, $source]);
+            $insertRow->execute([$bodyId, (int)$typeId, $year, $rankLow, $rank, $rankLow, $rankHigh, $rankValue, $phValue, $phRank, $phValue, $source]);
             $inserted++;
         }
     }
 
-    $findCard = $pdo->prepare('SELECT id, main_value, year_date, main_label FROM summary_cards WHERE title = ? ORDER BY created_at DESC LIMIT 1');
-    $updateCard = $pdo->prepare('UPDATE summary_cards SET main_value = ?, year_date = ?, main_label = ? WHERE id = ?');
-    $findCard->execute(['QS Rank - South East Asia']);
-    $card = $findCard->fetch(PDO::FETCH_ASSOC);
-    if ($card) {
-        $baseline = (string)$card['main_value'] === '153' && (string)$card['year_date'] === '2025';
-        $seeded = (string)$card['main_value'] === '161' && (string)$card['year_date'] === '2026';
-        if ($baseline || $seeded) { $updateCard->execute(['161', '2026', 'CLSU Rank in South East ASIA', $card['id']]); $summaryCardsUpdated++; }
-        else $summaryCardsSkipped++;
-    }
-    $findCard->execute(['BEST GLOBAL RANK']);
-    $card = $findCard->fetch(PDO::FETCH_ASSOC);
-    if ($card) {
-        $baseline = (string)$card['main_value'] === '86' && (string)$card['year_date'] === '2023' && (string)$card['main_label'] === 'WURI';
-        $seeded = (string)$card['main_value'] === '83' && (string)$card['year_date'] === '2026' && (string)$card['main_label'] === 'WURI 2026';
-        if ($baseline || $seeded) { $updateCard->execute(['83', '2026', 'WURI 2026', $card['id']]); $summaryCardsUpdated++; }
-        else $summaryCardsSkipped++;
-    }
+    if (seed_summary_card_period($pdo, 'QS Rank - South East Asia', '153', '2025', null, '161', '2026', 'CLSU Rank in South East ASIA')) $summaryCardsUpdated++;
+    else $summaryCardsSkipped++;
+    if (seed_summary_card_period($pdo, 'BEST GLOBAL RANK', '86', '2023', 'WURI', '83', '2026', 'WURI 2026')) $summaryCardsUpdated++;
+    else $summaryCardsSkipped++;
     $pdo->commit();
     printf("Inserted: %d\nUpdated seed-managed rows: %d\nSkipped manual or ambiguous rows: %d\nSummary cards updated: %d\nSummary cards skipped as manually changed: %d\n", $inserted, $updated, $skipped, $summaryCardsUpdated, $summaryCardsSkipped);
 } catch (Throwable $exception) {

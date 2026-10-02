@@ -1,0 +1,474 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light dark">
+  <title>CLSU Institutional Insights</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --page-bg: #f7f3ec;
+      --dot-color: rgba(91, 82, 67, 0.3);
+      --dot-highlight-color: rgba(30, 96, 49, 0.9);
+      --dot-opacity: 0.48;
+      --glow-opacity: 0.88;
+      --dot-radius: 1.25px;
+      --dot-spacing: 20px;
+      --glow-radius: 180px;
+      --clsu-green: #1e6031;
+      --clsu-green-deep: #174b27;
+      --clsu-gold: #e0a70d;
+      --text-main: #202a22;
+      --text-muted: #647064;
+      --surface: rgba(255, 255, 255, 0.78);
+      --surface-solid: #fffefa;
+      --border: rgba(48, 74, 52, 0.15);
+      --shadow: 0 12px 34px rgba(41, 57, 41, 0.08);
+    }
+
+    :root[data-theme="dark"] {
+      color-scheme: dark;
+      --page-bg: #111a16;
+      --dot-color: rgba(224, 211, 184, 0.27);
+      --dot-highlight-color: rgba(116, 202, 139, 0.92);
+      --dot-opacity: 0.45;
+      --glow-opacity: 0.82;
+      --clsu-green: #8acb96;
+      --clsu-green-deep: #254c30;
+      --clsu-gold: #efc34e;
+      --text-main: #f2f1e9;
+      --text-muted: #b0b9ad;
+      --surface: rgba(27, 39, 32, 0.88);
+      --surface-solid: #1b2720;
+      --border: rgba(207, 221, 199, 0.16);
+      --shadow: 0 14px 36px rgba(0, 0, 0, 0.22);
+    }
+
+    @media (prefers-color-scheme: dark) {
+      :root:not([data-theme="light"]) {
+        color-scheme: dark;
+        --page-bg: #111a16;
+        --dot-color: rgba(224, 211, 184, 0.27);
+        --dot-highlight-color: rgba(116, 202, 139, 0.92);
+        --dot-opacity: 0.45;
+        --glow-opacity: 0.82;
+        --clsu-green: #8acb96;
+        --clsu-green-deep: #254c30;
+        --clsu-gold: #efc34e;
+        --text-main: #f2f1e9;
+        --text-muted: #b0b9ad;
+        --surface: rgba(27, 39, 32, 0.88);
+        --surface-solid: #1b2720;
+        --border: rgba(207, 221, 199, 0.16);
+        --shadow: 0 14px 36px rgba(0, 0, 0, 0.22);
+      }
+    }
+
+    * { box-sizing: border-box; }
+
+    html { min-width: 320px; scroll-behavior: smooth; }
+
+    body {
+      min-width: 320px;
+      min-height: 100vh;
+      margin: 0;
+      isolation: isolate;
+      background: var(--page-bg);
+      color: var(--text-main);
+      font-family: "Aptos", "Segoe UI", sans-serif;
+      line-height: 1.5;
+    }
+
+    /* Tweak dot radius, spacing, glow radius, and colors in :root above. */
+    #dot-background {
+      position: fixed;
+      inset: 0;
+      z-index: -1;
+      overflow: hidden;
+      pointer-events: none;
+      --mx: 50vw;
+      --my: 40vh;
+    }
+
+    #dot-background::before,
+    #dot-background::after {
+      position: absolute;
+      inset: 0;
+      content: "";
+      background-image: radial-gradient(circle, var(--dot-color) var(--dot-radius), transparent calc(var(--dot-radius) + 0.7px));
+      background-size: var(--dot-spacing) var(--dot-spacing);
+      background-position: 10px 10px;
+    }
+
+    #dot-background::before { opacity: var(--dot-opacity); }
+
+    #dot-background::after {
+      background-image: radial-gradient(circle, var(--dot-highlight-color) var(--dot-radius), transparent calc(var(--dot-radius) + 0.7px));
+      opacity: var(--glow-opacity);
+      -webkit-mask-image: radial-gradient(circle var(--glow-radius) at var(--mx) var(--my), #000 0%, rgba(0, 0, 0, 0.82) 42%, transparent 100%);
+      mask-image: radial-gradient(circle var(--glow-radius) at var(--mx) var(--my), #000 0%, rgba(0, 0, 0, 0.82) 42%, transparent 100%);
+    }
+
+    .page-shell {
+      position: relative;
+      z-index: 1;
+      min-height: 100vh;
+    }
+
+    .topbar {
+      border-bottom: 1px solid var(--border);
+      background: var(--surface-solid);
+    }
+
+    .topbar-inner,
+    main,
+    .footer-inner {
+      width: min(1120px, calc(100% - 40px));
+      margin-inline: auto;
+    }
+
+    .topbar-inner {
+      display: flex;
+      min-height: 72px;
+      align-items: center;
+      justify-content: space-between;
+      gap: 20px;
+    }
+
+    .brand { display: flex; min-width: 0; align-items: center; gap: 12px; }
+
+    .brand-mark {
+      display: grid;
+      width: 42px;
+      height: 42px;
+      flex: 0 0 auto;
+      place-items: center;
+      border-radius: 10px;
+      background: var(--clsu-green);
+      color: #fff;
+      font-size: 13px;
+      font-weight: 800;
+    }
+
+    :root[data-theme="dark"] .brand-mark { color: #122017; }
+    @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .brand-mark { color: #122017; } }
+
+    .brand-name { margin: 0; font-size: 15px; font-weight: 800; line-height: 1.2; }
+    .brand-subtitle { margin: 4px 0 0; color: var(--text-muted); font-size: 11px; }
+
+    .top-actions { display: flex; align-items: center; gap: 10px; }
+
+    button, a { font: inherit; }
+
+    .theme-toggle,
+    .nav-link {
+      display: inline-flex;
+      min-height: 40px;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: var(--surface);
+      color: var(--text-main);
+      padding: 8px 12px;
+      text-decoration: none;
+      font-size: 12px;
+      font-weight: 700;
+    }
+
+    .theme-toggle { cursor: pointer; }
+    .theme-toggle:hover, .nav-link:hover { border-color: var(--clsu-green); }
+
+    main { padding-block: 30px 56px; }
+
+    .eyebrow {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      color: var(--clsu-green);
+      font-size: 11px;
+      font-weight: 800;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+
+    .eyebrow-mark { width: 18px; height: 2px; background: var(--clsu-gold); }
+
+    .hero {
+      position: relative;
+      overflow: hidden;
+      border: 1px solid rgba(255, 255, 255, 0.13);
+      border-radius: 14px;
+      background: var(--clsu-green-deep);
+      box-shadow: var(--shadow);
+      color: #fff;
+      padding: 36px clamp(22px, 5vw, 54px);
+    }
+
+    .hero::after {
+      position: absolute;
+      right: 40px;
+      bottom: -48px;
+      width: 210px;
+      height: 210px;
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      border-radius: 50%;
+      content: "";
+      pointer-events: none;
+    }
+
+    .hero .eyebrow { color: #e5c96d; }
+    .hero h1 {
+      max-width: 700px;
+      margin: 14px 0 10px;
+      font-family: Georgia, "Times New Roman", serif;
+      font-size: 36px;
+      font-weight: 600;
+      line-height: 1.13;
+    }
+
+    .hero-copy { max-width: 610px; margin: 0; color: rgba(255, 255, 255, 0.8); font-size: 14px; }
+
+    .hero-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; margin-top: 24px; }
+
+    .period-tag {
+      display: inline-flex;
+      align-items: center;
+      min-height: 30px;
+      border: 1px solid rgba(255, 255, 255, 0.28);
+      border-radius: 999px;
+      padding: 4px 10px;
+      color: #fff;
+      font-size: 11px;
+      font-weight: 700;
+    }
+
+    .hero-link {
+      display: inline-flex;
+      min-height: 38px;
+      align-items: center;
+      border-radius: 7px;
+      background: var(--clsu-gold);
+      color: #273323;
+      padding: 8px 13px;
+      text-decoration: none;
+      font-size: 12px;
+      font-weight: 800;
+    }
+
+    .section-heading {
+      display: flex;
+      align-items: end;
+      justify-content: space-between;
+      gap: 16px;
+      margin: 28px 0 14px;
+    }
+
+    .section-heading h2 { margin: 0; font-size: 18px; font-weight: 800; }
+    .section-heading p { margin: 4px 0 0; color: var(--text-muted); font-size: 12px; }
+
+    .metrics-grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 14px;
+    }
+
+    .metric-card,
+    .report-card {
+      min-width: 0;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      background: var(--surface);
+      box-shadow: var(--shadow);
+    }
+
+    .metric-card { min-height: 140px; padding: 18px; }
+    .metric-label { color: var(--text-muted); font-size: 11px; font-weight: 800; text-transform: uppercase; }
+    .metric-value { margin-top: 10px; font-family: Georgia, "Times New Roman", serif; font-size: 32px; line-height: 1; }
+    .metric-note { margin-top: 10px; color: var(--text-muted); font-size: 12px; }
+    .metric-accent { width: 26px; height: 3px; margin-top: 14px; background: var(--clsu-gold); }
+
+    .reports-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 14px;
+    }
+
+    .report-card { padding: 18px; }
+    .report-card h3 { margin: 0; font-size: 14px; }
+    .report-card p { margin: 8px 0 0; color: var(--text-muted); font-size: 12px; }
+    .indicator-row { display: flex; justify-content: space-between; gap: 16px; margin-top: 14px; border-top: 1px solid var(--border); padding-top: 12px; font-size: 12px; }
+    .indicator-row strong { color: var(--clsu-green); }
+
+    footer { border-top: 1px solid var(--border); color: var(--text-muted); font-size: 11px; }
+    .footer-inner { display: flex; min-height: 56px; align-items: center; justify-content: space-between; gap: 16px; }
+
+    @media (max-width: 720px) {
+      .topbar-inner, main, .footer-inner { width: min(100% - 28px, 600px); }
+      .topbar-inner { min-height: 64px; }
+      .nav-link { display: none; }
+      .hero { padding-block: 28px; }
+      .hero h1 { font-size: 30px; }
+      .metrics-grid { grid-template-columns: 1fr; }
+      .metric-card { min-height: 0; }
+      .reports-grid { grid-template-columns: 1fr; }
+      .footer-inner { align-items: flex-start; justify-content: center; flex-direction: column; padding-block: 12px; }
+    }
+
+    @media (hover: none), (pointer: coarse), (prefers-reduced-motion: reduce) {
+      #dot-background::after { display: none; }
+    }
+  </style>
+</head>
+<body>
+  <div id="dot-background" aria-hidden="true"></div>
+  <div class="page-shell">
+    <header class="topbar">
+      <div class="topbar-inner">
+        <div class="brand">
+          <div class="brand-mark" aria-hidden="true">CLSU</div>
+          <div>
+            <p class="brand-name">CLSU Institutional Insights</p>
+            <p class="brand-subtitle">International Affairs Office · Performance Observatory</p>
+          </div>
+        </div>
+        <div class="top-actions">
+          <a class="nav-link" href="#indicators">Institutional indicators</a>
+          <button class="theme-toggle" id="theme-toggle" type="button" aria-pressed="false">Switch theme</button>
+        </div>
+      </div>
+    </header>
+
+    <main>
+      <section class="hero" aria-labelledby="page-title">
+        <span class="eyebrow"><span class="eyebrow-mark" aria-hidden="true"></span> Institutional performance</span>
+        <h1 id="page-title">A clearer view of CLSU progress.</h1>
+        <p class="hero-copy">A concise overview of institutional reach, academic activity, and recent performance indicators.</p>
+        <div class="hero-meta">
+          <span class="period-tag">Reporting period · 2025–26</span>
+          <a class="hero-link" href="#indicators">Explore indicators</a>
+        </div>
+      </section>
+
+      <section id="indicators" aria-labelledby="indicators-title">
+        <div class="section-heading">
+          <div>
+            <h2 id="indicators-title">Institutional indicators</h2>
+            <p>Selected measures across the current reporting period</p>
+          </div>
+        </div>
+        <div class="metrics-grid">
+          <article class="metric-card">
+            <div class="metric-label">Academic units</div>
+            <div class="metric-value">12</div>
+            <div class="metric-note">Colleges and academic offices reporting</div>
+            <div class="metric-accent" aria-hidden="true"></div>
+          </article>
+          <article class="metric-card">
+            <div class="metric-label">Programs monitored</div>
+            <div class="metric-value">86</div>
+            <div class="metric-note">Across institutional performance areas</div>
+            <div class="metric-accent" aria-hidden="true"></div>
+          </article>
+          <article class="metric-card">
+            <div class="metric-label">Global ranking bodies</div>
+            <div class="metric-value">8</div>
+            <div class="metric-note">International, regional, and national lists</div>
+            <div class="metric-accent" aria-hidden="true"></div>
+          </article>
+        </div>
+      </section>
+
+      <section aria-labelledby="reports-title">
+        <div class="section-heading">
+          <div>
+            <h2 id="reports-title">Recent reports</h2>
+            <p>Highlights from published institutional data</p>
+          </div>
+        </div>
+        <div class="reports-grid">
+          <article class="report-card">
+            <h3>Research and extension</h3>
+            <p>Recent activity across research programs and community engagement.</p>
+            <div class="indicator-row"><span>Published projects</span><strong>248</strong></div>
+            <div class="indicator-row"><span>Partner communities</span><strong>41</strong></div>
+          </article>
+          <article class="report-card">
+            <h3>International rankings</h3>
+            <p>Current visibility across global and Asia-Pacific ranking systems.</p>
+            <div class="indicator-row"><span>Lists with current data</span><strong>6</strong></div>
+            <div class="indicator-row"><span>Latest reporting year</span><strong>2026</strong></div>
+          </article>
+        </div>
+      </section>
+    </main>
+
+    <footer>
+      <div class="footer-inner">
+        <span>CLSU · International Affairs Office</span>
+        <span>Institutional Performance Observatory</span>
+      </div>
+    </footer>
+  </div>
+
+  <script>
+    (() => {
+      const root = document.documentElement;
+      const background = document.getElementById('dot-background');
+      const themeButton = document.getElementById('theme-toggle');
+      const systemDark = window.matchMedia('(prefers-color-scheme: dark)');
+      const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
+      const finePointer = window.matchMedia('(hover: hover) and (pointer: fine)');
+
+      function isDark() {
+        return root.dataset.theme
+          ? root.dataset.theme === 'dark'
+          : systemDark.matches;
+      }
+
+      function updateThemeButton() {
+        const dark = isDark();
+        themeButton.textContent = dark ? 'Switch to light theme' : 'Switch to dark theme';
+        themeButton.setAttribute('aria-pressed', String(dark));
+      }
+
+      themeButton.addEventListener('click', () => {
+        root.dataset.theme = isDark() ? 'light' : 'dark';
+        updateThemeButton();
+      });
+      systemDark.addEventListener?.('change', updateThemeButton);
+      updateThemeButton();
+
+      if (reducedMotion.matches || !finePointer.matches) return;
+
+      let targetX = window.innerWidth / 2;
+      let targetY = window.innerHeight / 2;
+      let currentX = targetX;
+      let currentY = targetY;
+      let frame = 0;
+      background.style.setProperty('--mx', `${currentX}px`);
+      background.style.setProperty('--my', `${currentY}px`);
+
+      function easeTowardPointer() {
+        currentX += (targetX - currentX) * 0.14;
+        currentY += (targetY - currentY) * 0.14;
+        background.style.setProperty('--mx', `${currentX}px`);
+        background.style.setProperty('--my', `${currentY}px`);
+        if (Math.abs(targetX - currentX) > 0.35 || Math.abs(targetY - currentY) > 0.35) {
+          frame = requestAnimationFrame(easeTowardPointer);
+        } else {
+          frame = 0;
+        }
+      }
+
+      window.addEventListener('mousemove', event => {
+        targetX = event.clientX;
+        targetY = event.clientY;
+        if (!frame) frame = requestAnimationFrame(easeTowardPointer);
+      }, { passive: true });
+    })();
+  </script>
+</body>
+</html>

@@ -25,14 +25,12 @@ V4.5.0 expands template-driven office uploads and Ranking History management whi
 
 ## Database Migrations
 
-Apply pending migrations in filename order after the earlier account-separation and template-import migrations. V4.5.0 adds:
+Historical migrations from before the 3NF conversion target `iris_db`; do not apply them to `iris_db_3nf`. The V4.5.0 application expects the normalized schema to be provisioned separately. Its reviewed additive migrations are:
 
-- `migrations/20261003_simplify_ranking_history.sql`
-- `migrations/20261003_template_profile_workbooks.sql`
-- `migrations/20261003_ranking_history_display_defaults.sql`
-- `migrations/20261003_ranking_history_information.sql`
+- `migrations/20261002_seed_super_admin_role.sql`
+- `migrations/20261004_add_normalized_ranking_display_values.sql`
 
-Existing installations should apply these migrations before using workbook profile mapping, Ranking History chart defaults, or ranking information text.
+The normalized ranking-display migration preserves source text such as rank ranges and suffixes separately from numeric sort values. The PHP bootstrap does not create or modify schema objects.
 
 ## Verification
 

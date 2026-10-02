@@ -15,6 +15,7 @@
                 <input type="hidden" name="ranking_body_id" value="">
                 <label class="block text-sm font-semibold">Name<input name="body_name" type="text" required maxlength="100" class="mt-1 block w-full rounded-lg border border-gray-300 bg-gray-50 p-2.5 dark:border-slate-700 dark:bg-slate-800"></label>
                 <label class="block text-sm font-semibold">Short name<input name="short_name" type="text" required maxlength="20" class="mt-1 block w-full rounded-lg border border-gray-300 bg-gray-50 p-2.5 dark:border-slate-700 dark:bg-slate-800"></label>
+                <label class="block text-sm font-semibold">Sort order<input name="sort_order" type="number" required min="0" max="1000000" value="100" class="mt-1 block w-full rounded-lg border border-gray-300 bg-gray-50 p-2.5 dark:border-slate-700 dark:bg-slate-800"></label>
                 <div class="flex flex-wrap gap-2">
                     <button type="submit" class="rounded-lg bg-emerald-700 px-4 py-2 text-sm font-bold text-white hover:bg-emerald-800">Save ranking body</button>
                     <button type="button" id="rankingBodyManagerNew" class="rounded-lg border border-gray-300 px-3 py-2 text-sm font-bold hover:bg-gray-100 dark:border-slate-700 dark:hover:bg-slate-800">Cancel / New</button>

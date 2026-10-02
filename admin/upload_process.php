@@ -34,10 +34,10 @@ $importProfileId = null;
 $selectedTemplate = null;
 $profileConfig = null;
 if ($templateId !== null) {
-	$templateQuery = $pdo->prepare('SELECT templates.id, profiles.id AS import_profile_id, profiles.destination
+	$templateQuery = $pdo->prepare('SELECT templates.template_id AS id, profiles.import_profile_id, profiles.destination
 		FROM templates
-		LEFT JOIN template_import_profiles profiles ON profiles.template_id = templates.id
-		WHERE templates.id = ? AND templates.is_active = 1 LIMIT 1');
+		LEFT JOIN template_import_profiles profiles ON profiles.template_id = templates.template_id
+		WHERE templates.template_id = ? AND templates.is_active = 1 LIMIT 1');
 	$templateQuery->execute([$templateId]);
 	$selectedTemplate = $templateQuery->fetch(PDO::FETCH_ASSOC);
 	if (!$selectedTemplate) {
@@ -159,27 +159,32 @@ if (!move_uploaded_file($file['tmp_name'], $storedPath)) {
 chmod($storedPath, 0640);
 
 try {
-	$account = $pdo->prepare('SELECT office_name FROM users WHERE id = ? AND role = ? AND is_active = 1 LIMIT 1');
+	$account = $pdo->prepare('SELECT users.office_id, offices.office_name
+		FROM users
+		INNER JOIN roles ON roles.role_id = users.role_id
+		LEFT JOIN offices ON offices.office_id = users.office_id
+		WHERE users.user_id = ? AND roles.role_name = ? AND users.is_active = 1 LIMIT 1');
 	$account->execute([(int)$_SESSION['user_id'], $currentRole]);
-	$officeName = $account->fetchColumn();
-	if ($currentRole === 'admin' && !$officeName) throw new RuntimeException('The office account is no longer active.');
-	if ($currentRole === 'super_admin') $officeName = 'Super Admin';
+	$accountRow = $account->fetch(PDO::FETCH_ASSOC);
+	if (!$accountRow || ($currentRole === 'admin' && (empty($accountRow['office_id']) || empty($accountRow['office_name'])))) {
+		throw new RuntimeException('The office account is no longer active.');
+	}
+	$officeId = $accountRow['office_id'] ?? null;
+	if ($currentRole === 'super_admin') $officeId = null;
 
 	$originalName = basename((string)$file['name']);
 	$originalName = preg_replace('/[\x00-\x1F\x7F]/u', '', $originalName) ?: 'upload.' . $extension;
-	$recordId = 'rec_' . date('YmdHis') . '_' . bin2hex(random_bytes(6));
 	$metadata = json_encode(array_merge($parsed['metadata'], ['stored_file' => $storedName, 'upload_purpose' => $uploadPurpose]), JSON_THROW_ON_ERROR);
 	$insert = $pdo->prepare("INSERT INTO records
-		(id, fileName, fileType, fileSize, scannedAt, status, uploaded_by, office_name, uploaded_at,
-		 template_id, import_profile_id, docType, rawText, extractedData, graphDrafts, adminNotes, metadata, updatedAt)
-		VALUES (?, ?, ?, ?, NOW(), 'Pending Review', ?, ?, NOW(), ?, ?, ?, ?, ?, ?, '', ?, NULL)");
+		(file_name, file_type, file_size, scanned_at, status, uploaded_by, office_id, uploaded_at,
+		 template_id, import_profile_id, doc_type, raw_text, extracted_data, graph_drafts, admin_notes, metadata, updated_at)
+		VALUES (?, ?, ?, NOW(), 'Pending Review', ?, ?, NOW(), ?, ?, ?, ?, ?, ?, '', ?, NULL)");
 	$insert->execute([
-		$recordId,
 		function_exists('mb_substr') ? mb_substr($originalName, 0, 255, 'UTF-8') : substr($originalName, 0, 255),
 		$extension,
 		(int)$file['size'],
 		(int)$_SESSION['user_id'],
-		$officeName,
+		$officeId,
 		$templateId,
 		$importProfileId,
 		'Office Upload',

@@ -80,7 +80,26 @@ $pageTitle = $pageTitle ?? 'IRIS Admin Control Panel';
         /* TODO: Self-host Buttershine Serif for headings when the IAO provides the licensed font file. */
         body { font-family: 'Libre Franklin', 'Inter', 'Acumin Pro', sans-serif; }
         .admin-scanner-shell { width: 100%; }
-        .admin-scanner-shell .app-container { max-width: 1600px !important; margin: 0 auto; }
+        /* Match the Observatory dashboard: 1680px of content at a 1920px viewport. */
+        .admin-scanner-shell .app-container {
+            width: 100%;
+            max-width: var(--dashboard-container-max) !important;
+            margin-inline: auto;
+            padding-inline: var(--dashboard-container-gutter) !important;
+        }
+        @media (max-width: 760px) {
+            .admin-nav-inner { flex-wrap: wrap; gap: .5rem; }
+            .admin-nav-inner > .logo-refresh-trigger > div:first-child { width: clamp(8rem, 32vw, 13rem); }
+            .admin-nav-actions { gap: .25rem; margin-left: auto; }
+            .admin-nav-link { padding: .5rem; }
+            .admin-nav-link span { display: none; }
+            .admin-theme-btn { padding: .5rem !important; }
+            .admin-profile-btn { gap: .25rem !important; padding: .25rem !important; }
+        }
+        @media (max-width: 767px) {
+            .admin-nav-inner > .logo-refresh-trigger > div:last-child { display: none !important; }
+            #user-menu-button > span { display: none !important; }
+        }
         html.dark .studio-shell, html.dark .studio-data-manager, html.dark .studio-panel, html.dark .studio-chart-panel, html.dark .studio-graph-controls, html.dark .table-container, html.dark .data-table, html.dark .studio-data-manager .form-input, html.dark .studio-data-manager textarea, html.dark .studio-data-manager select { color: #f8fafc !important; }
         html.dark .studio-data-manager .form-input, html.dark .studio-data-manager textarea, html.dark .studio-data-manager select, html.dark .header-rename-input, html.dark .studio-cell-input { background: #273449 !important; border-color: #475569 !important; color: #f8fafc !important; }
         html.dark .form-input::placeholder, html.dark textarea::placeholder { color: #94a3b8 !important; }
@@ -232,7 +251,7 @@ $pageTitle = $pageTitle ?? 'IRIS Admin Control Panel';
 
     <!-- Navigation Bar -->
     <nav class="admin-nav sticky top-0 z-50 backdrop-blur-md bg-opacity-95">
-        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div class="dashboard-container">
             <div class="admin-nav-inner flex items-center justify-between gap-4">
                 <a href="<?= e(base_url('admin/dashboard.php')) ?>" class="logo-refresh-trigger flex items-center gap-3 min-w-0" data-target="<?= e(base_url('admin/dashboard.php')) ?>">
                     <div class="w-52 h-11 flex items-center justify-center overflow-hidden shrink-0 rounded-lg bg-white px-3 py-1.5">

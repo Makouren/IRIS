@@ -5,7 +5,6 @@
             <button type="button" data-import-close class="rounded-lg px-3 py-1 text-2xl leading-none text-gray-500 hover:bg-gray-100 dark:hover:bg-slate-800" aria-label="Close">&times;</button>
         </header>
         <div data-import-notice class="mb-4 rounded-lg p-3 text-sm" role="status" aria-live="polite">Choose an upload to preview changes.</div>
-        <a class="mb-4 inline-flex items-center gap-2 text-sm font-semibold text-emerald-800 underline dark:text-emerald-300" href="<?= e(base_url('admin/template_download.php?ranking_history=1')) ?>"><i class="fa-solid fa-download" aria-hidden="true"></i> Download IRIS_Ranking_History_Template.xlsx</a>
         <div data-import-source-picker class="mb-4 hidden flex-wrap items-end gap-3">
             <label class="min-w-64 flex-1 text-sm font-semibold">Office upload<select data-import-source class="mt-1 block w-full rounded-lg border border-gray-300 bg-gray-50 p-2.5 dark:border-slate-700 dark:bg-slate-800"><option value="">Choose an upload</option></select></label>
             <div class="flex gap-2">

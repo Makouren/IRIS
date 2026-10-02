@@ -1,8 +1,6 @@
 <?php
 require_once __DIR__.'/../includes/functions.php';
 redirect_to('auth/login.php');
-$error=flash('error');clear_old();
-if($_SERVER['REQUEST_METHOD']==='POST'){verify_csrf();$u=trim($_POST['username']??'');$em=trim($_POST['email']??'');$pw=$_POST['password']??'';$cp=$_POST['confirm_password']??'';$bad='';if(!preg_match('/^[A-Za-z0-9_-]{1,50}$/',$u))$bad='Username may contain letters, numbers, underscores, and hyphens only.';elseif(!preg_match('/^[A-Za-z0-9._%+-]+@clsu2\.edu\.ph$/i',$em))$bad='Please use a valid email address in the format name@clsu2.edu.ph.';elseif(strlen($pw)<8||$pw!==$cp)$bad='Passwords must match and contain at least 8 characters.';else{$q=db()->prepare('SELECT id FROM users WHERE username=? OR email=?');$q->execute([$u,$em]);if($q->fetch())$bad='Username or email already exists.';}if($bad){set_old($_POST);flash_redirect('auth/register.php','error',$bad);} $q=db()->prepare('INSERT INTO users(username,email,password,role) VALUES(?,?,?,?)');$q->execute([$u,$em,password_hash($pw,PASSWORD_DEFAULT),'user']);flash_redirect('auth/login.php','success','Account created successfully! You can now log in.');}
 ?>
 
 <!DOCTYPE html>

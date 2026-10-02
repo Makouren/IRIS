@@ -7,8 +7,8 @@ final class SummaryCardCategoryStorage
     {
         $query = $pdo->prepare('SELECT categories.name
             FROM summary_card_category_map mapping
-            INNER JOIN summary_card_categories categories ON categories.id = mapping.category_id
-            WHERE mapping.summary_card_id = ?
+            INNER JOIN summary_card_categories categories ON categories.category_id = mapping.category_id
+            WHERE mapping.card_id = ?
             ORDER BY categories.sort_order ASC, categories.name ASC');
         $query->execute([$cardId]);
         return array_map('strval', $query->fetchAll(PDO::FETCH_COLUMN));
@@ -24,7 +24,7 @@ final class SummaryCardCategoryStorage
         $slug = trim(preg_replace('/[^a-z0-9]+/', '-', $normalized) ?? '', '-');
         if (!preg_match('/^[a-z0-9-]+$/', $slug)) throw new InvalidArgumentException('Category names must contain letters or numbers.');
 
-        $query = $pdo->prepare('SELECT id FROM summary_card_categories WHERE slug = ? LIMIT 1');
+        $query = $pdo->prepare('SELECT category_id FROM summary_card_categories WHERE slug = ? LIMIT 1');
         $query->execute([$slug]);
         $id = $query->fetchColumn();
         if ($id !== false) return (int)$id;
@@ -50,8 +50,8 @@ final class SummaryCardCategoryStorage
             if ($name !== '') $ids[] = self::categoryId($pdo, $name);
         }
         $ids = array_values(array_unique($ids));
-        $pdo->prepare('DELETE FROM summary_card_category_map WHERE summary_card_id = ?')->execute([$cardId]);
-        $insert = $pdo->prepare('INSERT INTO summary_card_category_map (summary_card_id, category_id) VALUES (?, ?)');
+        $pdo->prepare('DELETE FROM summary_card_category_map WHERE card_id = ?')->execute([$cardId]);
+        $insert = $pdo->prepare('INSERT INTO summary_card_category_map (card_id, category_id) VALUES (?, ?)');
         foreach ($ids as $categoryId) $insert->execute([$cardId, $categoryId]);
     }
 }

@@ -29,12 +29,12 @@ final class ProfileWorkbookService
             'ready' => false,
             'message' => 'Run the pending migrations.'
         ];
-        $query = $pdo->prepare('SELECT id FROM template_import_profiles WHERE template_id IS NULL AND destination = ? LIMIT 1');
+        $query = $pdo->prepare('SELECT import_profile_id FROM template_import_profiles WHERE template_id IS NULL AND destination = ? LIMIT 1');
         $query->execute([$destination]);
         $builtInId = $query->fetchColumn();
         $exists = false;
         if ($profileId !== null && $profileId > 0) {
-            $profileQuery = $pdo->prepare('SELECT id FROM template_import_profiles WHERE id = ? AND destination = ?');
+            $profileQuery = $pdo->prepare('SELECT import_profile_id FROM template_import_profiles WHERE import_profile_id = ? AND destination = ?');
             $profileQuery->execute([$profileId, $destination]);
             $exists = (bool)$profileQuery->fetchColumn();
         }
@@ -253,7 +253,7 @@ final class ProfileWorkbookService
 
     private static function oldProfileFile(PDO $pdo, int $profileId): ?string
     {
-        $query = $pdo->prepare('SELECT workbook_file_path FROM template_import_profiles WHERE id = ?');
+        $query = $pdo->prepare('SELECT workbook_file_path FROM template_import_profiles WHERE import_profile_id = ?');
         $query->execute([$profileId]);
         $value = $query->fetchColumn();
         return $value === false || $value === null ? null : (string)$value;
@@ -285,7 +285,7 @@ final class ProfileWorkbookService
     {
         if (!self::metadataReady($pdo)) throw new RuntimeException('Run the pending migrations.');
         $profile = SummaryCardImportProfiles::active($pdo, $destination);
-        $query = $pdo->prepare('SELECT workbook_file_path, workbook_original_filename, workbook_headers, workbook_header_row FROM template_import_profiles WHERE id = ?');
+        $query = $pdo->prepare('SELECT workbook_file_path, workbook_original_filename, workbook_headers, workbook_header_row FROM template_import_profiles WHERE import_profile_id = ?');
         $query->execute([(int)$profile['id']]);
         $workbook = $query->fetch(PDO::FETCH_ASSOC) ?: [];
         return [$profile, $workbook];
@@ -302,13 +302,11 @@ final class ProfileWorkbookService
     public static function expectedHeaders(array $profile, string $destination = 'summary_cards'): array
     {
         if ($destination === 'ranking_history') $profile = TemplateImportSupport::normalizeRankingProfile($profile);
-        if (!empty($profile['workbook_headers']) && is_array($profile['workbook_headers'])) {
-            return array_values(array_filter($profile['workbook_headers'], static fn($header): bool => is_string($header) && trim($header) !== ''));
-        }
         $headers = [];
         $removed = ['scope', 'scope_id', 'level', 'level_id', 'edition', 'category', 'rank_low', 'rank_high', 'note', 'verification_status'];
         foreach ($profile['mapping_rules'] as $field => $header) {
             if ($destination === 'ranking_history' && in_array($field, $removed, true)) continue;
+            if ($destination === 'summary_cards' && $field === 'display_order') continue;
             if (is_string($header) && trim($header) !== '') $headers[] = trim($header);
         }
         return array_values(array_unique($headers));
@@ -326,13 +324,9 @@ final class ProfileWorkbookService
         $expectedMap = [];
         foreach ($expected as $header) $expectedMap[$normalize($header)] = (string)$header;
         $missing = array_values(array_map(static fn(string $key): string => $expectedMap[$key], array_diff(array_keys($expectedMap), array_keys($actualMap))));
-        $unexpected = array_values(array_map(static fn(string $key): string => $actualMap[$key], array_diff(array_keys($actualMap), array_keys($expectedMap))));
-        if ($missing || $unexpected) {
+        if ($missing) {
             $message = $destination === 'ranking_history' ? 'Ranking History' : 'Summary Cards';
-            $parts = [];
-            if ($missing) $parts[] = 'missing columns: ' . implode(', ', $missing);
-            if ($unexpected) $parts[] = 'unexpected columns: ' . implode(', ', $unexpected);
-            throw new InvalidArgumentException($message . ' workbook headers do not match the active profile (' . implode('; ', $parts) . ').');
+            throw new InvalidArgumentException($message . ' workbook is missing active profile columns: ' . implode(', ', $missing) . '. Unmapped columns are ignored.');
         }
     }
 

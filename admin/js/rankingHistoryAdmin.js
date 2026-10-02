@@ -17,18 +17,38 @@
   let rankings = [];
   const escapeHtml = value => String(value ?? '').replace(/[&<>"']/g, character => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[character]));
 
-  function updateChartDefaultLists(preferredList = '') {
-    const organization = chartDefaultOrganization.value;
-    const types = [...new Set(rankings
-      .filter(row => row.organization_short_name !== 'DEMO' && row.organization === organization && row.rank_value !== null && row.rank_value !== '' && Number.isFinite(Number(row.rank_value)))
-      .map(row => String(row.ranking_type || '')))]
-      .filter(Boolean).sort((left, right) => left.localeCompare(right));
+  function rankingGraphValue(organization, type) {
+    return JSON.stringify([organization, type]);
+  }
+
+  function selectedRankingGraph() {
+    if (!chartDefaultList.value) return null;
+    try {
+      const [organization, type] = JSON.parse(chartDefaultList.value);
+      return typeof organization === 'string' && typeof type === 'string' ? { organization, type } : null;
+    } catch (error) {
+      return null;
+    }
+  }
+
+  function updateChartDefaultLists(preferredOrganization = '', preferredList = '') {
+    const graphs = new Map();
+    for (const row of rankings) {
+      if (row.organization_short_name === 'DEMO' || row.rank_value === null || row.rank_value === '' || !Number.isFinite(Number(row.rank_value))) continue;
+      const organization = String(row.organization || '');
+      const type = String(row.ranking_type || '');
+      if (!organization || !type) continue;
+      graphs.set(rankingGraphValue(organization, type), { organization, type });
+    }
+    const orderedGraphs = [...graphs.entries()];
     chartDefaultList.replaceChildren(
-      new Option(organization ? 'All lists' : 'Select an organization first', ''),
-      ...types.map(type => new Option(type, type))
+      new Option('All lists for selected organization', ''),
+      ...orderedGraphs.map(([value, graph]) => new Option(`${graph.organization} · ${graph.type}`, value))
     );
-    chartDefaultList.disabled = !organization;
-    chartDefaultList.value = types.includes(preferredList) ? preferredList : '';
+    const preferredValue = preferredList ? rankingGraphValue(preferredOrganization, preferredList) : '';
+    chartDefaultList.value = graphs.has(preferredValue) ? preferredValue : '';
+    const selected = selectedRankingGraph();
+    if (selected) chartDefaultOrganization.value = selected.organization;
   }
 
   function populateChartDefaults(payload) {
@@ -36,10 +56,10 @@
     const organizations = [...new Set(rankings
       .filter(row => row.organization_short_name !== 'DEMO' && row.rank_value !== null && row.rank_value !== '' && Number.isFinite(Number(row.rank_value)))
       .map(row => String(row.organization || '')))]
-      .filter(Boolean).sort((left, right) => left.localeCompare(right));
+      .filter(Boolean);
     chartDefaultOrganization.replaceChildren(new Option('All organizations', ''), ...organizations.map(name => new Option(name, name)));
     chartDefaultOrganization.value = organizations.includes(defaults.default_organization) ? defaults.default_organization : '';
-    updateChartDefaultLists(defaults.default_list || '');
+    updateChartDefaultLists(defaults.default_organization || '', defaults.default_list || '');
   }
 
   function showList() {
@@ -168,7 +188,14 @@
   });
   yearFilter.addEventListener('change', render);
   searchInput?.addEventListener('input', render);
-  chartDefaultOrganization.addEventListener('change', () => updateChartDefaultLists());
+  chartDefaultOrganization.addEventListener('change', () => {
+    const selected = selectedRankingGraph();
+    if (selected && selected.organization !== chartDefaultOrganization.value) chartDefaultList.value = '';
+  });
+  chartDefaultList.addEventListener('change', () => {
+    const selected = selectedRankingGraph();
+    if (selected) chartDefaultOrganization.value = selected.organization;
+  });
   saveChartDefaults.addEventListener('click', async () => {
     saveChartDefaults.disabled = true;
     chartDefaultsStatus.textContent = 'Saving…';
@@ -179,8 +206,8 @@
         headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': token, Accept: 'application/json' },
         body: JSON.stringify({
           action: 'save-chart-defaults',
-          default_organization: chartDefaultOrganization.value,
-          default_list: chartDefaultList.value
+          default_organization: selectedRankingGraph()?.organization || chartDefaultOrganization.value,
+          default_list: selectedRankingGraph()?.type || ''
         })
       });
       const result = await response.json().catch(() => ({}));

@@ -1,4 +1,9 @@
 :root {
+  --dashboard-container-max: 1808px;
+  --dashboard-container-gutter: clamp(16px, 4vw, 64px);
+  --dashboard-dot-page: #f7f3ec;
+  --dashboard-dot-color: rgba(91, 82, 67, 0.28);
+  --dashboard-dot-highlight: rgba(30, 96, 49, 0.9);
   --iris-font-base: 16px;
   --iris-font-xs: 0.75rem;
   --iris-font-sm: 0.875rem;
@@ -6,6 +11,63 @@
   --iris-font-lg: 1.25rem;
   --iris-font-xl: 1.5rem;
   --iris-font-display: 2rem;
+}
+
+html.dark {
+  --dashboard-dot-page: #111a16;
+  --dashboard-dot-color: rgba(224, 211, 184, 0.25);
+  --dashboard-dot-highlight: rgba(224, 167, 13, 0.88);
+}
+
+.dashboard-container {
+  width: 100%;
+  max-width: var(--dashboard-container-max);
+  margin-inline: auto;
+  padding-inline: var(--dashboard-container-gutter);
+}
+
+.dot-grid-dashboard {
+  position: relative;
+  isolation: isolate;
+  background-color: var(--dashboard-dot-page) !important;
+}
+
+#dashboard-dot-background {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  overflow: hidden;
+  pointer-events: none;
+  --dashboard-dot-radius: 1.25px;
+  --dashboard-dot-spacing: 20px;
+  --dashboard-dot-glow-radius: 180px;
+  --dashboard-dot-opacity: 0.45;
+  --dashboard-glow-opacity: 0.82;
+  --mx: 50vw;
+  --my: 40vh;
+}
+
+#dashboard-dot-background::before,
+#dashboard-dot-background::after {
+  position: absolute;
+  inset: 0;
+  content: "";
+  background-image: radial-gradient(circle, var(--dashboard-dot-color) var(--dashboard-dot-radius), transparent calc(var(--dashboard-dot-radius) + 0.7px));
+  background-size: var(--dashboard-dot-spacing) var(--dashboard-dot-spacing);
+  background-position: 10px 10px;
+}
+
+#dashboard-dot-background::before { opacity: var(--dashboard-dot-opacity); }
+
+#dashboard-dot-background::after {
+  background-image: radial-gradient(circle, var(--dashboard-dot-highlight) var(--dashboard-dot-radius), transparent calc(var(--dashboard-dot-radius) + 0.7px));
+  opacity: var(--dashboard-glow-opacity);
+  -webkit-mask-image: radial-gradient(circle var(--dashboard-dot-glow-radius) at var(--mx) var(--my), #000 0%, rgba(0, 0, 0, 0.82) 42%, transparent 100%);
+  mask-image: radial-gradient(circle var(--dashboard-dot-glow-radius) at var(--mx) var(--my), #000 0%, rgba(0, 0, 0, 0.82) 42%, transparent 100%);
+}
+
+@media (hover: none), (pointer: coarse), (prefers-reduced-motion: reduce) {
+  #dashboard-dot-background::after { display: none; }
 }
 
 body {

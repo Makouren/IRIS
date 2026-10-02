@@ -34,7 +34,10 @@ function requireRole(array $roles, bool $api = false): void {
 	}
 
 	try {
-		$query = db()->prepare('SELECT role, is_active FROM users WHERE id = ? LIMIT 1');
+		$query = db()->prepare('SELECT roles.role_name AS role, users.is_active
+			FROM users
+			INNER JOIN roles ON roles.role_id = users.role_id
+			WHERE users.user_id = ? LIMIT 1');
 		$query->execute([$userId]);
 		$account = $query->fetch(PDO::FETCH_ASSOC);
 	} catch (Throwable $exception) {

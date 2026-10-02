@@ -132,16 +132,28 @@ body {
    Header & Institutional Branding Banner
    ==================================================================== */
 .app-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 0.9rem 2.5rem;
+  display: block;
+  padding: 0;
   background: var(--clsu-green);
   border-bottom: 3.5px solid var(--clsu-gold-bright);
   position: sticky;
   top: 0;
   z-index: 100;
   box-shadow: 0 4px 15px rgba(13, 92, 44, 0.2);
+}
+
+.app-header.office-upload-header { background: #1E6031; }
+
+/* Match the Observatory dashboard's 1680px effective content width. */
+.app-header-inner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  width: 100%;
+  max-width: var(--dashboard-container-max);
+  margin-inline: auto;
+  padding: 0.9rem var(--dashboard-container-gutter);
 }
 
 .brand-container {
@@ -243,9 +255,82 @@ body {
    Section Titles & Containers
    ==================================================================== */
 .app-container {
-  max-width: 1350px;
+  width: 100%;
+  max-width: var(--dashboard-container-max);
   margin: 2rem auto;
-  padding: 0 1.5rem;
+  padding-inline: var(--dashboard-container-gutter);
+}
+
+.office-upload-layout {
+  display: grid;
+  grid-template-columns: minmax(280px, 0.8fr) minmax(0, 1.5fr);
+  gap: 1.5rem;
+}
+
+.office-templates-section { grid-column: 1 / -1; }
+.office-header-nav { flex-wrap: wrap; justify-content: flex-end; }
+.office-header-nav .nav-btn { white-space: nowrap; }
+.office-upload-layout { color: var(--text-main); }
+.office-upload-layout h2,
+.office-upload-layout label { color: var(--text-main); }
+.office-upload-form-card,
+.office-uploads-panel,
+.office-templates-section {
+  transition: box-shadow 0.2s ease, transform 0.2s ease;
+}
+.office-file-input::file-selector-button {
+  margin-right: 0.75rem;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: var(--clsu-green) !important;
+  color: #fff !important;
+  padding: 0.55rem 0.85rem;
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+.office-file-input::-webkit-file-upload-button {
+  margin-right: 0.75rem;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: var(--clsu-green) !important;
+  color: #fff !important;
+  padding: 0.55rem 0.85rem;
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+.office-file-input::file-selector-button:hover { background: var(--clsu-green-dark); }
+
+@media (hover: hover) {
+  .office-upload-form-card:hover,
+  .office-uploads-panel:hover,
+  .office-templates-section:hover {
+    box-shadow: var(--card-shadow);
+    transform: translateY(-1px);
+  }
+}
+
+.office-uploads-table {
+  width: 100%;
+  min-width: 0;
+  table-layout: fixed;
+}
+
+.office-uploads-table th:nth-child(1) { width: 30%; }
+.office-uploads-table th:nth-child(2) { width: 26%; }
+.office-uploads-table th:nth-child(3) { width: 24%; }
+.office-uploads-table th:nth-child(4) { width: 20%; }
+.office-uploads-table .office-file-name { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.office-uploads-table td:nth-child(2) { overflow-wrap: anywhere; }
+.office-uploads-table .office-status-badge { white-space: normal; text-align: center; }
+
+@media (max-width: 760px) {
+  .app-header-inner { flex-wrap: wrap; }
+  .header-nav { margin-left: auto; }
+  .office-upload-layout { grid-template-columns: minmax(0, 1fr); }
+  .office-uploads-table { min-width: 760px; }
+  .office-header-nav { width: 100%; }
 }
 
 .clsu-section-title {

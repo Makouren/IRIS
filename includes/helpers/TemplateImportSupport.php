@@ -8,8 +8,8 @@ final class TemplateImportSupport
 {
     public static function record(PDO $pdo, string $recordId): array
     {
-        $query = $pdo->prepare('SELECT id, fileName, fileType, template_id, import_profile_id, metadata FROM records WHERE id = ? LIMIT 1');
-        $query->execute([$recordId]);
+        $query = $pdo->prepare('SELECT record_id AS id, file_name AS fileName, file_type AS fileType, template_id, import_profile_id, metadata FROM records WHERE record_id = ? LIMIT 1');
+        $query->execute([(int)$recordId]);
         $record = $query->fetch(PDO::FETCH_ASSOC);
         if (!$record) throw new RuntimeException('Upload record not found.');
         $metadata = json_decode((string)($record['metadata'] ?? ''), true);
@@ -32,7 +32,7 @@ final class TemplateImportSupport
 
     public static function profile(PDO $pdo, int $templateId, string $destination): array
     {
-        $query = $pdo->prepare('SELECT * FROM template_import_profiles WHERE template_id = ? AND destination = ? LIMIT 1');
+        $query = $pdo->prepare('SELECT template_import_profiles.*, import_profile_id AS id FROM template_import_profiles WHERE template_id = ? AND destination = ? LIMIT 1');
         $query->execute([$templateId, $destination]);
         $profile = $query->fetch(PDO::FETCH_ASSOC);
         if (!$profile) throw new RuntimeException('No import profile is configured for this template and destination.');
@@ -133,7 +133,16 @@ final class TemplateImportSupport
         }
         $resolved = [];
         foreach ($requiredFields as $field) {
-            $matchedIndex = self::findHeaderIndex($headerIndexes, $profile, (string)$field, array_values($resolved));
+            $mappingRule = $profile['mapping_rules'][$field] ?? null;
+            $sourceMapping = is_string($mappingRule) ? ImportSheetReader::normalizeHeader($mappingRule) : '';
+            $excluded = $excludedIndexes;
+            foreach ($resolved as $resolvedField => $resolvedIndex) {
+                $resolvedRule = $profile['mapping_rules'][$resolvedField] ?? null;
+                $resolvedMapping = is_string($resolvedRule) ? ImportSheetReader::normalizeHeader($resolvedRule) : '';
+                if ($sourceMapping !== '' && $sourceMapping === $resolvedMapping) continue;
+                $excluded[] = $resolvedIndex;
+            }
+            $matchedIndex = self::findHeaderIndex($headerIndexes, $profile, (string)$field, array_values(array_unique($excluded)));
             if ($matchedIndex === null) {
                 throw new InvalidArgumentException("Required template field '{$field}' is not mapped to a worksheet column. Add a mapping in the import profile, for example 'Global Label -> import_key'.");
             }

@@ -42,7 +42,7 @@
       name.textContent = body.name;
       const usage = document.createElement('p');
       usage.className = 'text-xs text-gray-500 dark:text-slate-400';
-      usage.textContent = `${body.short_name} · ${Number(body.ranking_count)} ranking row(s) · ${Number(body.template_count)} template(s)`;
+      usage.textContent = `${body.short_name} · Order ${Number(body.sort_order ?? 100)} · ${Number(body.ranking_count)} ranking row(s) · ${Number(body.template_count)} template(s)`;
       details.append(name, usage);
       const actions = document.createElement('div');
       actions.className = 'mt-3 flex flex-wrap gap-2';
@@ -94,6 +94,7 @@
       form.elements.ranking_body_id.value = body.id;
       form.elements.body_name.value = body.name;
       form.elements.short_name.value = body.short_name;
+      form.elements.sort_order.value = body.sort_order ?? 100;
       document.getElementById('rankingBodyManagerFormTitle').textContent = `Edit ${body.name}`;
       form.elements.body_name.focus();
       return;

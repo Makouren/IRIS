@@ -19,8 +19,13 @@ try {
     $pdo = db();
     $method = $_SERVER['REQUEST_METHOD'] ?? 'GET';
     if ($method === 'GET') {
-        $rows = $pdo->query("SELECT id, username, email, role, office_name, is_active, created_at
-            FROM users WHERE role IN ('admin', 'user') ORDER BY role, office_name, username")->fetchAll(PDO::FETCH_ASSOC);
+        $rows = $pdo->query("SELECT users.user_id AS id, users.username, users.email, roles.role_name AS role,
+                offices.office_name, users.is_active, users.created_at
+            FROM users
+            INNER JOIN roles ON roles.role_id = users.role_id
+            LEFT JOIN offices ON offices.office_id = users.office_id
+            WHERE roles.role_name IN ('admin', 'user')
+            ORDER BY roles.role_name, offices.office_name, users.username")->fetchAll(PDO::FETCH_ASSOC);
         echo json_encode($rows, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT);
         exit;
     }
@@ -48,28 +53,39 @@ try {
         if (!$id && strlen($password) < 8) accounts_fail('Passwords must contain at least 8 characters.');
         if ($password !== '' && strlen($password) < 8) accounts_fail('Passwords must contain at least 8 characters.');
 
-        $duplicate = $pdo->prepare('SELECT id FROM users WHERE (username = ? OR email = ?) AND id <> ? LIMIT 1');
+        $duplicate = $pdo->prepare('SELECT user_id FROM users WHERE (username = ? OR email = ?) AND user_id <> ? LIMIT 1');
         $duplicate->execute([$username, $email, $id ?? 0]);
         if ($duplicate->fetchColumn()) accounts_fail('Username or email already exists.', 409);
 
+        $roleQuery = $pdo->prepare('SELECT role_id FROM roles WHERE role_name = ? LIMIT 1');
+        $roleQuery->execute([$role]);
+        $roleId = $roleQuery->fetchColumn();
+        if (!$roleId) accounts_fail('Selected role is not configured.', 409);
+        $officeId = null;
+        if ($officeName !== '') {
+            $officeInsert = $pdo->prepare('INSERT INTO offices (office_name) VALUES (?) ON DUPLICATE KEY UPDATE office_id = LAST_INSERT_ID(office_id)');
+            $officeInsert->execute([$officeName]);
+            $officeId = (int)$pdo->lastInsertId();
+        }
+
         if ($id) {
-            $sets = ['username = ?', 'email = ?', 'role = ?', 'office_name = ?'];
-            $values = [$username, $email, $role, $officeName !== '' ? $officeName : null];
+            $sets = ['username = ?', 'email = ?', 'role_id = ?', 'office_id = ?'];
+            $values = [$username, $email, $roleId, $officeId];
             if ($password !== '') {
                 $sets[] = 'password = ?';
                 $values[] = password_hash($password, PASSWORD_DEFAULT);
             }
             $values[] = $id;
-            $update = $pdo->prepare("UPDATE users SET " . implode(', ', $sets) . " WHERE id = ? AND role IN ('admin', 'user')");
+            $update = $pdo->prepare("UPDATE users SET " . implode(', ', $sets) . " WHERE user_id = ? AND role_id IN (SELECT role_id FROM roles WHERE role_name IN ('admin', 'user'))");
             $update->execute($values);
             if (!$update->rowCount()) {
-                $exists = $pdo->prepare("SELECT id FROM users WHERE id = ? AND role IN ('admin', 'user')");
+                $exists = $pdo->prepare("SELECT users.user_id FROM users INNER JOIN roles ON roles.role_id = users.role_id WHERE users.user_id = ? AND roles.role_name IN ('admin', 'user')");
                 $exists->execute([$id]);
                 if (!$exists->fetchColumn()) accounts_fail('Account not found.', 404);
             }
         } else {
-            $insert = $pdo->prepare('INSERT INTO users (username, email, password, role, office_name) VALUES (?, ?, ?, ?, ?)');
-            $insert->execute([$username, $email, password_hash($password, PASSWORD_DEFAULT), $role, $officeName !== '' ? $officeName : null]);
+            $insert = $pdo->prepare('INSERT INTO users (username, email, password, role_id, office_id) VALUES (?, ?, ?, ?, ?)');
+            $insert->execute([$username, $email, password_hash($password, PASSWORD_DEFAULT), $roleId, $officeId]);
             $id = (int)$pdo->lastInsertId();
         }
         echo json_encode(['success' => true, 'id' => $id]);
@@ -79,7 +95,7 @@ try {
     $id = filter_var($data['id'] ?? null, FILTER_VALIDATE_INT);
     if (!$id) accounts_fail('Account id is required.');
     if ($action === 'deactivate' || $action === 'activate') {
-        $update = $pdo->prepare("UPDATE users SET is_active = ? WHERE id = ? AND role IN ('admin', 'user')");
+        $update = $pdo->prepare("UPDATE users SET is_active = ? WHERE user_id = ? AND role_id IN (SELECT role_id FROM roles WHERE role_name IN ('admin', 'user'))");
         $update->execute([$action === 'activate' ? 1 : 0, $id]);
         if (!$update->rowCount()) accounts_fail('Account not found.', 404);
         echo json_encode(['success' => true]);
@@ -88,7 +104,7 @@ try {
     if ($action === 'reset-password') {
         $password = (string)($data['password'] ?? '');
         if (strlen($password) < 8) accounts_fail('Passwords must contain at least 8 characters.');
-        $update = $pdo->prepare("UPDATE users SET password = ? WHERE id = ? AND role IN ('admin', 'user')");
+        $update = $pdo->prepare("UPDATE users SET password = ? WHERE user_id = ? AND role_id IN (SELECT role_id FROM roles WHERE role_name IN ('admin', 'user'))");
         $update->execute([password_hash($password, PASSWORD_DEFAULT), $id]);
         if (!$update->rowCount()) accounts_fail('Account not found.', 404);
         echo json_encode(['success' => true]);

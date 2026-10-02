@@ -6,22 +6,22 @@ header('Content-Type: application/json; charset=utf-8');
 $pdo = db();
 $parts = [];
 
-$best = $pdo->query("SELECT r.global_rank, rb.name AS body_name, r.year
-    FROM rankings r JOIN ranking_bodies rb ON rb.id = r.ranking_body_id
+$best = $pdo->query("SELECT COALESCE(r.global_rank_display, CAST(r.global_rank AS CHAR)) AS global_rank, rb.name AS body_name, r.year
+    FROM rankings r JOIN ranking_bodies rb ON rb.ranking_body_id = r.ranking_body_id
     WHERE r.rank_value IS NOT NULL ORDER BY r.year DESC, r.rank_value LIMIT 1")->fetch(PDO::FETCH_ASSOC) ?: [];
-$national = $pdo->query('SELECT ph_rank, year FROM rankings WHERE ph_rank IS NOT NULL ORDER BY year DESC LIMIT 1')->fetch(PDO::FETCH_ASSOC) ?: [];
+$national = $pdo->query("SELECT COALESCE(ph_rank_display, CAST(ph_rank AS CHAR)) AS ph_rank, year FROM rankings WHERE ph_rank IS NOT NULL OR ph_rank_display IS NOT NULL ORDER BY year DESC LIMIT 1")->fetch(PDO::FETCH_ASSOC) ?: [];
 $headlineCount = (int)$pdo->query('SELECT COUNT(*) FROM rankings')->fetchColumn();
 $programCount = (int)$pdo->query('SELECT COUNT(*) FROM programs')->fetchColumn();
 $bodyCount = (int)$pdo->query('SELECT COUNT(*) FROM ranking_bodies')->fetchColumn();
 $breakdownCount = (int)$pdo->query('SELECT COUNT(*) FROM ranking_breakdowns')->fetchColumn();
-$accreditationCount = (int)$pdo->query('SELECT COUNT(DISTINCT program_name) FROM accreditations')->fetchColumn();
-$publishedCount = (int)$pdo->query("SELECT COUNT(*) FROM saved_graphs sg INNER JOIN records r ON r.id = sg.record_id WHERE r.status = 'Approved' AND COALESCE(sg.is_published, CASE WHEN r.status = 'Approved' THEN 1 ELSE 0 END) = 1")->fetchColumn();
+$accreditationCount = (int)$pdo->query('SELECT COUNT(DISTINCT program_id) FROM accreditations')->fetchColumn();
+$publishedCount = (int)$pdo->query("SELECT COUNT(*) FROM saved_graphs sg INNER JOIN records r ON r.record_id = sg.record_id WHERE r.status = 'Approved' AND sg.is_published = 1")->fetchColumn();
 
-$uploaded = $pdo->query("SELECT fileName, extractedData, scannedAt
-    FROM records WHERE status = 'Approved' ORDER BY scannedAt DESC LIMIT 1")->fetch(PDO::FETCH_ASSOC) ?: null;
+$uploaded = $pdo->query("SELECT file_name, extracted_data, scanned_at
+    FROM records WHERE status = 'Approved' ORDER BY scanned_at DESC LIMIT 1")->fetch(PDO::FETCH_ASSOC) ?: null;
 
 if ($uploaded) {
-    $sheets = json_decode((string)$uploaded['extractedData'], true) ?: [];
+    $sheets = json_decode((string)$uploaded['extracted_data'], true) ?: [];
     $sheetCount = 0;
     $rowCount = 0;
     $metricCount = 0;
@@ -55,7 +55,7 @@ if ($uploaded) {
     arsort($metricAverages, SORT_NUMERIC);
     $strongestMetric = array_key_first($metricAverages);
     $strongestValue = $strongestMetric !== null ? $metricAverages[$strongestMetric] : null;
-    $parts[] = 'The latest published upload, ' . $uploaded['fileName'] . ', is the active source for this dashboard.';
+    $parts[] = 'The latest published upload, ' . $uploaded['file_name'] . ', is the active source for this dashboard.';
     $parts[] = 'It contains ' . $sheetCount . ' worksheet' . ($sheetCount === 1 ? '' : 's') . ' and approximately ' . $rowCount . ' data rows.';
     if ($metricCount) {
         $metricText = $metricCount . ' meaningful numeric metric' . ($metricCount === 1 ? '' : 's');
@@ -72,7 +72,7 @@ if (!empty($best['global_rank'])) $parts[] = 'The best global rank displayed is 
 if (!empty($national['ph_rank'])) $parts[] = 'The latest national Philippines rank displayed is ' . $national['ph_rank'] . '.';
 $parts[] = 'The dashboard currently covers ' . $bodyCount . ' monitored ranking bodies, ' . $headlineCount . ' headline ranking entries, ' . $programCount . ' stored program records, ' . $breakdownCount . ' breakdown indicators, and ' . $accreditationCount . ' accredited programs.';
 $parts[] = $publishedCount
-    ? $publishedCount . ' published scanner chart' . ($publishedCount === 1 ? ' is' : 's are') . ' available in Scanner-Published Analytics for registered users.'
-    : 'No scanner charts have been published to Scanner-Published Analytics yet.';
+    ? $publishedCount . ' published chart' . ($publishedCount === 1 ? ' is' : 's are') . ' available in Data & Report Visualization for registered users.'
+    : 'No charts have been published to Data & Report Visualization yet.';
 
 echo json_encode(['summary' => implode(' ', $parts)], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);

@@ -1,6 +1,6 @@
 # Graph Generation and Chart Data
 
-V4.5.0's workbook-based Ranking History and Summary Card imports are handled by the PHP import pipeline and do not change chart suggestion or chart rendering behavior in this folder.
+V5.3.0 adds grouped public visualizations and graph scopes through the shared chart/data modules. It does not introduce a remote AI service or change the chart-recommendation boundary described here.
 
 This folder contains browser-side chart recommendations. It does not call an external AI service. The `AI` label describes the recommendation logic, not a remote model dependency.
 

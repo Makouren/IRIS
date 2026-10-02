@@ -52,9 +52,9 @@ if (!$templateId || $templateId < 1) {
 
 $pdo = db();
 if (($_SESSION['role'] ?? '') === 'super_admin') {
-    $query = $pdo->prepare('SELECT file_path, original_filename FROM templates WHERE id = ? LIMIT 1');
+    $query = $pdo->prepare('SELECT file_path, original_filename FROM templates WHERE template_id = ? LIMIT 1');
 } else {
-    $query = $pdo->prepare('SELECT file_path, original_filename FROM templates WHERE id = ? AND is_active = 1 LIMIT 1');
+    $query = $pdo->prepare('SELECT file_path, original_filename FROM templates WHERE template_id = ? AND is_active = 1 LIMIT 1');
 }
 $query->execute([$templateId]);
 $template = $query->fetch(PDO::FETCH_ASSOC);

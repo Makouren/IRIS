@@ -4,9 +4,9 @@
 
 IRIS is a plain-PHP application. Apache serves PHP pages and PDO-backed APIs; browser JavaScript handles interactive workflows, file parsing, and charts. There is no Laravel application, Composer runtime, Node.js web server, or Python service.
 
-## V4.5.0 Highlight
+## V5.3.0 Highlight
 
-V4.5.0 expands workbook-based Ranking History imports and administration, adds reusable workbook mapping for ranking and summary-card profiles, and lets office users select **Data and Report Visualization** as the general upload destination. Super Admins can search and manage rankings, set public chart defaults, and review destination-specific imports. The public Ranking History chart runs as a dedicated JavaScript module. See [README_V4.5.0.md](README_V4.5.0.md) for changes, migrations, and verification.
+V5.3.0 adds destination-aware office uploads and a Super Admin File Archives workspace, grouped public visualizations, editable graph scopes and ranking-body order, and richer Ranking History defaults. It also aligns the Office Upload, Scanner, and Observatory styling, including a responsive dotted background. See [README_V5.3.0.md](README_V5.3.0.md) for changes, migrations, and verification.
 
 ## What the System Does
 
@@ -67,7 +67,7 @@ Parser and viewer modules for PDF, DOCX, and image OCR are present in the codeba
 - Saved Graphs Publish sends the selected graph IDs to the authenticated graph API and changes only those graph rows.
 - Observatory Unpublish changes the same graph's publication flag back to false. The chart remains saved and can be published again.
 - Archive file-level Unpublish resets one record to `Pending Review` and unpublishes all of its linked saved graphs. Bulk Publish/Unpublish applies the same record-and-chart behavior to each selected record in a single database transaction.
-- Public Scanner-Published Analytics includes only saved graph rows whose `is_published` value is true. Its endpoint sends no-cache headers so state changes appear after refresh.
+- Public Data & Report Visualization includes only saved graph rows whose `is_published` value is true. Its endpoint sends no-cache headers so state changes appear after refresh.
 
 ### Performance Snapshot Cards
 
@@ -84,7 +84,7 @@ After successful database writes, open IRIS pages refresh automatically. Super A
 Publication and record review are distinct:
 
 - `records.status` describes record review (`Pending Review`, `Approved`, or `Needs Revision`).
-- `saved_graphs.is_published` controls whether a graph appears in Scanner-Published Analytics.
+- `saved_graphs.is_published` controls whether a graph appears in Data & Report Visualization.
 - `summary_cards.is_published` controls whether a snapshot card appears in the Observatory.
 
 Approving a record does not implicitly publish its saved graphs. The public graph query filters by the graph flag; publication is never inferred from record approval.
@@ -94,7 +94,7 @@ Approving a record does not implicitly publish its saved graphs. The public grap
 ### Runtime
 
 - **Server:** Apache with PHP 8.1+ and PDO.
-- **Database:** MySQL or MariaDB, database name `iris_db` by default.
+- **Database:** MySQL 8/InnoDB, database name `iris_db_3nf`.
 - **Frontend:** browser JavaScript modules and CSS. Pages load Tailwind, Flowbite, Font Awesome, ECharts, and parser libraries from CDNs, so the browser needs access to those hosts.
 - **Tests:** Node.js is optional and is used only for the dependency-free test suite.
 
@@ -126,7 +126,7 @@ flowchart LR
 | `scanner/js/` | Run browser workflows and call the PHP API through `DatabaseManager`; parsing and charting happen client-side. |
 | `api/iris.php` | Authenticate record and graph reads; require admin authorization for mutations; persist changes using PDO. |
 | `api/dashboard_graphs.php`, `api/summary.php` | Supply Observatory graph/card data and authenticated summary data. |
-| `config/db.php`, `database.sql` | Configure the PDO connection and create the institutional and Scanner schema. |
+| `config/db.php`, `database.sql` | Configure the normalized PDO connection; `database.sql` is retained only as a legacy schema reference. |
 | `user/dashboard.php` | Render institutional analytics and only explicitly published Scanner graphs and summary cards. |
 
 For Scanner publication, a record is linked to its charts by `saved_graphs.record_id`. Record-level unpublishing changes `records.status` and the linked charts' `is_published` flags together. Summary cards are independent rows in `summary_cards` and are not associated with a Scanner file.
@@ -151,7 +151,7 @@ For Scanner publication, a record is linked to its charts by `saved_graphs.recor
 | `import_batches`, `import_batch_rows` | Import audit records used to revert an applied batch. |
 | `app_change_state` | Shared write version polled by active pages for refresh synchronization. |
 
-`database.sql` creates the core institutional schema and Scanner `records`/`saved_graphs` tables. On database connection, `config/db.php` ensures the Scanner tables and compatibility columns exist and creates `summary_cards` when absent. The PHP database account therefore needs the required table/column creation privileges during setup or migration.
+The runtime uses the normalized `iris_db_3nf` schema. `database.sql` and migrations that select `iris_db` describe the retired denormalized schema and must not be imported or applied to the normalized database. `config/db.php` only opens the configured PDO connection and tracks application writes; it does not create or alter tables.
 
 ## API Map
 
@@ -192,19 +192,13 @@ Graph publish/unpublish requests send JSON such as `{ "published": true }` or `{
 
 1. Place or clone the repository under `C:/xampp/htdocs/iris` (or another Apache document-root subdirectory).
 2. Start Apache and MySQL from the XAMPP Control Panel.
-3. Import [`database.sql`](database.sql) once into MySQL using phpMyAdmin or the MySQL client. The script creates/selects `iris_db` and seeds the ranking body catalog.
-4. Apply the required migrations in [`migrations/`](migrations/), including template imports, app change state, Summary Card history, and the Unified Summary Cards profile migrations. Imports require a stable Global Label column or a configured profile default.
+3. Provision the supplied normalized schema and any required transformed data into `iris_db_3nf` before starting the application. Do not import [`database.sql`](database.sql) or run historical migrations that select `iris_db`; those describe the retired denormalized schema.
+4. Apply only explicit migrations documented for `iris_db_3nf`, such as the normalized Super Admin role seed and ranking-display migration. The application bootstrap does not create or alter tables.
 5. Set `IRIS_DB_HOST`, `IRIS_DB_PORT`, `IRIS_DB_NAME`, `IRIS_DB_USER`, and `IRIS_DB_PASS` in [`config/db.php`](config/db.php) for the environment. The current defaults are intended for local XAMPP development, not production.
-6. Open `http://localhost/iris/`, register a CLSU account, and sign in. Registration requires an email ending in `@clsu2.edu.ph` and a password of at least eight characters.
-7. Registration assigns the `user` role. To grant administrator access, run the following as a database administrator, substituting the account name:
+6. Provision the initial active `super_admin` account through the deployment's secure account-bootstrap process. Self-registration is disabled. Super Admins can manage subsequent Admin and User accounts from the application.
+7. Open the application under its Apache document-root URL and sign in. The application root redirects signed-in users according to their normalized role.
 
-   ```sql
-   UPDATE users SET role = 'admin' WHERE username = 'YOUR_USERNAME';
-   ```
-
-8. Sign out and back in so the new role is present in the PHP session. The application root redirects signed-in users according to their role.
-
-For production, configure a least-privilege MySQL account, a non-default password, HTTPS, and a schema migration process appropriate to the deployment. Because the database bootstrap may create or add Scanner schema objects, ensure its database account has the necessary setup privileges.
+For production, configure a least-privilege MySQL account, a non-default password, HTTPS, and a reviewed migration process appropriate to the deployment. Runtime database credentials need no schema-creation or schema-alter privileges.
 
 ## Repository Map
 
@@ -219,7 +213,7 @@ scanner/js/              Browser app, charting, persistence, modules, parsers
 scanner/css/             Scanner styles
 scanner/test/            Dependency-free Node tests
 user/dashboard.php       Signed-in Observatory interface
-database.sql             Core schema and seed ranking-body data
+database.sql             Legacy schema reference; do not import for V5.3.0
 ```
 
 ## Tests
@@ -235,6 +229,7 @@ The suite covers graph/chart mapping, table filtering, document pagination, grap
 ## Related Documentation
 
 - [`README_PHP.md`](README_PHP.md): PHP deployment notes.
+- [`README_V5.3.0.md`](README_V5.3.0.md): current release changes, migrations, and verification.
 - [`README_V4.5.0.md`](README_V4.5.0.md): V4.5.0 release changes and migration steps.
 - [`README_V3.4.7.md`](README_V3.4.7.md): Historical V3.4.7 release details.
 - [`README_V3.4.5.md`](README_V3.4.5.md): Historical V3.4.5 release notes.

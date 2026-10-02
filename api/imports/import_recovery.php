@@ -1,5 +1,7 @@
 <?php
 require_once __DIR__ . '/../../includes/functions.php';
+require_once __DIR__ . '/../../includes/helpers/LatestYearResolver.php';
+require_once __DIR__ . '/../../includes/helpers/SummaryCardHistory.php';
 require_once __DIR__ . '/../../includes/helpers/SummaryCardCategoryStorage.php';
 requireRole(['super_admin'], true);
 header('Content-Type: application/json; charset=utf-8');
@@ -42,7 +44,7 @@ if (!$batchId || $batchId < 1) import_recovery_fail('Import batch id is required
 $pdo = db();
 $pdo->beginTransaction();
 try {
-    $batchQuery = $pdo->prepare('SELECT * FROM import_batches WHERE id = ? FOR UPDATE');
+    $batchQuery = $pdo->prepare('SELECT * FROM import_batches WHERE batch_id = ? FOR UPDATE');
     $batchQuery->execute([$batchId]);
     $batch = $batchQuery->fetch(PDO::FETCH_ASSOC);
     if (!$batch) {
@@ -54,19 +56,20 @@ try {
         import_recovery_fail('This import batch has already been reverted.');
     }
 
-    $rowsQuery = $pdo->prepare('SELECT * FROM import_batch_rows WHERE batch_id = ? ORDER BY id DESC FOR UPDATE');
+    $rowsQuery = $pdo->prepare('SELECT * FROM import_batch_rows WHERE batch_id = ? ORDER BY batch_row_id DESC FOR UPDATE');
     $rowsQuery->execute([$batchId]);
     $rows = $rowsQuery->fetchAll(PDO::FETCH_ASSOC);
     foreach ($rows as $audit) {
-        $before = $audit['before_state'] !== null ? json_decode((string)$audit['before_state'], true) : null;
-        $after = json_decode((string)$audit['after_state'], true);
-        if (!is_array($after) || ($audit['entity_type'] !== 'ranking' && $audit['entity_type'] !== 'summary_card')) {
+        $sourceData = json_decode((string)($audit['source_data'] ?? ''), true);
+        $before = is_array($sourceData) && is_array($sourceData['before'] ?? null) ? $sourceData['before'] : null;
+        $after = is_array($sourceData) && is_array($sourceData['after'] ?? null) ? $sourceData['after'] : null;
+        if (!is_array($after) || !in_array($audit['entity_type'], ['ranking', 'summary_card_snapshot', 'summary_card'], true)) {
             throw new RuntimeException('Import audit data is invalid; rollback was stopped.');
         }
         if ($audit['entity_type'] === 'ranking') {
             $id = (int)$audit['entity_id'];
-            $fields = ['ranking_body_id', 'ranking_type', 'year', 'global_rank', 'rank_low', 'rank_high', 'rank_value', 'ph_rank', 'ph_rank_value', 'source', 'seed_managed'];
-            $query = $pdo->prepare('SELECT id, ' . implode(', ', array_map(static fn(string $field): string => '`' . $field . '`', $fields)) . ' FROM rankings WHERE id = ? FOR UPDATE');
+            $fields = ['ranking_body_id', 'ranking_type_id', 'category_id', 'year', 'global_rank', 'global_rank_display', 'rank_low', 'rank_high', 'rank_value', 'ph_rank', 'ph_rank_display', 'ph_rank_value', 'source', 'seed_managed'];
+            $query = $pdo->prepare('SELECT ranking_id AS id, ' . implode(', ', array_map(static fn(string $field): string => '`' . $field . '`', $fields)) . ' FROM rankings WHERE ranking_id = ? FOR UPDATE');
             $query->execute([$id]);
             $current = $query->fetch(PDO::FETCH_ASSOC);
             $expectedAfter = array_intersect_key($after, array_flip($fields));
@@ -74,37 +77,48 @@ try {
                 throw new RuntimeException('A ranking row changed after this batch. Rollback was stopped.');
             }
             if ($before === null) {
-                $pdo->prepare('DELETE FROM rankings WHERE id = ?')->execute([$id]);
+                $pdo->prepare('DELETE FROM rankings WHERE ranking_id = ?')->execute([$id]);
             } else {
                 $sets = implode(', ', array_map(static fn(string $field): string => '`' . $field . '` = ?', $fields));
                 $values = array_map(static fn(string $field) => $before[$field] ?? null, $fields);
-                $pdo->prepare('UPDATE rankings SET ' . $sets . ' WHERE id = ?')->execute([...$values, $id]);
+                $pdo->prepare('UPDATE rankings SET ' . $sets . ' WHERE ranking_id = ?')->execute([...$values, $id]);
             }
             continue;
         }
 
-        if (str_starts_with((string)$audit['entity_id'], 'snapshot:')) {
-            [, $cardId, $period] = array_pad(explode(':', (string)$audit['entity_id'], 3), 3, '');
-            if ($cardId === '' || $period === '') throw new RuntimeException('Snapshot audit key is invalid.');
-            $query = $pdo->prepare('SELECT * FROM summary_card_snapshots WHERE card_id = ? AND period_key = ? FOR UPDATE');
-            $query->execute([$cardId, $period]);
+        if ($audit['entity_type'] === 'summary_card_snapshot') {
+            $snapshotId = (int)$audit['entity_id'];
+            $query = $pdo->prepare('SELECT * FROM summary_card_snapshots WHERE snapshot_id = ? FOR UPDATE');
+            $query->execute([$snapshotId]);
             $current = $query->fetch(PDO::FETCH_ASSOC);
             if (!$current || !import_recovery_matches($current, $after)) {
                 throw new RuntimeException('A summary snapshot changed after this batch. Rollback was stopped.');
             }
             if ($before === null) {
-                $pdo->prepare('DELETE FROM summary_card_snapshots WHERE id = ?')->execute([(int)$current['id']]);
+                $pdo->prepare('DELETE FROM summary_card_snapshots WHERE snapshot_id = ?')->execute([$snapshotId]);
+                $pdo->prepare('DELETE FROM summary_card_periods WHERE card_id = ? AND period_key = ?')->execute([$current['card_id'], $current['period_key']]);
             } else {
                 $fields = ['title', 'period_label', 'period_sort', 'period_precision', 'is_published', 'main_value', 'main_label', 'secondary_label', 'secondary_value', 'year_date', 'description', 'secondary_description', 'info_text', 'source_info', 'source_record_id', 'batch_id', 'last_source_record_id', 'last_batch_id'];
                 $sets = implode(', ', array_map(static fn(string $field): string => '`' . $field . '` = ?', $fields));
                 $values = array_map(static fn(string $field) => $before[$field] ?? null, $fields);
-                $pdo->prepare('UPDATE summary_card_snapshots SET ' . $sets . ' WHERE id = ?')->execute([...$values, (int)$current['id']]);
+                $pdo->prepare('UPDATE summary_card_snapshots SET ' . $sets . ' WHERE snapshot_id = ?')->execute([...$values, $snapshotId]);
+                $pdo->prepare('INSERT INTO summary_card_periods (card_id, period_key, period_label, period_sort, period_precision, main_value, main_label, secondary_label, secondary_value, year_date, description, secondary_description, info_text, source_info, is_published)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    ON DUPLICATE KEY UPDATE period_label = VALUES(period_label), period_sort = VALUES(period_sort), period_precision = VALUES(period_precision),
+                        main_value = VALUES(main_value), main_label = VALUES(main_label), secondary_label = VALUES(secondary_label), secondary_value = VALUES(secondary_value),
+                        year_date = VALUES(year_date), description = VALUES(description), secondary_description = VALUES(secondary_description), info_text = VALUES(info_text),
+                        source_info = VALUES(source_info), is_published = VALUES(is_published)')->execute([
+                    $before['card_id'], $before['period_key'], $before['period_label'], $before['period_sort'], $before['period_precision'], $before['main_value'],
+                    $before['main_label'], $before['secondary_label'], $before['secondary_value'], $before['year_date'], $before['description'],
+                    $before['secondary_description'], $before['info_text'], $before['source_info'], $before['is_published']
+                ]);
             }
+            SummaryCardHistory::syncLive($pdo, (string)$current['card_id']);
             continue;
         }
 
-        $cardId = (string)$audit['entity_id'];
-        $query = $pdo->prepare('SELECT * FROM summary_cards WHERE id = ? FOR UPDATE');
+        $cardId = (int)$audit['entity_id'];
+        $query = $pdo->prepare('SELECT summary_cards.*, card_id AS id FROM summary_cards WHERE card_id = ? FOR UPDATE');
         $query->execute([$cardId]);
         $current = $query->fetch(PDO::FETCH_ASSOC);
         $currentCategoryNames = $current && array_key_exists('category_names', $after)
@@ -114,16 +128,16 @@ try {
             throw new RuntimeException('A summary card changed after this batch. Rollback was stopped.');
         }
         if ($before === null) {
-            $pdo->prepare('DELETE FROM summary_cards WHERE id = ?')->execute([$cardId]);
+            $pdo->prepare('DELETE FROM summary_cards WHERE card_id = ?')->execute([$cardId]);
             continue;
         }
-        $fields = ['import_key', 'main_value', 'main_label', 'year_date', 'secondary_label', 'secondary_value', 'description', 'secondary_description', 'info_text', 'display_precision'];
+        $fields = ['import_key', 'title', 'display_order', 'display_precision', 'is_published'];
         $sets = implode(', ', array_map(static fn(string $field): string => '`' . $field . '` = ?', $fields));
         $values = array_map(static fn(string $field) => $before[$field] ?? null, $fields);
-        $pdo->prepare('UPDATE summary_cards SET ' . $sets . ' WHERE id = ?')->execute([...$values, $cardId]);
+        $pdo->prepare('UPDATE summary_cards SET ' . $sets . ' WHERE card_id = ?')->execute([...$values, $cardId]);
         if (array_key_exists('category_names', $before)) SummaryCardCategoryStorage::replace($pdo, $cardId, $before['category_names']);
     }
-    $pdo->prepare("UPDATE import_batches SET status = 'reverted', reverted_at = NOW() WHERE id = ?")->execute([$batchId]);
+    $pdo->prepare("UPDATE import_batches SET status = 'reverted' WHERE batch_id = ?")->execute([$batchId]);
     $pdo->commit();
     echo json_encode(['success' => true, 'batch_id' => $batchId, 'restored_rows' => count($rows)]);
 } catch (Throwable $exception) {

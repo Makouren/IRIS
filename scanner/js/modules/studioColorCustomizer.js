@@ -100,6 +100,12 @@ export function initStudioColorCustomizer(ctx) {
       name.className = 'studio-color-field-label';
       name.textContent = label;
       button.addEventListener('click', () => {
+        if (selectedIndex === index && !editingManagedField && !pickerPanel.hidden) {
+          pickerPanel.hidden = true;
+          selectedIndex = -1;
+          renderSwatches();
+          return;
+        }
         selectedIndex = index;
         editingManagedField = null;
         saveFieldButton.hidden = true;
@@ -218,6 +224,16 @@ export function initStudioColorCustomizer(ctx) {
       edit.className = 'archive-load-button';
       edit.textContent = 'Edit';
       edit.addEventListener('click', () => {
+        if (editingManagedField?.field_key === field.field_key && !pickerPanel.hidden) {
+          pickerPanel.hidden = true;
+          editingManagedField = null;
+          selectedIndex = -1;
+          saveFieldButton.hidden = true;
+          renderSwatches();
+          managerModal.classList.remove('active');
+          managerModal.setAttribute('aria-hidden', 'true');
+          return;
+        }
         editingManagedField = { field_key: field.field_key, label: field.label, color: field.color };
         selectedIndex = Math.max(0, currentFields.findIndex(name => normalizeFieldKey(name) === field.field_key));
         root.hidden = false;

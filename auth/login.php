@@ -27,7 +27,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     try {
         // All account roles may sign in with either username or email.
-        $q = db()->prepare('SELECT * FROM users WHERE username = ? OR email = ? LIMIT 1');
+        $q = db()->prepare('SELECT users.*, roles.role_name AS role, offices.office_name
+            FROM users
+            INNER JOIN roles ON roles.role_id = users.role_id
+            LEFT JOIN offices ON offices.office_id = users.office_id
+            WHERE users.username = ? OR users.email = ? LIMIT 1');
         $q->execute([$login, $login]);
         $user = $q->fetch();
     } catch (Throwable $e) {
@@ -58,15 +62,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     // Upgrade a legacy password to a secure password_hash() value after login.
     if ($needsRehash) {
         try {
-            $update = db()->prepare('UPDATE users SET password = ? WHERE id = ?');
-            $update->execute([password_hash($pw, PASSWORD_DEFAULT), $user->id]);
+            $update = db()->prepare('UPDATE users SET password = ? WHERE user_id = ?');
+            $update->execute([password_hash($pw, PASSWORD_DEFAULT), $user->user_id]);
         } catch (Throwable $e) {
             // Login can still continue if only the password upgrade fails.
         }
     }
 
     session_regenerate_id(true);
-    $_SESSION['user_id'] = $user->id;
+    $_SESSION['user_id'] = $user->user_id;
     $_SESSION['username'] = $user->username;
     $_SESSION['role'] = strtolower(trim((string)$user->role));
 

@@ -48,6 +48,23 @@ function output_record(array $r): array {
     $r['metadata'] = json_col($r['metadata'], []);
     return $r;
 }
+function load_record(PDO $pdo, int $recordId, bool $lock = false): ?array {
+    $sql = 'SELECT records.record_id AS id, records.file_name AS fileName, records.file_type AS fileType,
+        records.file_size AS fileSize, records.scanned_at AS scannedAt, records.status, records.doc_type AS docType,
+        records.raw_text AS rawText, records.extracted_data AS extractedData, records.graph_drafts AS graphDrafts,
+        records.admin_notes AS adminNotes, records.metadata, records.updated_at AS updatedAt, records.uploaded_by,
+        records.office_id, offices.office_name, records.uploaded_at, records.template_id, records.import_profile_id,
+        COALESCE((SELECT import_profiles.destination FROM template_import_profiles import_profiles WHERE import_profiles.import_profile_id = records.import_profile_id LIMIT 1),
+            (SELECT template_profiles.destination FROM template_import_profiles template_profiles WHERE template_profiles.template_id = records.template_id LIMIT 1)) AS import_destination,
+        records.opened_at, templates.name AS template_name
+        FROM records LEFT JOIN templates ON templates.template_id = records.template_id
+        LEFT JOIN offices ON offices.office_id = records.office_id WHERE records.record_id = ?';
+    if ($lock) $sql .= ' FOR UPDATE';
+    $query = $pdo->prepare($sql);
+    $query->execute([$recordId]);
+    $record = $query->fetch(PDO::FETCH_ASSOC);
+    return $record ?: null;
+}
 function output_graph(array $g): array {
     $g['labels'] = json_col($g['labels'], []);
     $g['values_data'] = json_col($g['values_data'], []);
@@ -59,8 +76,86 @@ function output_graph(array $g): array {
         unset($g['chart_data']['irisConfig']['roseMode']);
     }
     $g['colors'] = valid_graph_colors(json_col($g['colors'] ?? null, null));
+    $g['value_axis_reversed'] = !empty($g['value_axis_reversed']);
+    $g['rank_semantic'] = in_array(strtolower((string)($g['rank_semantic'] ?? '')), ['rank', 'true', '1'], true);
     $g['is_published'] = isset($g['is_published']) ? (bool)$g['is_published'] : false;
     return $g;
+}
+function load_saved_graph(PDO $pdo, int $graphId): ?array {
+    $query = $pdo->prepare('SELECT saved_graphs.*, saved_graphs.graph_id AS id, saved_graphs.chart_options AS chart_data,
+            records.record_id AS source_file_id, records.file_name AS source_file_name, records.file_type AS source_file_type
+        FROM saved_graphs LEFT JOIN records ON records.record_id = saved_graphs.record_id
+        WHERE saved_graphs.graph_id = ?');
+    $query->execute([$graphId]);
+    $graph = $query->fetch(PDO::FETCH_ASSOC);
+    if (!$graph) return null;
+    $options = json_col($graph['chart_data'] ?? null, []);
+    $seriesQuery = $pdo->prepare('SELECT series_id, series_name, display_order FROM graph_series WHERE graph_id = ? ORDER BY display_order, series_id');
+    $seriesQuery->execute([$graphId]);
+    $seriesRows = $seriesQuery->fetchAll(PDO::FETCH_ASSOC);
+    $series = [];
+    foreach ($seriesRows as $seriesRow) {
+        $pointsQuery = $pdo->prepare('SELECT label, value FROM graph_points WHERE series_id = ? ORDER BY display_order, point_id');
+        $pointsQuery->execute([(int)$seriesRow['series_id']]);
+        $points = $pointsQuery->fetchAll(PDO::FETCH_ASSOC);
+        $series[] = [
+            'name' => $seriesRow['series_name'],
+            'data' => array_map(static fn(array $point): array => ['name' => $point['label'], 'value' => $point['value'] !== null ? (float)$point['value'] : null], $points)
+        ];
+    }
+    $firstSeries = $series[0] ?? ['name' => null, 'data' => []];
+    $graph['labels'] = array_map(static fn(array $point): ?string => $point['name'] === null ? null : (string)$point['name'], $firstSeries['data']);
+    $graph['values_data'] = array_map(static fn(array $point) => $point['value'], $firstSeries['data']);
+    $storedSeries = $options['series'] ?? [];
+    if (is_array($storedSeries) && $storedSeries) {
+        foreach ($storedSeries as $index => &$stored) {
+            if (!is_array($stored)) continue;
+            if (isset($series[$index])) {
+                $stored['name'] = $series[$index]['name'] ?? ($stored['name'] ?? null);
+                $stored['data'] = $series[$index]['data'];
+            }
+        }
+        unset($stored);
+        $options['series'] = $storedSeries;
+    } elseif ($series) {
+        $options['series'] = $series;
+    }
+    $graph['chart_data'] = $options;
+    $colorQuery = $pdo->prepare('SELECT color FROM graph_colors WHERE graph_id = ? AND series_id IS NULL ORDER BY color_id');
+    $colorQuery->execute([$graphId]);
+    $colors = $colorQuery->fetchAll(PDO::FETCH_COLUMN);
+    $graph['colors'] = $colors ?: null;
+    return output_graph($graph);
+}
+function save_graph_relations(PDO $pdo, int $graphId, array $data): void {
+    $pdo->prepare('DELETE FROM graph_colors WHERE graph_id = ?')->execute([$graphId]);
+    $pdo->prepare('DELETE FROM graph_series WHERE graph_id = ?')->execute([$graphId]);
+    $chartData = $data['chart_data'] ?? $data['chartData'] ?? $data['option'] ?? $data['config'] ?? [];
+    $sourceSeries = is_array($chartData) && is_array($chartData['series'] ?? null) ? $chartData['series'] : [];
+    if (!$sourceSeries && is_array($chartData) && is_array($chartData['datasets'] ?? null)) $sourceSeries = $chartData['datasets'];
+    $labels = is_array($data['labels'] ?? null) ? $data['labels'] : [];
+    $values = $data['values_data'] ?? $data['valuesData'] ?? $data['data'] ?? [];
+    if (!is_array($values)) $values = [];
+    if (!$sourceSeries) $sourceSeries = [['name' => $data['title'] ?? 'Value', 'data' => $values]];
+    $insertSeries = $pdo->prepare('INSERT INTO graph_series (graph_id, series_name, display_order) VALUES (?, ?, ?)');
+    $insertPoint = $pdo->prepare('INSERT INTO graph_points (series_id, label, value, display_order) VALUES (?, ?, ?, ?)');
+    foreach (array_values($sourceSeries) as $seriesIndex => $series) {
+        if (!is_array($series)) continue;
+        $seriesIdQuery = $insertSeries;
+        $seriesIdQuery->execute([$graphId, isset($series['name']) ? (string)$series['name'] : null, $seriesIndex]);
+        $seriesId = (int)$pdo->lastInsertId();
+        $points = is_array($series['data'] ?? null) ? $series['data'] : ($seriesIndex === 0 ? $values : []);
+        foreach (array_values($points) as $pointIndex => $point) {
+            $pointLabel = is_array($point) ? ($point['name'] ?? $point['label'] ?? null) : null;
+            if ($pointLabel === null && $seriesIndex === 0) $pointLabel = $labels[$pointIndex] ?? null;
+            $pointValue = is_array($point) ? ($point['rawValue'] ?? $point['value'] ?? null) : $point;
+            $numericValue = is_numeric($pointValue) ? (float)$pointValue : null;
+            $insertPoint->execute([$seriesId, $pointLabel !== null ? (string)$pointLabel : null, $numericValue, $pointIndex]);
+        }
+    }
+    $colors = valid_graph_colors($data['colors'] ?? null) ?? [];
+    $insertColor = $pdo->prepare('INSERT INTO graph_colors (graph_id, series_id, color) VALUES (?, NULL, ?)');
+    foreach ($colors as $color) $insertColor->execute([$graphId, $color]);
 }
 function normalize_graph_type($type): string {
     $value = (string)($type ?? 'bar');
@@ -109,7 +204,7 @@ function valid_trash_id($trashId): bool {
 }
 function stored_file_in_use(PDO $pdo, string $name, string $exceptRecordId): bool {
     $escaped = str_replace(['!', '%', '_'], ['!!', '!%', '!_'], $name);
-    $query = $pdo->prepare("SELECT id, metadata FROM records WHERE id <> ? AND metadata LIKE ? ESCAPE '!' ");
+    $query = $pdo->prepare("SELECT record_id AS id, metadata FROM records WHERE record_id <> ? AND metadata LIKE ? ESCAPE '!' ");
     $query->execute([$exceptRecordId, '%"stored_file"%' . $escaped . '%']);
     foreach ($query->fetchAll(PDO::FETCH_ASSOC) as $row) {
         $metadata = json_col($row['metadata'] ?? null, []);
@@ -158,14 +253,34 @@ function load_merge_manifest(string $trashId): array {
     return [$trashDirectory, $path, $manifest];
 }
 function insert_row_from_snapshot(PDO $pdo, string $table, array $row): void {
-    if (!in_array($table, ['records', 'saved_graphs'], true)) bad('Invalid recovery table.', 500);
+    $primaryKeys = [
+        'records' => 'record_id',
+        'saved_graphs' => 'graph_id',
+        'graph_series' => 'series_id',
+        'graph_points' => 'point_id',
+        'graph_colors' => 'color_id'
+    ];
+    if (!isset($primaryKeys[$table])) bad('Invalid recovery table.', 500);
     $columns = $pdo->query('SHOW COLUMNS FROM `' . $table . '`')->fetchAll(PDO::FETCH_COLUMN);
     $fields = array_values(array_intersect($columns, array_keys($row)));
-    if (!$fields || !in_array('id', $fields, true)) bad('Recovery snapshot does not match the current database schema.', 409);
+    if (!$fields || !in_array($primaryKeys[$table], $fields, true)) bad('Recovery snapshot does not match the current database schema.', 409);
     $quoted = array_map(static fn(string $field): string => '`' . $field . '`', $fields);
     $sql = 'INSERT INTO `' . $table . '` (' . implode(',', $quoted) . ') VALUES (' . implode(',', array_fill(0, count($fields), '?')) . ')';
     $values = array_map(static fn(string $field) => $row[$field], $fields);
     $pdo->prepare($sql)->execute($values);
+}
+function insert_graph_from_snapshot(PDO $pdo, array $graph): void {
+    $seriesRows = $graph['_series'] ?? [];
+    $colorRows = $graph['_colors'] ?? [];
+    unset($graph['_series'], $graph['_colors']);
+    insert_row_from_snapshot($pdo, 'saved_graphs', $graph);
+    foreach ($seriesRows as $series) {
+        $points = $series['_points'] ?? [];
+        unset($series['_points']);
+        insert_row_from_snapshot($pdo, 'graph_series', $series);
+        foreach ($points as $point) insert_row_from_snapshot($pdo, 'graph_points', $point);
+    }
+    foreach ($colorRows as $color) insert_row_from_snapshot($pdo, 'graph_colors', $color);
 }
 function normalize_field_key($value): string {
     return strtolower(preg_replace('/\s+/', ' ', trim((string)$value)) ?? '');
@@ -202,22 +317,41 @@ function summary_card_import_key(mixed $value): string {
     }
     return $key;
 }
-function summary_card_manual_snapshot(PDO $pdo, array $card, bool $published): array {
-    $period = summary_card_period_identity((string)$card['id'], (string)($card['year_date'] ?? ''));
+function summary_card_manual_snapshot(PDO $pdo, array $card, bool $published, array $values = []): array {
+    $cardId = (int)($card['card_id'] ?? $card['id'] ?? 0);
+    $yearDateInput = trim((string)($values['year_date'] ?? ''));
+    $period = summary_card_period_identity((string)$cardId, $yearDateInput);
+    $mainValue = trim((string)($values['main_value'] ?? ''));
+    $secondaryValue = trim((string)($values['secondary_value'] ?? ''));
+    if ($mainValue === '') bad('main_value cannot be blank.');
+    $secondaryValue = $secondaryValue !== '' ? $secondaryValue : null;
+    $yearDate = null;
+    if (preg_match('/^\d{4}$/', $yearDateInput)) $yearDate = $yearDateInput . '-01-01';
+    elseif ($yearDateInput !== '' && ($timestamp = strtotime($yearDateInput)) !== false) $yearDate = date('Y-m-d', $timestamp);
     $existing = $pdo->prepare('SELECT * FROM summary_card_snapshots WHERE card_id = ? AND period_key = ? FOR UPDATE');
-    $existing->execute([$card['id'], $period['period_key']]);
+    $existing->execute([$cardId, $period['period_key']]);
     $snapshot = $existing->fetch(PDO::FETCH_ASSOC);
     if ($snapshot) return $snapshot;
-    $insert = $pdo->prepare('INSERT INTO summary_card_snapshots (card_id, title, period_key, period_label, period_sort, period_precision, is_published, main_value, main_label, secondary_label, secondary_value, year_date, description, secondary_description, info_text, source_info, source_record_id, batch_id, last_source_record_id, last_batch_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, NULL, NULL, NULL)');
+    $periodValues = [
+        $cardId, $period['period_key'], $period['period_label'], $period['period_sort'], $period['period_precision'],
+        $mainValue, trim((string)($values['main_label'] ?? '')), trim((string)($values['secondary_label'] ?? '')),
+        $secondaryValue, $yearDate, trim((string)($values['description'] ?? '')),
+        trim((string)($values['secondary_description'] ?? '')), trim((string)($values['info_text'] ?? '')),
+        trim((string)($values['source_info'] ?? 'Manual entry')), $published ? 1 : 0
+    ];
+    $pdo->prepare('INSERT INTO summary_card_periods (card_id, period_key, period_label, period_sort, period_precision, main_value, main_label, secondary_label, secondary_value, year_date, description, secondary_description, info_text, source_info, is_published) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
+        ->execute($periodValues);
+    $insert = $pdo->prepare('INSERT INTO summary_card_snapshots (card_id, title, period_key, period_label, period_sort, period_precision, is_published, main_value, main_label, secondary_label, secondary_value, year_date, description, secondary_description, info_text, source_info) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
     $insert->execute([
-        $card['id'], $card['title'], $period['period_key'], $period['period_label'], $period['period_sort'], $period['period_precision'], $published ? 1 : 0,
-        $card['main_value'], $card['main_label'], $card['secondary_label'], $card['secondary_value'], $card['year_date'], $card['description'],
-        $card['secondary_description'], $card['info_text'], 'Manual entry'
+        $cardId, $card['title'], $period['period_key'], $period['period_label'], $period['period_sort'], $period['period_precision'], $published ? 1 : 0,
+        $mainValue, $values['main_label'] ?? '', $values['secondary_label'] ?? '', $secondaryValue, $yearDate,
+        $values['description'] ?? '', $values['secondary_description'] ?? '', $values['info_text'] ?? '',
+        $values['source_info'] ?? 'Manual entry'
     ]);
     $existing->execute([$card['id'], $period['period_key']]);
     $saved = $existing->fetch(PDO::FETCH_ASSOC);
     $pdo->prepare('INSERT INTO summary_card_period_changes (card_id, period_key, action, before_state, after_state, changed_by) VALUES (?, ?, "create", NULL, ?, ?)')->execute([
-        $card['id'], $period['period_key'], json_encode($saved, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES), (int)($_SESSION['user_id'] ?? 0)
+        $cardId, $period['period_key'], json_encode($saved, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES), (int)($_SESSION['user_id'] ?? 0)
     ]);
     return $saved;
 }
@@ -254,7 +388,7 @@ function resolve_summary_categories(PDO $pdo, array $data): array {
     if ($categoryIds) {
         $categoryIds = array_values(array_unique(array_map('intval', $categoryIds)));
         $placeholders = implode(',', array_fill(0, count($categoryIds), '?'));
-        $check = $pdo->prepare("SELECT id FROM summary_card_categories WHERE id IN ($placeholders)");
+        $check = $pdo->prepare("SELECT category_id FROM summary_card_categories WHERE category_id IN ($placeholders)");
         $check->execute($categoryIds);
         if (count($check->fetchAll(PDO::FETCH_COLUMN)) !== count($categoryIds)) bad('One or more categories were not found.');
     }
@@ -264,7 +398,7 @@ function resolve_summary_categories(PDO $pdo, array $data): array {
     foreach ($categoryNames as $rawName) {
         $name = trim((string)$rawName);
         $slug = summary_category_slug($name);
-        $existing = $pdo->prepare('SELECT id FROM summary_card_categories WHERE slug = ? LIMIT 1');
+        $existing = $pdo->prepare('SELECT category_id FROM summary_card_categories WHERE slug = ? LIMIT 1');
         $existing->execute([$slug]);
         $categoryId = $existing->fetchColumn();
         if ($categoryId === false) {
@@ -284,18 +418,18 @@ function resolve_summary_categories(PDO $pdo, array $data): array {
     return array_values(array_unique(array_map('intval', $categoryIds)));
 }
 function save_summary_card_categories(PDO $pdo, string $cardId, array $categoryIds): void {
-    $pdo->prepare('DELETE FROM summary_card_category_map WHERE summary_card_id = ?')->execute([$cardId]);
-    $insert = $pdo->prepare('INSERT INTO summary_card_category_map (summary_card_id, category_id) VALUES (?, ?)');
+    $pdo->prepare('DELETE FROM summary_card_category_map WHERE card_id = ?')->execute([$cardId]);
+    $insert = $pdo->prepare('INSERT INTO summary_card_category_map (card_id, category_id) VALUES (?, ?)');
     foreach ($categoryIds as $categoryId) $insert->execute([$cardId, $categoryId]);
 }
 function attach_summary_card_categories(PDO $pdo, array $cards): array {
     if (!$cards) return [];
     $cardIds = array_column($cards, 'id');
     $placeholders = implode(',', array_fill(0, count($cardIds), '?'));
-    $query = $pdo->prepare("SELECT mapping.summary_card_id, categories.id, categories.name, categories.slug
+    $query = $pdo->prepare("SELECT mapping.card_id AS summary_card_id, categories.category_id AS id, categories.name, categories.slug
         FROM summary_card_category_map mapping
-        INNER JOIN summary_card_categories categories ON categories.id = mapping.category_id
-        WHERE mapping.summary_card_id IN ($placeholders)
+        INNER JOIN summary_card_categories categories ON categories.category_id = mapping.category_id
+        WHERE mapping.card_id IN ($placeholders)
         ORDER BY categories.sort_order ASC, categories.name ASC");
     $query->execute($cardIds);
     $byCard = [];
@@ -318,7 +452,7 @@ function attach_summary_card_categories(PDO $pdo, array $cards): array {
 try {
     if ($resource === 'field_colors') {
         if ($_SERVER['REQUEST_METHOD'] === 'GET') {
-            $rows = $pdo->query('SELECT field_key, label, color, updated_at FROM field_colors ORDER BY label ASC')->fetchAll(PDO::FETCH_ASSOC);
+            $rows = $pdo->query('SELECT field_name AS field_key, field_name AS label, color, updated_at FROM field_colors ORDER BY field_name ASC')->fetchAll(PDO::FETCH_ASSOC);
             foreach ($rows as &$row) {
                 $row['field_key'] = normalize_field_key($row['field_key']);
                 $row['color'] = valid_field_color($row['color']) ? strtoupper($row['color']) : null;
@@ -335,9 +469,9 @@ try {
             $color = $data['color'] ?? null;
             if ($fieldKey === '' || $label === '') bad('A field label is required.');
             if (!valid_field_color($color)) bad('color must be a six-digit HEX value.');
-            $stmt = $pdo->prepare('INSERT INTO field_colors (field_key, label, color) VALUES (?, ?, ?) ON DUPLICATE KEY UPDATE label = VALUES(label), color = VALUES(color), updated_at = CURRENT_TIMESTAMP');
-            $stmt->execute([$fieldKey, $label, strtoupper($color)]);
-            $q = $pdo->prepare('SELECT field_key, label, color, updated_at FROM field_colors WHERE field_key = ?');
+            $stmt = $pdo->prepare('INSERT INTO field_colors (field_name, color) VALUES (?, ?) ON DUPLICATE KEY UPDATE color = VALUES(color), updated_at = CURRENT_TIMESTAMP');
+            $stmt->execute([$fieldKey, strtoupper($color)]);
+            $q = $pdo->prepare('SELECT field_name AS field_key, field_name AS label, color, updated_at FROM field_colors WHERE field_name = ?');
             $q->execute([$fieldKey]);
             echo json_encode($q->fetch(PDO::FETCH_ASSOC), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT);
             exit;
@@ -346,7 +480,7 @@ try {
             ensure_admin_for_mutation();
             $fieldKey = normalize_field_key($_GET['field_key'] ?? '');
             if ($fieldKey === '') bad('field_key is required.');
-            $stmt = $pdo->prepare('DELETE FROM field_colors WHERE field_key = ?');
+            $stmt = $pdo->prepare('DELETE FROM field_colors WHERE field_name = ?');
             $stmt->execute([$fieldKey]);
             echo json_encode(['success' => true, 'deleted' => $stmt->rowCount() > 0]);
             exit;
@@ -356,11 +490,11 @@ try {
     if ($resource === 'summary_card_categories') {
         if ($_SERVER['REQUEST_METHOD'] === 'GET') {
             $rows = ($_SESSION['role'] ?? '') === 'super_admin'
-                ? $pdo->query('SELECT id, name, slug, sort_order FROM summary_card_categories ORDER BY sort_order ASC, name ASC')->fetchAll(PDO::FETCH_ASSOC)
-                : $pdo->query("SELECT DISTINCT categories.id, categories.name, categories.slug, categories.sort_order
+                ? $pdo->query('SELECT category_id AS id, name, slug, sort_order FROM summary_card_categories ORDER BY sort_order ASC, name ASC')->fetchAll(PDO::FETCH_ASSOC)
+                : $pdo->query("SELECT DISTINCT categories.category_id AS id, categories.name, categories.slug, categories.sort_order
                     FROM summary_card_categories categories
-                    INNER JOIN summary_card_category_map mapping ON mapping.category_id = categories.id
-                    INNER JOIN summary_cards cards ON cards.id = mapping.summary_card_id
+                    INNER JOIN summary_card_category_map mapping ON mapping.category_id = categories.category_id
+                    INNER JOIN summary_cards cards ON cards.card_id = mapping.card_id
                     WHERE cards.is_published = 1 ORDER BY categories.sort_order ASC, categories.name ASC")->fetchAll(PDO::FETCH_ASSOC);
             echo json_encode($rows, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT);
             exit;
@@ -371,7 +505,7 @@ try {
         if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $name = trim((string)($data['name'] ?? ''));
             $slug = summary_category_slug($name);
-            $existing = $pdo->prepare('SELECT id, name, slug, sort_order FROM summary_card_categories WHERE slug = ? LIMIT 1');
+            $existing = $pdo->prepare('SELECT category_id AS id, name, slug, sort_order FROM summary_card_categories WHERE slug = ? LIMIT 1');
             $existing->execute([$slug]);
             $category = $existing->fetch(PDO::FETCH_ASSOC);
             if (!$category) {
@@ -403,11 +537,11 @@ try {
             if (!$sets) bad('No category fields to update.');
             $values[] = (int)$id;
             try {
-                $pdo->prepare('UPDATE summary_card_categories SET ' . implode(', ', $sets) . ' WHERE id = ?')->execute($values);
+                $pdo->prepare('UPDATE summary_card_categories SET ' . implode(', ', $sets) . ' WHERE category_id = ?')->execute($values);
             } catch (PDOException $exception) {
                 bad('A category with that name or slug already exists.', 409);
             }
-            $query = $pdo->prepare('SELECT id, name, slug, sort_order FROM summary_card_categories WHERE id = ?');
+            $query = $pdo->prepare('SELECT category_id AS id, name, slug, sort_order FROM summary_card_categories WHERE category_id = ?');
             $query->execute([(int)$id]);
             $category = $query->fetch(PDO::FETCH_ASSOC);
             if (!$category) bad('Category not found.', 404);
@@ -416,7 +550,7 @@ try {
         }
         if ($_SERVER['REQUEST_METHOD'] === 'DELETE') {
             if ($id === null) bad('Category id is required.');
-            $delete = $pdo->prepare('DELETE FROM summary_card_categories WHERE id = ?');
+            $delete = $pdo->prepare('DELETE FROM summary_card_categories WHERE category_id = ?');
             $delete->execute([(int)$id]);
             echo json_encode(['success' => true, 'deleted' => $delete->rowCount() > 0]);
             exit;
@@ -425,7 +559,7 @@ try {
 
     if ($resource === 'summary_card_history') {
         if ($id === null || trim((string)$id) === '') bad('Summary Card id is required.');
-        $cardQuery = $pdo->prepare('SELECT * FROM summary_cards WHERE id = ?');
+        $cardQuery = $pdo->prepare('SELECT summary_cards.*, card_id AS id FROM summary_cards WHERE card_id = ?');
         $cardQuery->execute([(string)$id]);
         $card = $cardQuery->fetch(PDO::FETCH_ASSOC);
         if (!$card) bad('Summary Card not found.', 404);
@@ -436,7 +570,7 @@ try {
             $current = SummaryCardHistory::latest($allPeriods, true);
             $latestImported = SummaryCardHistory::latest($allPeriods);
             $historyVersion = SummaryCardHistory::version($card, $allPeriods);
-            $changeRows = $pdo->prepare('SELECT period_key, action, changed_by, created_at FROM summary_card_period_changes WHERE card_id = ? ORDER BY created_at DESC, id DESC');
+            $changeRows = $pdo->prepare('SELECT period_key, action, changed_by, created_at FROM summary_card_period_changes WHERE card_id = ? ORDER BY created_at DESC, change_id DESC');
             $changeRows->execute([(string)$id]);
             $changesByPeriod = [];
             foreach ($changeRows->fetchAll(PDO::FETCH_ASSOC) as $change) $changesByPeriod[$change['period_key']][] = $change;
@@ -477,7 +611,7 @@ try {
         if ($expectedVersion === '') bad('Refresh the history before changing a period.');
         $pdo->beginTransaction();
         try {
-            $lockedCardQuery = $pdo->prepare('SELECT * FROM summary_cards WHERE id = ? FOR UPDATE');
+            $lockedCardQuery = $pdo->prepare('SELECT summary_cards.*, card_id AS id FROM summary_cards WHERE card_id = ? FOR UPDATE');
             $lockedCardQuery->execute([(string)$id]);
             $lockedCard = $lockedCardQuery->fetch(PDO::FETCH_ASSOC);
             $allPeriods = SummaryCardHistory::periods($pdo, (string)$id, true);
@@ -502,12 +636,12 @@ try {
                 }
                 if (!$sets) throw new InvalidArgumentException('Provide at least one period field to correct.');
                 if (array_key_exists('main_value', $data) && trim((string)$data['main_value']) === '') throw new InvalidArgumentException('main_value cannot be blank.');
-                $pdo->prepare('UPDATE summary_card_snapshots SET ' . implode(', ', $sets) . ' WHERE id = ?')->execute([...$values, $before['id']]);
+                $pdo->prepare('UPDATE summary_card_snapshots SET ' . implode(', ', $sets) . ' WHERE snapshot_id = ?')->execute([...$values, $before['snapshot_id']]);
             } else {
-                $pdo->prepare('UPDATE summary_card_snapshots SET is_published = ? WHERE id = ?')->execute([$action === 'publish' ? 1 : 0, $before['id']]);
+                $pdo->prepare('UPDATE summary_card_snapshots SET is_published = ? WHERE snapshot_id = ?')->execute([$action === 'publish' ? 1 : 0, $before['snapshot_id']]);
             }
-            $changedQuery = $pdo->prepare('SELECT * FROM summary_card_snapshots WHERE id = ?');
-            $changedQuery->execute([$before['id']]);
+            $changedQuery = $pdo->prepare('SELECT * FROM summary_card_snapshots WHERE snapshot_id = ?');
+            $changedQuery->execute([$before['snapshot_id']]);
             $after = $changedQuery->fetch(PDO::FETCH_ASSOC);
             SummaryCardHistory::syncLive($pdo, (string)$id);
             $pdo->prepare('INSERT INTO summary_card_period_changes (card_id, period_key, action, before_state, after_state, changed_by) VALUES (?, ?, ?, ?, ?, ?)')->execute([
@@ -530,13 +664,7 @@ try {
     if ($resource === 'summary_cards') {
         if ($_SERVER['REQUEST_METHOD'] === 'GET') {
             $rows = ($_SESSION['role'] ?? '') === 'super_admin'
-                ? $pdo->query("SELECT cards.*,
-                    (SELECT period_label FROM summary_card_snapshots p WHERE p.card_id = cards.id ORDER BY p.period_sort DESC, p.period_precision DESC, p.period_key ASC LIMIT 1) AS latest_imported_period,
-                    (SELECT period_key FROM summary_card_snapshots p WHERE p.card_id = cards.id ORDER BY p.period_sort DESC, p.period_precision DESC, p.period_key ASC LIMIT 1) AS latest_imported_period_key,
-                    (SELECT period_label FROM summary_card_snapshots p WHERE p.card_id = cards.id AND p.is_published = 1 ORDER BY p.period_sort DESC, p.period_precision DESC, p.period_key ASC LIMIT 1) AS current_public_period,
-                    (SELECT period_key FROM summary_card_snapshots p WHERE p.card_id = cards.id AND p.is_published = 1 ORDER BY p.period_sort DESC, p.period_precision DESC, p.period_key ASC LIMIT 1) AS current_public_period_key,
-                    (SELECT COUNT(*) FROM summary_card_snapshots p WHERE p.card_id = cards.id) AS history_count
-                    FROM summary_cards cards ORDER BY cards.display_order ASC, cards.created_at DESC")->fetchAll(PDO::FETCH_ASSOC)
+                ? SummaryCardHistory::publishedCards($pdo, false)
                 : SummaryCardHistory::publishedCards($pdo);
             $rows = attach_summary_card_categories($pdo, $rows);
             echo json_encode(array_map(static function (array $card): array {
@@ -552,10 +680,12 @@ try {
             ensure_admin_for_mutation();
             ensure_json_csrf();
             $data = json_input();
-            $id = $data['id'] ?? ('summary_card_' . date('YmdHis') . '_' . bin2hex(random_bytes(4)));
-            $importKey = summary_card_import_key($data['import_key'] ?? $id);
+            $importKey = summary_card_import_key($data['import_key'] ?? bin2hex(random_bytes(12)));
             $title = trim((string)($data['title'] ?? ''));
             if ($title === '') bad('title is required');
+            $mainValue = trim((string)($data['main_value'] ?? ''));
+            if ($mainValue === '') bad('main_value cannot be blank.');
+            $secondaryValue = trim((string)($data['secondary_value'] ?? ''));
 
             $displayPrecision = isset($data['display_precision']) ? (int)$data['display_precision'] : 2;
             $displayPrecision = max(0, min(2, $displayPrecision));
@@ -564,32 +694,23 @@ try {
             $pdo->beginTransaction();
             try {
                 $categoryIds = resolve_summary_categories($pdo, $data);
-                $collision = $pdo->prepare('SELECT id FROM summary_cards WHERE import_key = ? FOR UPDATE');
+                $collision = $pdo->prepare('SELECT card_id FROM summary_cards WHERE import_key = ? FOR UPDATE');
                 $collision->execute([$importKey]);
                 if ($collision->fetchColumn()) throw new RuntimeException('Another Summary Card already uses this Global Label.', 409);
-                $stmt = $pdo->prepare('INSERT INTO summary_cards (id, import_key, title, main_value, main_label, year_date, secondary_label, secondary_value, description, secondary_description, info_text, display_order, display_precision, is_published, category_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
+                $stmt = $pdo->prepare('INSERT INTO summary_cards (import_key, title, display_order, display_precision, is_published) VALUES (?, ?, ?, ?, ?)');
                 $stmt->execute([
-                    $id,
                     $importKey,
                     $title,
-                    (string)($data['main_value'] ?? ''),
-                    (string)($data['main_label'] ?? ''),
-                    (string)($data['year_date'] ?? ''),
-                    (string)($data['secondary_label'] ?? ''),
-                    (string)($data['secondary_value'] ?? ''),
-                    (string)($data['description'] ?? ''),
-                    (string)($data['secondary_description'] ?? ''),
-                    (string)($data['info_text'] ?? ''),
                     isset($data['display_order']) ? (int)$data['display_order'] : 0,
                     $displayPrecision,
-                    $published ? 1 : 0,
-                    $categoryIds[0] ?? null
+                    $published ? 1 : 0
                 ]);
+                $id = (int)$pdo->lastInsertId();
                 save_summary_card_categories($pdo, (string)$id, $categoryIds);
-                $createdQuery = $pdo->prepare('SELECT * FROM summary_cards WHERE id = ? FOR UPDATE');
+                $createdQuery = $pdo->prepare('SELECT summary_cards.*, card_id AS id FROM summary_cards WHERE card_id = ? FOR UPDATE');
                 $createdQuery->execute([$id]);
                 $createdCard = $createdQuery->fetch(PDO::FETCH_ASSOC);
-                summary_card_manual_snapshot($pdo, $createdCard, $published);
+                summary_card_manual_snapshot($pdo, $createdCard, $published, $data);
                 SummaryCardHistory::syncLive($pdo, (string)$id);
                 $pdo->commit();
             } catch (Throwable $exception) {
@@ -599,10 +720,8 @@ try {
                 throw $exception;
             }
 
-            $q = $pdo->prepare('SELECT * FROM summary_cards WHERE id=?');
-            $q->execute([$id]);
-            $saved = $q->fetch(PDO::FETCH_ASSOC);
-            echo json_encode(attach_summary_card_categories($pdo, $saved ? [$saved] : [])[0] ?? null);
+            $savedCards = array_values(array_filter(SummaryCardHistory::publishedCards($pdo, false), static fn(array $card): bool => (int)$card['id'] === $id));
+            echo json_encode(attach_summary_card_categories($pdo, $savedCards)[0] ?? null);
             exit;
         }
 
@@ -624,19 +743,19 @@ try {
             if (array_key_exists('main_value', $data) && trim((string)$data['main_value']) === '') bad('main_value cannot be blank');
             $pdo->beginTransaction();
             try {
-                $locked = $pdo->prepare('SELECT * FROM summary_cards WHERE id = ? FOR UPDATE');
+                $locked = $pdo->prepare('SELECT summary_cards.*, card_id AS id FROM summary_cards WHERE card_id = ? FOR UPDATE');
                 $locked->execute([(string)$id]);
                 $card = $locked->fetch(PDO::FETCH_ASSOC);
                 if (!$card) throw new RuntimeException('Summary Card not found.', 404);
                 $periods = SummaryCardHistory::periods($pdo, (string)$id, true);
                 $beforeIdentity = $card;
                 if ($hasIdentityUpdate && $importKey !== (string)$card['import_key']) {
-                    $collision = $pdo->prepare('SELECT id FROM summary_cards WHERE import_key = ? AND id <> ? FOR UPDATE');
+                    $collision = $pdo->prepare('SELECT card_id FROM summary_cards WHERE import_key = ? AND card_id <> ? FOR UPDATE');
                     $collision->execute([$importKey, $id]);
                     if ($collision->fetchColumn()) throw new RuntimeException('Another Summary Card already uses this Global Label.', 409);
                 }
                 if (!$periods) {
-                    summary_card_manual_snapshot($pdo, $card, (bool)$card['is_published']);
+                    summary_card_manual_snapshot($pdo, $card, (bool)$card['is_published'], $data);
                     $periods = SummaryCardHistory::periods($pdo, (string)$id, true);
                 }
                 if ($hasContentUpdate) {
@@ -649,13 +768,18 @@ try {
                         if (strlen($value) > (in_array($field, ['description', 'secondary_description', 'info_text'], true) ? 65535 : 255)) {
                             throw new InvalidArgumentException($field . ' exceeds its storage limit.');
                         }
+                        if ($field === 'year_date' && $value !== '') {
+                            if (preg_match('/^\d{4}$/', $value)) $value .= '-01-01';
+                            elseif (($timestamp = strtotime($value)) !== false) $value = date('Y-m-d', $timestamp);
+                            else throw new InvalidArgumentException('year_date must be a valid date or year.');
+                        }
                         $sets[] = '`' . $field . '` = ?';
                         $values[] = $value;
                     }
                     $before = $target;
-                    $pdo->prepare('UPDATE summary_card_snapshots SET ' . implode(', ', $sets) . ' WHERE id = ?')->execute([...$values, $target['id']]);
-                    $snapshotQuery = $pdo->prepare('SELECT * FROM summary_card_snapshots WHERE id = ?');
-                    $snapshotQuery->execute([$target['id']]);
+                    $pdo->prepare('UPDATE summary_card_snapshots SET ' . implode(', ', $sets) . ' WHERE snapshot_id = ?')->execute([...$values, $target['snapshot_id']]);
+                    $snapshotQuery = $pdo->prepare('SELECT * FROM summary_card_snapshots WHERE snapshot_id = ?');
+                    $snapshotQuery->execute([$target['snapshot_id']]);
                     $after = $snapshotQuery->fetch(PDO::FETCH_ASSOC);
                     summary_card_manual_audit($pdo, (string)$id, (string)$target['period_key'], 'correct', $before, $after);
                     $periods = SummaryCardHistory::periods($pdo, (string)$id, true);
@@ -665,9 +789,9 @@ try {
                         ? SummaryCardHistory::latest($periods)
                         : SummaryCardHistory::latest($periods, true);
                     if ($target) {
-                        $pdo->prepare('UPDATE summary_card_snapshots SET is_published = ? WHERE id = ?')->execute([!empty($data['is_published']) ? 1 : 0, $target['id']]);
-                        $snapshotQuery = $pdo->prepare('SELECT * FROM summary_card_snapshots WHERE id = ?');
-                        $snapshotQuery->execute([$target['id']]);
+                        $pdo->prepare('UPDATE summary_card_snapshots SET is_published = ? WHERE snapshot_id = ?')->execute([!empty($data['is_published']) ? 1 : 0, $target['snapshot_id']]);
+                        $snapshotQuery = $pdo->prepare('SELECT * FROM summary_card_snapshots WHERE snapshot_id = ?');
+                        $snapshotQuery->execute([$target['snapshot_id']]);
                         $after = $snapshotQuery->fetch(PDO::FETCH_ASSOC);
                         summary_card_manual_audit($pdo, (string)$id, (string)$target['period_key'], !empty($data['is_published']) ? 'publish' : 'unpublish', $target, $after);
                     }
@@ -677,13 +801,13 @@ try {
                 if ($hasIdentityUpdate) { $cardSets[] = 'import_key = ?'; $cardValues[] = $importKey; }
                 if (array_key_exists('display_order', $data)) { $cardSets[] = 'display_order = ?'; $cardValues[] = (int)$data['display_order']; }
                 if (array_key_exists('display_precision', $data)) { $cardSets[] = 'display_precision = ?'; $cardValues[] = max(0, min(2, (int)$data['display_precision'])); }
-                if ($cardSets) $pdo->prepare('UPDATE summary_cards SET ' . implode(', ', $cardSets) . ' WHERE id = ?')->execute([...$cardValues, $id]);
+                if ($cardSets) $pdo->prepare('UPDATE summary_cards SET ' . implode(', ', $cardSets) . ' WHERE card_id = ?')->execute([...$cardValues, $id]);
                 if ($hasCategoryUpdate) save_summary_card_categories($pdo, (string)$id, $categoryIds);
                 SummaryCardHistory::syncLive($pdo, (string)$id);
                 if ($hasIdentityUpdate && $importKey !== (string)$beforeIdentity['import_key']) {
                     $period = SummaryCardHistory::latest($periods);
                     if ($period) {
-                        $updatedCardQuery = $pdo->prepare('SELECT * FROM summary_cards WHERE id = ?');
+                        $updatedCardQuery = $pdo->prepare('SELECT summary_cards.*, card_id AS id FROM summary_cards WHERE card_id = ?');
                         $updatedCardQuery->execute([(string)$id]);
                         summary_card_manual_audit($pdo, (string)$id, (string)$period['period_key'], 'identity', $beforeIdentity, $updatedCardQuery->fetch(PDO::FETCH_ASSOC));
                     }
@@ -695,10 +819,8 @@ try {
                 if ($exception instanceof PDOException && (string)($exception->errorInfo[0] ?? '') === '23000') bad('Another Summary Card already uses this Global Label.', 409);
                 throw $exception;
             }
-            $q = $pdo->prepare('SELECT * FROM summary_cards WHERE id=?');
-            $q->execute([$id]);
-            $saved = $q->fetch(PDO::FETCH_ASSOC);
-            echo json_encode(attach_summary_card_categories($pdo, $saved ? [$saved] : [])[0] ?? null);
+            $savedCards = array_values(array_filter(SummaryCardHistory::publishedCards($pdo, false), static fn(array $card): bool => (int)$card['id'] === (int)$id));
+            echo json_encode(attach_summary_card_categories($pdo, $savedCards)[0] ?? null);
             exit;
         }
 
@@ -706,7 +828,7 @@ try {
             ensure_admin_for_mutation();
             ensure_json_csrf();
             if ($id === null) bad('Summary card id is required');
-            $pdo->prepare('DELETE FROM summary_cards WHERE id=?')->execute([$id]);
+            $pdo->prepare('DELETE FROM summary_cards WHERE card_id = ?')->execute([$id]);
             echo json_encode(['success' => true, 'deleted_id' => $id]);
             exit;
         }
@@ -718,25 +840,44 @@ try {
             $importRecordExclusion = $excludeImportRecords
                 ? " AND COALESCE(
                         NULLIF(JSON_UNQUOTE(JSON_EXTRACT(records.metadata, '$.upload_purpose')), ''),
-                        (SELECT upload_profiles.destination FROM template_import_profiles upload_profiles WHERE upload_profiles.id = records.import_profile_id LIMIT 1),
+                        (SELECT upload_profiles.destination FROM template_import_profiles upload_profiles WHERE upload_profiles.import_profile_id = records.import_profile_id LIMIT 1),
                         ''
                     ) NOT IN ('ranking_history', 'summary_cards')"
                 : '';
             if ($id !== null) {
-                $pdo->prepare('UPDATE records SET opened_at = COALESCE(opened_at, NOW()) WHERE id = ?')->execute([$id]);
-                $q = $pdo->prepare('SELECT records.*, templates.name AS template_name FROM records LEFT JOIN templates ON templates.id = records.template_id WHERE records.id=?' . $importRecordExclusion); $q->execute([$id]);
+                $pdo->prepare('UPDATE records SET opened_at = COALESCE(opened_at, NOW()) WHERE record_id = ?')->execute([(int)$id]);
+                $q = $pdo->prepare('SELECT records.record_id AS id, records.file_name AS fileName, records.file_type AS fileType,
+                    records.file_size AS fileSize, records.scanned_at AS scannedAt, records.status, records.doc_type AS docType,
+                    records.raw_text AS rawText, records.extracted_data AS extractedData, records.graph_drafts AS graphDrafts,
+                    records.admin_notes AS adminNotes, records.metadata, records.updated_at AS updatedAt, records.uploaded_by,
+                    records.office_id, offices.office_name, records.uploaded_at, records.template_id, records.import_profile_id,
+                    COALESCE((SELECT import_profiles.destination FROM template_import_profiles import_profiles WHERE import_profiles.import_profile_id = records.import_profile_id LIMIT 1),
+                        (SELECT template_profiles.destination FROM template_import_profiles template_profiles WHERE template_profiles.template_id = records.template_id LIMIT 1)) AS import_destination,
+                    records.opened_at, templates.name AS template_name
+                    FROM records LEFT JOIN templates ON templates.template_id = records.template_id
+                    LEFT JOIN offices ON offices.office_id = records.office_id WHERE records.record_id=?' . $importRecordExclusion); $q->execute([(int)$id]);
                 $r = $q->fetch(PDO::FETCH_ASSOC); if (!$r) bad('Record not found',404);
                 echo json_encode(output_record($r)); exit;
             }
-            $rows = $pdo->query('SELECT records.*, templates.name AS template_name FROM records LEFT JOIN templates ON templates.id = records.template_id WHERE 1=1' . $importRecordExclusion . ' ORDER BY records.scannedAt DESC, records.updatedAt DESC')->fetchAll(PDO::FETCH_ASSOC);
+            $rows = $pdo->query('SELECT records.record_id AS id, records.file_name AS fileName, records.file_type AS fileType,
+                records.file_size AS fileSize, records.scanned_at AS scannedAt, records.status, records.doc_type AS docType,
+                records.raw_text AS rawText, records.extracted_data AS extractedData, records.graph_drafts AS graphDrafts,
+                records.admin_notes AS adminNotes, records.metadata, records.updated_at AS updatedAt, records.uploaded_by,
+                records.office_id, offices.office_name, records.uploaded_at, records.template_id, records.import_profile_id,
+                COALESCE((SELECT import_profiles.destination FROM template_import_profiles import_profiles WHERE import_profiles.import_profile_id = records.import_profile_id LIMIT 1),
+                    (SELECT template_profiles.destination FROM template_import_profiles template_profiles WHERE template_profiles.template_id = records.template_id LIMIT 1)) AS import_destination,
+                records.opened_at, templates.name AS template_name
+                FROM records LEFT JOIN templates ON templates.template_id = records.template_id
+                LEFT JOIN offices ON offices.office_id = records.office_id WHERE 1=1' . $importRecordExclusion . ' ORDER BY records.scanned_at DESC, records.updated_at DESC')->fetchAll(PDO::FETCH_ASSOC);
             echo json_encode(array_map('output_record',$rows)); exit;
         }
         if ($_SERVER['REQUEST_METHOD'] === 'POST' && $action === 'stage-restore') {
             ensure_admin_for_mutation();
-            if ($id === null || $id === '') bad('Existing record id is required.');
+            $existingId = filter_var($id, FILTER_VALIDATE_INT);
+            if (!$existingId || $existingId < 1) bad('Existing record id is required.');
             $data = json_input();
-            $officeId = $data['office_id'] ?? null;
-            if (!is_scalar($officeId) || (string)$officeId === '' || (string)$officeId === (string)$id) bad('A different office record id is required.');
+            $officeId = filter_var($data['office_id'] ?? null, FILTER_VALIDATE_INT);
+            if (!$officeId || $officeId < 1 || $officeId === $existingId) bad('A different office record id is required.');
             $trashDirectory = merge_trash_directory(true);
             if (!$trashDirectory) bad('Private merge recovery storage is unavailable.', 500);
             cleanup_expired_merge_trash($trashDirectory);
@@ -745,17 +886,17 @@ try {
             $temporaryPath = $manifestPath . '.tmp';
             $pdo->beginTransaction();
             try {
-                $oldQuery = $pdo->prepare('SELECT * FROM records WHERE id=? FOR UPDATE');
-                $oldQuery->execute([$id]);
+                $oldQuery = $pdo->prepare('SELECT * FROM records WHERE record_id=? FOR UPDATE');
+                $oldQuery->execute([$existingId]);
                 $oldRow = $oldQuery->fetch(PDO::FETCH_ASSOC);
                 if (!$oldRow) bad('Existing record not found.', 404);
-                $officeQuery = $pdo->prepare('SELECT * FROM records WHERE id=? FOR UPDATE');
+                $officeQuery = $pdo->prepare('SELECT records.*, offices.office_name FROM records LEFT JOIN offices ON offices.office_id = records.office_id WHERE records.record_id=? FOR UPDATE');
                 $officeQuery->execute([$officeId]);
                 $officeRow = $officeQuery->fetch(PDO::FETCH_ASSOC);
                 if (!$officeRow) bad('Office upload not found.', 404);
                 if (strtolower((string)($officeRow['status'] ?? '')) !== 'pending review') bad('The office upload must still be Pending Review.', 409);
                 if (empty($officeRow['uploaded_by']) || empty($officeRow['office_name'])) bad('The selected record is not an office upload.', 409);
-                if (!in_array(strtolower((string)($officeRow['fileType'] ?? '')), ['xlsx', 'csv', 'tsv'], true)) bad('The office upload is not a supported spreadsheet.', 409);
+                if (!in_array(strtolower((string)($officeRow['file_type'] ?? '')), ['xlsx', 'csv', 'tsv'], true)) bad('The office upload is not a supported spreadsheet.', 409);
                 if (empty($oldRow['template_id']) || empty($officeRow['template_id']) || (string)$oldRow['template_id'] !== (string)$officeRow['template_id']) bad('Both records must be assigned to the same template.', 409);
                 $oldMetadata = json_col($oldRow['metadata'] ?? null, []);
                 $officeMetadata = json_col($officeRow['metadata'] ?? null, []);
@@ -763,16 +904,32 @@ try {
                 if (!is_array($officeMetadata)) $officeMetadata = [];
                 $graphQuery = $pdo->prepare('SELECT * FROM saved_graphs WHERE record_id=?');
                 $graphQuery->execute([$officeId]);
+                $officeGraphs = $graphQuery->fetchAll(PDO::FETCH_ASSOC);
+                foreach ($officeGraphs as &$graph) {
+                    $seriesQuery = $pdo->prepare('SELECT * FROM graph_series WHERE graph_id = ? ORDER BY display_order, series_id');
+                    $seriesQuery->execute([(int)$graph['graph_id']]);
+                    $graph['_series'] = $seriesQuery->fetchAll(PDO::FETCH_ASSOC);
+                    foreach ($graph['_series'] as &$series) {
+                        $pointsQuery = $pdo->prepare('SELECT * FROM graph_points WHERE series_id = ? ORDER BY display_order, point_id');
+                        $pointsQuery->execute([(int)$series['series_id']]);
+                        $series['_points'] = $pointsQuery->fetchAll(PDO::FETCH_ASSOC);
+                    }
+                    unset($series);
+                    $colorsQuery = $pdo->prepare('SELECT * FROM graph_colors WHERE graph_id = ? ORDER BY color_id');
+                    $colorsQuery->execute([(int)$graph['graph_id']]);
+                    $graph['_colors'] = $colorsQuery->fetchAll(PDO::FETCH_ASSOC);
+                }
+                unset($graph);
                 $oldStoredFile = (string)($oldMetadata['stored_file'] ?? '');
                 if (!preg_match('/^[a-f0-9]{48}\.(xlsx|csv|tsv)$/', $oldStoredFile)) $oldStoredFile = null;
                 $manifest = [
                     'trash_id' => $trashId,
                     'created_at' => gmdate('c'),
-                    'old_id' => (string)$id,
+                    'old_id' => (string)$existingId,
                     'office_id' => (string)$officeId,
                     'old_row' => $oldRow,
                     'office_row' => $officeRow,
-                    'office_saved_graphs' => $graphQuery->fetchAll(PDO::FETCH_ASSOC),
+                    'office_saved_graphs' => $officeGraphs,
                     'old_stored_file' => $oldStoredFile,
                 ];
                 $encoded = json_encode($manifest, JSON_THROW_ON_ERROR);
@@ -798,8 +955,8 @@ try {
             $trashId = (string)($data['trash_id'] ?? '');
             [$trashDirectory, $manifestPath, $manifest] = load_merge_manifest($trashId);
             if ((string)($manifest['old_id'] ?? '') !== (string)$id) bad('Recovery manifest does not match this record.', 409);
-            $recordQuery = $pdo->prepare('SELECT metadata FROM records WHERE id=?');
-            $recordQuery->execute([$id]);
+            $recordQuery = $pdo->prepare('SELECT metadata FROM records WHERE record_id=?');
+            $recordQuery->execute([(int)$id]);
             $recordMetadata = json_col($recordQuery->fetchColumn(), []);
             if (!is_array($recordMetadata) || (string)($recordMetadata['merge']['trash_id'] ?? '') !== $trashId) bad('The record has not been staged for this merge.', 409);
             $name = $manifest['old_stored_file'] ?? null;
@@ -828,29 +985,30 @@ try {
         }
         if ($_SERVER['REQUEST_METHOD'] === 'POST' && $action === 'restore-merge') {
             ensure_admin_for_mutation();
-            if ($id === null || $id === '') bad('Existing record id is required.');
+            $existingId = filter_var($id, FILTER_VALIDATE_INT);
+            if (!$existingId || $existingId < 1) bad('Existing record id is required.');
             $data = json_input();
             $trashId = (string)($data['trash_id'] ?? '');
             [$trashDirectory, $manifestPath, $manifest] = load_merge_manifest($trashId);
-            if ((string)($manifest['old_id'] ?? '') !== (string)$id) bad('Recovery manifest does not match this record.', 409);
+            if ((string)($manifest['old_id'] ?? '') !== (string)$existingId) bad('Recovery manifest does not match this record.', 409);
             $createdAt = strtotime((string)($manifest['created_at'] ?? ''));
             if ($createdAt === false || time() - $createdAt > 30 * 24 * 60 * 60) bad('Merge recovery has expired.', 410);
             $oldRow = $manifest['old_row'] ?? null;
             $officeRow = $manifest['office_row'] ?? null;
-            if (!is_array($oldRow) || !is_array($officeRow) || (string)($officeRow['id'] ?? '') !== (string)($manifest['office_id'] ?? '')) bad('Recovery manifest is incomplete.', 500);
-            $currentQuery = $pdo->prepare('SELECT metadata FROM records WHERE id=?');
-            $currentQuery->execute([$id]);
+            if (!is_array($oldRow) || !is_array($officeRow) || (string)($officeRow['record_id'] ?? '') !== (string)($manifest['office_id'] ?? '')) bad('Recovery manifest is incomplete.', 500);
+            $currentQuery = $pdo->prepare('SELECT metadata FROM records WHERE record_id=?');
+            $currentQuery->execute([$existingId]);
             $currentRow = $currentQuery->fetch(PDO::FETCH_ASSOC);
             if (!$currentRow) bad('Merged record not found.', 404);
             $currentMetadata = json_col($currentRow['metadata'] ?? null, []);
             if (!is_array($currentMetadata) || (string)($currentMetadata['merge']['trash_id'] ?? '') !== $trashId) bad('This merge was already restored or replaced.', 409);
-            $officeCheck = $pdo->prepare('SELECT id FROM records WHERE id=?');
+            $officeCheck = $pdo->prepare('SELECT record_id FROM records WHERE record_id=?');
             $officeCheck->execute([$manifest['office_id']]);
             if ($officeCheck->fetchColumn()) bad('The office upload id is already in use.', 409);
 
             $pdo->beginTransaction();
             try {
-                $restoreFields = ['fileName','fileType','fileSize','docType','rawText','extractedData','adminNotes','metadata'];
+                $restoreFields = array_values(array_diff($pdo->query('SHOW COLUMNS FROM records')->fetchAll(PDO::FETCH_COLUMN), ['record_id']));
                 $sets = [];
                 $values = [];
                 foreach ($restoreFields as $field) {
@@ -858,12 +1016,11 @@ try {
                     $sets[] = '`' . $field . '`=?';
                     $values[] = $oldRow[$field];
                 }
-                $sets[] = 'updatedAt=NOW()';
-                $values[] = $id;
-                $pdo->prepare('UPDATE records SET ' . implode(',', $sets) . ' WHERE id=?')->execute($values);
+                $values[] = $existingId;
+                $pdo->prepare('UPDATE records SET ' . implode(',', $sets) . ' WHERE record_id=?')->execute($values);
                 insert_row_from_snapshot($pdo, 'records', $officeRow);
                 foreach (($manifest['office_saved_graphs'] ?? []) as $graphRow) {
-                    if (is_array($graphRow)) insert_row_from_snapshot($pdo, 'saved_graphs', $graphRow);
+                    if (is_array($graphRow)) insert_graph_from_snapshot($pdo, $graphRow);
                 }
                 $pdo->commit();
             } catch (Throwable $exception) {
@@ -889,9 +1046,7 @@ try {
                 }
             }
             if (!@unlink($manifestPath)) error_log('IRIS merge restore could not delete manifest ' . $trashId);
-            $resultQuery = $pdo->prepare('SELECT * FROM records WHERE id=?');
-            $resultQuery->execute([$id]);
-            $restoredRecord = $resultQuery->fetch(PDO::FETCH_ASSOC);
+            $restoredRecord = load_record($pdo, $existingId);
             echo json_encode(['success' => true, 'record' => output_record($restoredRecord), 'file_restored' => $fileRestored]);
             exit;
         }
@@ -901,11 +1056,11 @@ try {
             $ids=array_values(array_unique(array_filter($data['ids']??[], fn($x)=>is_scalar($x)&&$x!=='')));
             if (!$ids) bad('ids must be a non-empty array');
             $ph=implode(',',array_fill(0,count($ids),'?'));
-            $q=$pdo->prepare("SELECT id FROM records WHERE id IN ($ph)"); $q->execute($ids);
+            $q=$pdo->prepare("SELECT record_id AS id FROM records WHERE record_id IN ($ph)"); $q->execute(array_map('intval', $ids));
             $existing=$q->fetchAll(PDO::FETCH_COLUMN);
             if ($existing) {
                 $ph2=implode(',',array_fill(0,count($existing),'?'));
-                $pdo->prepare("UPDATE records SET status='Approved', updatedAt=NOW() WHERE id IN ($ph2)")->execute($existing);
+                $pdo->prepare("UPDATE records SET status='Approved', updated_at=NOW() WHERE record_id IN ($ph2)")->execute($existing);
             }
             $set=array_fill_keys($existing,true); $results=[];
             foreach($ids as $x) $results[]=['id'=>$x,'success'=>isset($set[$x]),'error'=>isset($set[$x])?null:'Record not found'];
@@ -920,13 +1075,13 @@ try {
             $placeholders = implode(',', array_fill(0, count($ids), '?'));
             $pdo->beginTransaction();
             try {
-                $query = $pdo->prepare("SELECT id FROM records WHERE id IN ($placeholders) FOR UPDATE");
-                $query->execute($ids);
+                $query = $pdo->prepare("SELECT record_id AS id FROM records WHERE record_id IN ($placeholders) FOR UPDATE");
+                $query->execute(array_map('intval', $ids));
                 $existing = $query->fetchAll(PDO::FETCH_COLUMN);
                 $graphCount = 0;
                 if ($existing) {
                     $recordPlaceholders = implode(',', array_fill(0, count($existing), '?'));
-                    $pdo->prepare('UPDATE records SET status=?, updatedAt=NOW() WHERE id IN ('.$recordPlaceholders.')')->execute(array_merge([$published ? 'Approved' : 'Pending Review'], $existing));
+                    $pdo->prepare('UPDATE records SET status=?, updated_at=NOW() WHERE record_id IN ('.$recordPlaceholders.')')->execute(array_merge([$published ? 'Approved' : 'Pending Review'], $existing));
                     $graphs = $pdo->prepare('UPDATE saved_graphs SET is_published=? WHERE record_id IN ('.$recordPlaceholders.') AND is_published<>?');
                     $graphs->execute(array_merge([$published ? 1 : 0], $existing, [$published ? 1 : 0]));
                     $graphCount = $graphs->rowCount();
@@ -947,22 +1102,22 @@ try {
             if ($id === null) bad('Record id is required');
             $pdo->beginTransaction();
             try {
-                $q = $pdo->prepare('SELECT id FROM records WHERE id=? FOR UPDATE');
-                $q->execute([$id]);
+                $q = $pdo->prepare('SELECT record_id FROM records WHERE record_id=? FOR UPDATE');
+                $q->execute([(int)$id]);
                 if (!$q->fetch()) {
                     $pdo->rollBack();
                     bad('Record not found', 404);
                 }
-                $pdo->prepare("UPDATE records SET status='Pending Review', updatedAt=NOW() WHERE id=?")->execute([$id]);
+                $pdo->prepare("UPDATE records SET status='Pending Review', updated_at=NOW() WHERE record_id=?")->execute([(int)$id]);
                 $graphs = $pdo->prepare('UPDATE saved_graphs SET is_published=0 WHERE record_id=? AND is_published=1');
-                $graphs->execute([$id]);
+                $graphs->execute([(int)$id]);
                 $pdo->commit();
             } catch (Throwable $e) {
                 if ($pdo->inTransaction()) $pdo->rollBack();
                 throw $e;
             }
-            $q = $pdo->prepare('SELECT * FROM records WHERE id=?');
-            $q->execute([$id]);
+            $q = $pdo->prepare('SELECT record_id AS id, file_name AS fileName, file_type AS fileType, file_size AS fileSize, scanned_at AS scannedAt, status, doc_type AS docType, raw_text AS rawText, extracted_data AS extractedData, graph_drafts AS graphDrafts, admin_notes AS adminNotes, metadata, updated_at AS updatedAt FROM records WHERE record_id=?');
+            $q->execute([(int)$id]);
             echo json_encode(['success'=>true,'record'=>output_record($q->fetch(PDO::FETCH_ASSOC)),'unpublished_graph_count'=>$graphs->rowCount()]);
             exit;
         }
@@ -974,14 +1129,14 @@ try {
             $pdo->beginTransaction();
             try {
                 $ph=implode(',',array_fill(0,count($ids),'?'));
-                $q=$pdo->prepare("SELECT * FROM records WHERE id IN ($ph) FOR UPDATE");
-                $q->execute($ids);
+                $q=$pdo->prepare("SELECT record_id AS id, metadata FROM records WHERE record_id IN ($ph) FOR UPDATE");
+                $q->execute(array_map('intval', $ids));
                 $existingRows=$q->fetchAll(PDO::FETCH_ASSOC);
                 $existing=array_column($existingRows,'id');
                 if ($existing) {
                     $ph2=implode(',',array_fill(0,count($existing),'?'));
                     $pdo->prepare("DELETE FROM saved_graphs WHERE record_id IN ($ph2)")->execute($existing);
-                    $q=$pdo->prepare("DELETE FROM records WHERE id IN ($ph2)");$q->execute($existing);
+                    $q=$pdo->prepare("DELETE FROM records WHERE record_id IN ($ph2)");$q->execute($existing);
                 }
                 $pdo->commit();
             } catch (Throwable $exception) {
@@ -996,30 +1151,48 @@ try {
         $data=json_input();
         if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             ensure_admin_for_mutation();
-            $id2=$data['id']??('rec_'.date('YmdHis').'_'.bin2hex(random_bytes(3)));
             if (!ALLOW_SUPER_ADMIN_UPLOAD && ($data['fileType'] ?? $data['type'] ?? '') !== 'manual') bad('File uploads are disabled for Super Admin.', 403);
-            $stmt=$pdo->prepare('INSERT INTO records (id,fileName,fileType,fileSize,scannedAt,status,docType,rawText,extractedData,graphDrafts,adminNotes,metadata,updatedAt) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)');
-            $stmt->execute([$id2,$data['fileName']??$data['name']??'Untitled',$data['fileType']??$data['type']??'unknown',(int)($data['fileSize']??$data['size']??0),date('Y-m-d H:i:s',strtotime($data['scannedAt']??'now')),$data['status']??'Pending Review',$data['docType']??'General Institutional Data',$data['rawText']??'',json_encode($data['extractedData']??$data['sheetsData']??[]),json_encode($data['graphDrafts']??[]),$data['adminNotes']??'',json_encode($data['metadata']??[]),null]);
-            $q=$pdo->prepare('SELECT * FROM records WHERE id=?');$q->execute([$id2]);echo json_encode(output_record($q->fetch(PDO::FETCH_ASSOC)));exit;
+            $account = $pdo->prepare('SELECT office_id FROM users WHERE user_id = ?');
+            $account->execute([(int)$_SESSION['user_id']]);
+            $officeId = $account->fetchColumn();
+            $scannedAt = strtotime((string)($data['scannedAt'] ?? 'now'));
+            $stmt = $pdo->prepare('INSERT INTO records (file_name, file_type, file_size, scanned_at, status, uploaded_by, office_id, uploaded_at, template_id, import_profile_id, doc_type, raw_text, extracted_data, graph_drafts, admin_notes, metadata, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, NOW(), ?, ?, ?, ?, ?, ?, ?, ?, NOW())');
+            $stmt->execute([
+                $data['fileName'] ?? $data['name'] ?? 'Untitled', $data['fileType'] ?? $data['type'] ?? 'unknown',
+                max(0, (int)($data['fileSize'] ?? $data['size'] ?? 0)), date('Y-m-d H:i:s', $scannedAt === false ? time() : $scannedAt),
+                $data['status'] ?? 'Pending Review', (int)$_SESSION['user_id'], $officeId ?: null,
+                filter_var($data['template_id'] ?? null, FILTER_VALIDATE_INT) ?: null,
+                filter_var($data['import_profile_id'] ?? null, FILTER_VALIDATE_INT) ?: null,
+                $data['docType'] ?? 'General Institutional Data', $data['rawText'] ?? '',
+                json_encode($data['extractedData'] ?? $data['sheetsData'] ?? []), json_encode($data['graphDrafts'] ?? []),
+                $data['adminNotes'] ?? '', json_encode($data['metadata'] ?? [])
+            ]);
+            $id2 = (int)$pdo->lastInsertId();
+            echo json_encode(output_record(load_record($pdo, $id2) ?? []));exit;
         }
         if ($_SERVER['REQUEST_METHOD'] === 'PUT') {
             ensure_admin_for_mutation();
-            if ($id===null) bad('Record id is required'); $data=json_input(); $allowed=['fileName','fileType','fileSize','status','docType','rawText','adminNotes'];$sets=[];$vals=[];
+            $recordId = filter_var($id, FILTER_VALIDATE_INT);
+            if (!$recordId || $recordId < 1) bad('Record id is required'); $data=json_input();
+            $fieldMap = ['fileName' => 'file_name', 'fileType' => 'file_type', 'fileSize' => 'file_size', 'status' => 'status', 'docType' => 'doc_type', 'rawText' => 'raw_text', 'adminNotes' => 'admin_notes'];
+            $sets=[];$vals=[];
             if (array_key_exists('status',$data) && !in_array($data['status'], ['Pending Review','Approved','Needs Revision'], true)) bad('Invalid record status');
-            foreach($allowed as $f) if(array_key_exists($f,$data)){ $sets[]="$f=?";$vals[]=$data[$f]; }
-            foreach(['extractedData','graphDrafts','metadata'] as $f) if(array_key_exists($f,$data)){ $col=$f;$sets[]="$col=?";$vals[]=json_encode($data[$f]); }
-            if(array_key_exists('scannedAt',$data)){ $sets[]='scannedAt=?';$vals[]=date('Y-m-d H:i:s',strtotime($data['scannedAt'])); }
-            if(!$sets) bad('No fields to update'); $sets[]='updatedAt=NOW()';$vals[]=$id;$stmt=$pdo->prepare('UPDATE records SET '.implode(',',$sets).' WHERE id=?');$stmt->execute($vals);if(!$stmt->rowCount()){$q=$pdo->prepare('SELECT id FROM records WHERE id=?');$q->execute([$id]);if(!$q->fetch())bad('Record not found',404);}
-            $q=$pdo->prepare('SELECT * FROM records WHERE id=?');$q->execute([$id]);echo json_encode(output_record($q->fetch(PDO::FETCH_ASSOC)));exit;
+            foreach($fieldMap as $field => $column) if(array_key_exists($field,$data)){ $sets[]="`$column`=?";$vals[]=$field === 'fileSize' ? max(0, (int)$data[$field]) : $data[$field]; }
+            foreach(['extractedData' => 'extracted_data', 'graphDrafts' => 'graph_drafts', 'metadata' => 'metadata'] as $field => $column) if(array_key_exists($field,$data)){ $sets[]="`$column`=?";$vals[]=json_encode($data[$field]); }
+            if(array_key_exists('scannedAt',$data)){ $timestamp = strtotime((string)$data['scannedAt']); if ($timestamp === false) bad('Invalid scannedAt value.'); $sets[]='scanned_at=?';$vals[]=date('Y-m-d H:i:s',$timestamp); }
+            if(!$sets) bad('No fields to update'); $sets[]='updated_at=NOW()';$vals[]=$recordId;$stmt=$pdo->prepare('UPDATE records SET '.implode(',',$sets).' WHERE record_id=?');$stmt->execute($vals);if(!$stmt->rowCount() && !load_record($pdo, $recordId))bad('Record not found',404);
+            echo json_encode(output_record(load_record($pdo, $recordId) ?? []));exit;
         }
         if ($_SERVER['REQUEST_METHOD'] === 'DELETE') {
             ensure_admin_for_mutation();
-            if($id===null)bad('Record id is required');
+            $recordId = filter_var($id, FILTER_VALIDATE_INT);
+            if(!$recordId || $recordId < 1)bad('Record id is required');
             $pdo->beginTransaction();
             try {
-                $q=$pdo->prepare('SELECT * FROM records WHERE id=? FOR UPDATE');$q->execute([$id]);$r=$q->fetch(PDO::FETCH_ASSOC);if(!$r)bad('Record not found',404);
-                $pdo->prepare('DELETE FROM saved_graphs WHERE record_id=?')->execute([$id]);
-                $q=$pdo->prepare('DELETE FROM records WHERE id=?');$q->execute([$id]);
+                $r = load_record($pdo, $recordId, true);if(!$r)bad('Record not found',404);
+                $pdo->prepare('DELETE FROM saved_graphs WHERE record_id=?')->execute([$recordId]);
+                $q=$pdo->prepare('DELETE FROM records WHERE record_id=?');$q->execute([$recordId]);
                 if($q->rowCount() < 1) bad('Record not found',404);
                 $pdo->commit();
             } catch (Throwable $exception) {
@@ -1033,20 +1206,28 @@ try {
 
     if ($resource === 'graphs') {
         if ($_SERVER['REQUEST_METHOD']==='GET') {
-            if($id!==null){$q=$pdo->prepare('SELECT saved_graphs.* FROM saved_graphs WHERE saved_graphs.id=?');$q->execute([$id]);$g=$q->fetch(PDO::FETCH_ASSOC);if(!$g)bad('Graph not found',404);echo json_encode(output_graph($g));exit;}
-            if($recordId!==null){$q=$pdo->prepare('SELECT saved_graphs.*, records.id AS source_file_id, records.fileName AS source_file_name, records.fileType AS source_file_type FROM saved_graphs LEFT JOIN records ON records.id=saved_graphs.record_id WHERE saved_graphs.record_id=? ORDER BY saved_graphs.created_at DESC');$q->execute([$recordId]);echo json_encode(array_map('output_graph',$q->fetchAll(PDO::FETCH_ASSOC)));exit;}
-            $rows=$pdo->query('SELECT saved_graphs.*, records.id AS source_file_id, records.fileName AS source_file_name, records.fileType AS source_file_type FROM saved_graphs LEFT JOIN records ON records.id=saved_graphs.record_id ORDER BY saved_graphs.created_at DESC')->fetchAll(PDO::FETCH_ASSOC);echo json_encode(array_map('output_graph',$rows));exit;
+            if($id!==null){$g=load_saved_graph($pdo,(int)$id);if(!$g)bad('Graph not found',404);echo json_encode($g);exit;}
+            $query = $recordId !== null
+                ? $pdo->prepare('SELECT graph_id FROM saved_graphs WHERE record_id = ? ORDER BY created_at DESC')
+                : $pdo->query('SELECT graph_id FROM saved_graphs ORDER BY created_at DESC');
+            if ($recordId !== null) $query->execute([(int)$recordId]);
+            $rows = [];
+            foreach ($query->fetchAll(PDO::FETCH_COLUMN) as $graphId) {
+                $graph = load_saved_graph($pdo, (int)$graphId);
+                if ($graph) $rows[] = $graph;
+            }
+            echo json_encode($rows);exit;
         }
         if ($_SERVER['REQUEST_METHOD']==='POST' && $action==='bulk-delete'){
             ensure_admin_for_mutation();
-            $d=json_input();$ids=array_values(array_unique(array_filter($d['ids']??[])));if(!$ids)bad('ids must be a non-empty array');$ph=implode(',',array_fill(0,count($ids),'?'));$q=$pdo->prepare("SELECT id FROM saved_graphs WHERE id IN ($ph)");$q->execute($ids);$existing=$q->fetchAll(PDO::FETCH_COLUMN);if($existing){$ph2=implode(',',array_fill(0,count($existing),'?'));$pdo->prepare("DELETE FROM saved_graphs WHERE id IN ($ph2)")->execute($existing);} $set=array_fill_keys($existing,true);$results=[];foreach($ids as $x)$results[]=['id'=>$x,'success'=>isset($set[$x]),'error'=>isset($set[$x])?null:'Graph not found'];echo json_encode(['results'=>$results,'successCount'=>count($existing),'failureCount'=>count($ids)-count($existing)]);exit;}
+            $d=json_input();$ids=array_values(array_unique(array_filter(array_map('intval', $d['ids']??[]), static fn(int $value): bool => $value > 0)));if(!$ids)bad('ids must be a non-empty array');$ph=implode(',',array_fill(0,count($ids),'?'));$q=$pdo->prepare("SELECT graph_id FROM saved_graphs WHERE graph_id IN ($ph)");$q->execute($ids);$existing=$q->fetchAll(PDO::FETCH_COLUMN);if($existing){$ph2=implode(',',array_fill(0,count($existing),'?'));$pdo->prepare("DELETE FROM saved_graphs WHERE graph_id IN ($ph2)")->execute($existing);} $set=array_fill_keys(array_map('intval', $existing),true);$results=[];foreach($ids as $x)$results[]=['id'=>$x,'success'=>isset($set[$x]),'error'=>isset($set[$x])?null:'Graph not found'];echo json_encode(['results'=>$results,'successCount'=>count($existing),'failureCount'=>count($ids)-count($existing)]);exit;}
         if ($_SERVER['REQUEST_METHOD']==='POST' && ($action==='publish' || $action==='unpublish' || $action==='toggle-publish')) {
             ensure_admin_for_mutation();
             $d=json_input();
             $published = isset($d['published']) ? (bool)$d['published'] : ($action === 'publish');
             if($id===null)bad('Graph id is required');
-            $q=$pdo->prepare('SELECT id FROM saved_graphs WHERE id=?');$q->execute([$id]);if(!$q->fetch())bad('Graph not found',404);
-            $pdo->prepare('UPDATE saved_graphs SET is_published = ? WHERE id = ?')->execute([$published ? 1 : 0,$id]);
+            $q=$pdo->prepare('SELECT graph_id FROM saved_graphs WHERE graph_id=?');$q->execute([(int)$id]);if(!$q->fetch())bad('Graph not found',404);
+            $pdo->prepare('UPDATE saved_graphs SET is_published = ? WHERE graph_id = ?')->execute([$published ? 1 : 0,(int)$id]);
             echo json_encode(['success'=>true,'id'=>$id,'is_published'=>$published,'message'=>$published ? 'Graph published to the Observatory.' : 'Graph removed from the Observatory.']);exit;
         }
         if ($_SERVER['REQUEST_METHOD'] === 'POST' && $action === 'export') {
@@ -1057,9 +1238,13 @@ try {
             if (!$ids) bad('snapshot_ids must contain at least one graph id');
             if (!in_array($mode, ['database', 'script'], true)) bad('mode must be database or script');
             $placeholders = implode(',', array_fill(0, count($ids), '?'));
-            $query = $pdo->prepare("SELECT saved_graphs.*, records.fileName AS source_file_name FROM saved_graphs LEFT JOIN records ON records.id=saved_graphs.record_id WHERE saved_graphs.id IN ($placeholders) ORDER BY saved_graphs.created_at DESC");
-            $query->execute($ids);
-            $graphs = $query->fetchAll(PDO::FETCH_ASSOC);
+            $query = $pdo->prepare("SELECT graph_id FROM saved_graphs WHERE graph_id IN ($placeholders) ORDER BY created_at DESC");
+            $query->execute(array_map('intval', $ids));
+            $graphs = [];
+            foreach ($query->fetchAll(PDO::FETCH_COLUMN) as $graphId) {
+                $graph = load_saved_graph($pdo, (int)$graphId);
+                if ($graph) $graphs[] = $graph;
+            }
             if (!$graphs) bad('No saved graphs found', 404);
             if ($mode === 'script') {
                 $out = '';
@@ -1090,14 +1275,35 @@ try {
                 exit;
             }
             $new = [];
-            foreach ($graphs as $graph) {
-                $newId = 'export_'.date('YmdHis').'_'.bin2hex(random_bytes(4));
-                $colors = valid_graph_colors(json_col($graph['colors'] ?? null, null));
-                $stmt = $pdo->prepare('INSERT INTO saved_graphs (id,record_id,title,chart_type,orientation,value_axis_reversed,value_axis_min,value_axis_max,rank_semantic,rank_value_min,rank_value_max,labels,values_data,colors) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)');
-                $stmt->execute([$newId,$graph['record_id'],$graph['title'],$graph['chart_type'],$graph['orientation'],(int)$graph['value_axis_reversed'],$graph['value_axis_min'],$graph['value_axis_max'],(int)$graph['rank_semantic'],$graph['rank_value_min'],$graph['rank_value_max'],$graph['labels'],$graph['values_data'],$colors === null ? null : json_encode($colors)]);
-                $new[] = $newId;
+            $pdo->beginTransaction();
+            try {
+                foreach ($graphs as $graph) {
+                    $stmt = $pdo->prepare('INSERT INTO saved_graphs (record_id, title, chart_type, orientation, value_axis_reversed, value_axis_min, value_axis_max, rank_semantic, rank_value_min, rank_value_max, is_published, chart_options) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?)');
+                    $stmt->execute([(int)$graph['record_id'], $graph['title'], $graph['chart_type'], $graph['orientation'], (int)$graph['value_axis_reversed'], $graph['value_axis_min'], $graph['value_axis_max'], !empty($graph['rank_semantic']) ? 'rank' : null, $graph['rank_value_min'], $graph['rank_value_max'], json_encode($graph['chart_data'] ?? [])]);
+                    $newId = (int)$pdo->lastInsertId();
+                    save_graph_relations($pdo, $newId, $graph);
+                    $new[] = $newId;
+                }
+                $pdo->commit();
+            } catch (Throwable $exception) {
+                if ($pdo->inTransaction()) $pdo->rollBack();
+                throw $exception;
             }
             echo json_encode(['mode' => 'database', 'count' => count($new), 'exported_ids' => $new]);
+            exit;
+        }
+        if ($_SERVER['REQUEST_METHOD'] === 'PATCH') {
+            ensure_admin_for_mutation();
+            if ($id === null || $id === '') bad('Graph id is required.');
+            $data = json_input();
+            if (!array_key_exists('scope', $data) || !is_string($data['scope'])) bad('Scope must be text.');
+            $scope = trim($data['scope']);
+            $scopeLength = function_exists('mb_strlen') ? mb_strlen($scope, 'UTF-8') : strlen($scope);
+            if ($scopeLength > 150) bad('Scope must not exceed 150 characters.');
+            $pdo->prepare('UPDATE saved_graphs SET scope = ?, updated_at = NOW() WHERE graph_id = ?')->execute([$scope !== '' ? $scope : null, (int)$id]);
+            $saved = load_saved_graph($pdo, (int)$id);
+            if (!$saved) bad('Graph not found', 404);
+            echo json_encode($saved);
             exit;
         }
         if ($_SERVER['REQUEST_METHOD'] === 'PUT') {
@@ -1105,8 +1311,8 @@ try {
             if (($_SESSION['role'] ?? '') !== 'super_admin') bad('Forbidden', 403);
             if ($id === null || $id === '') bad('Graph id is required.');
             $data = json_input();
-            $existingQuery = $pdo->prepare('SELECT id, record_id FROM saved_graphs WHERE id = ?');
-            $existingQuery->execute([$id]);
+            $existingQuery = $pdo->prepare('SELECT graph_id AS id, record_id FROM saved_graphs WHERE graph_id = ?');
+            $existingQuery->execute([(int)$id]);
             $existing = $existingQuery->fetch(PDO::FETCH_ASSOC);
             if (!$existing) bad('Graph not found', 404);
             $recordId = $data['record_id'] ?? $data['recordId'] ?? null;
@@ -1124,10 +1330,7 @@ try {
                 'rank_semantic = ?',
                 'rank_value_min = ?',
                 'rank_value_max = ?',
-                'labels = ?',
-                'values_data = ?',
-                'chart_data = ?',
-                'colors = ?'
+                'chart_options = ?'
             ];
             $values = [
                 $data['title'] ?? 'Saved Chart',
@@ -1136,27 +1339,28 @@ try {
                 !empty($data['valueAxisReversed']) ? 1 : 0,
                 is_numeric($data['valueAxisMin'] ?? null) ? $data['valueAxisMin'] : null,
                 is_numeric($data['valueAxisMax'] ?? null) ? $data['valueAxisMax'] : null,
-                !empty($data['rankSemantic']) ? 1 : 0,
+                !empty($data['rankSemantic']) ? 'rank' : null,
                 is_numeric($data['rankValueMin'] ?? null) ? $data['rankValueMin'] : null,
                 is_numeric($data['rankValueMax'] ?? null) ? $data['rankValueMax'] : null,
-                json_encode($data['labels'] ?? []),
-                json_encode($data['values_data'] ?? $data['valuesData'] ?? $data['data'] ?? []),
-                json_encode($chartData ?? []),
-                $colors === null ? null : json_encode($colors)
+                json_encode($chartData ?? [])
             ];
             if (array_key_exists('is_published', $data)) {
                 $sets[] = 'is_published = ?';
                 $values[] = (int)(bool)$data['is_published'];
             }
-            $updatedAtCheck = $pdo->prepare("SELECT COUNT(*) FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'saved_graphs' AND COLUMN_NAME = 'updated_at'");
-            $updatedAtCheck->execute();
-            if ((int)$updatedAtCheck->fetchColumn() > 0) $sets[] = 'updated_at = NOW()';
-            $values[] = $id;
-            $update = $pdo->prepare('UPDATE saved_graphs SET ' . implode(', ', $sets) . ' WHERE id = ?');
-            $update->execute($values);
-            $query = $pdo->prepare('SELECT * FROM saved_graphs WHERE id = ?');
-            $query->execute([$id]);
-            $saved = $query->fetch(PDO::FETCH_ASSOC);
+            $sets[] = 'updated_at = NOW()';
+            $values[] = (int)$id;
+            $pdo->beginTransaction();
+            try {
+                $update = $pdo->prepare('UPDATE saved_graphs SET ' . implode(', ', $sets) . ' WHERE graph_id = ?');
+                $update->execute($values);
+                save_graph_relations($pdo, (int)$id, $data);
+                $pdo->commit();
+            } catch (Throwable $exception) {
+                if ($pdo->inTransaction()) $pdo->rollBack();
+                throw $exception;
+            }
+            $saved = load_saved_graph($pdo, (int)$id);
             if (!$saved) bad('Graph not found', 404);
             echo json_encode(output_graph($saved));
             exit;
@@ -1165,22 +1369,30 @@ try {
             ensure_admin_for_mutation();
             $d=json_input();
             $colors = require_graph_colors($d);
-            $gid=$d['id']??('graph_'.date('YmdHis').'_'.bin2hex(random_bytes(4)));
             $rid=$d['record_id']??$d['recordId']??null;
             if(!$rid)bad('record_id is required');
-            $q=$pdo->prepare('SELECT id FROM records WHERE id=?');
-            $q->execute([$rid]);
+            $rid = filter_var($rid, FILTER_VALIDATE_INT);
+            if (!$rid || $rid < 1) bad('record_id must be a valid record id.');
+            $q=$pdo->prepare('SELECT record_id FROM records WHERE record_id=?');
+            $q->execute([(int)$rid]);
             if(!$q->fetch())bad('Record not found',404);
             $published = isset($d['is_published']) ? (int)(bool)$d['is_published'] : 0;
             $chartData = $d['chart_data'] ?? $d['chartData'] ?? null;
-            $stmt=$pdo->prepare('INSERT INTO saved_graphs (id,record_id,title,chart_type,orientation,value_axis_reversed,value_axis_min,value_axis_max,rank_semantic,rank_value_min,rank_value_max,labels,values_data,chart_data,colors,is_published) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)');
-            $stmt->execute([$gid,$rid,$d['title']??'Saved Chart',normalize_graph_type($d['chart_type']??$d['chartType']??'bar'),$d['orientation']??'vertical',!empty($d['valueAxisReversed'])?1:0,is_numeric($d['valueAxisMin']??null)?$d['valueAxisMin']:null,is_numeric($d['valueAxisMax']??null)?$d['valueAxisMax']:null,!empty($d['rankSemantic'])?1:0,is_numeric($d['rankValueMin']??null)?$d['rankValueMin']:null,is_numeric($d['rankValueMax']??null)?$d['rankValueMax']:null,json_encode($d['labels']??[]),json_encode($d['values_data']??$d['valuesData']??$d['data']??[]),json_encode($chartData ?? []),$colors === null ? null : json_encode($colors),$published]);
-            $q=$pdo->prepare('SELECT * FROM saved_graphs WHERE id=?');
-            $q->execute([$gid]);
-            echo json_encode(output_graph($q->fetch(PDO::FETCH_ASSOC)));
+            $pdo->beginTransaction();
+            try {
+                $stmt=$pdo->prepare('INSERT INTO saved_graphs (record_id, title, chart_type, orientation, value_axis_reversed, value_axis_min, value_axis_max, rank_semantic, rank_value_min, rank_value_max, chart_options, is_published) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)');
+                $stmt->execute([(int)$rid,$d['title']??'Saved Chart',normalize_graph_type($d['chart_type']??$d['chartType']??'bar'),$d['orientation']??'vertical',!empty($d['valueAxisReversed'])?1:0,is_numeric($d['valueAxisMin']??null)?$d['valueAxisMin']:null,is_numeric($d['valueAxisMax']??null)?$d['valueAxisMax']:null,!empty($d['rankSemantic'])?'rank':null,is_numeric($d['rankValueMin']??null)?$d['rankValueMin']:null,is_numeric($d['rankValueMax']??null)?$d['rankValueMax']:null,json_encode($chartData ?? []),$published]);
+                $gid=(int)$pdo->lastInsertId();
+                save_graph_relations($pdo, $gid, $d);
+                $pdo->commit();
+            } catch (Throwable $exception) {
+                if ($pdo->inTransaction()) $pdo->rollBack();
+                throw $exception;
+            }
+            echo json_encode(load_saved_graph($pdo, $gid));
             exit;
         }
-        if ($_SERVER['REQUEST_METHOD']==='DELETE'){ ensure_admin_for_mutation(); if($id===null)bad('Graph id is required');$q=$pdo->prepare('SELECT * FROM saved_graphs WHERE id=?');$q->execute([$id]);$g=$q->fetch(PDO::FETCH_ASSOC);if(!$g)bad('Graph not found',404);$pdo->prepare('DELETE FROM saved_graphs WHERE id=?')->execute([$id]);echo json_encode(['message'=>'Graph deleted','graph'=>$g]);exit;}
+        if ($_SERVER['REQUEST_METHOD']==='DELETE'){ ensure_admin_for_mutation(); if($id===null)bad('Graph id is required');$g=load_saved_graph($pdo,(int)$id);if(!$g)bad('Graph not found',404);$pdo->prepare('DELETE FROM saved_graphs WHERE graph_id=?')->execute([(int)$id]);echo json_encode(['message'=>'Graph deleted','graph'=>$g]);exit;}
     }
     bad('Unknown API resource',404);
 } catch(Throwable $e) { error_log($e->getMessage()); bad('Server error: '.$e->getMessage(),500); }

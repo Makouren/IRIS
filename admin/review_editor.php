@@ -51,6 +51,9 @@ require_once __DIR__.'/includes/header.php';
                             <button id="bulkPublishSummaryCards" type="button" class="btn-save-modal" style="display:none;">
                                 <i class="fa-solid fa-circle-check" aria-hidden="true"></i> Publish Selected (<span id="bulkPublishSummaryCardsCount">0</span>)
                             </button>
+                            <button id="publishAllSummaryCards" type="button" class="btn-save-modal" style="display:none;">
+                                <i class="fa-solid fa-circle-check" aria-hidden="true"></i> Publish All (<span id="publishAllSummaryCardsCount">0</span>)
+                            </button>
                             <button id="bulkUnpublishSummaryCards" type="button" class="export-cancel-button" style="display:none;">
                                 <i class="fa-solid fa-circle-minus" aria-hidden="true"></i> Unpublish Selected (<span id="bulkUnpublishSummaryCardsCount">0</span>)
                             </button>
@@ -170,7 +173,7 @@ require_once __DIR__.'/includes/header.php';
                             <select id="rankingHistoryChartDefaultOrganization" class="form-input" style="display:inline-block; width:auto; min-width:150px; margin-left:0.25rem;"><option value="">All organizations</option></select>
                         </label>
                         <label class="form-label" style="margin:0; display:inline-flex; align-items:center; gap:0.25rem;">Default list
-                            <select id="rankingHistoryChartDefaultList" class="form-input" style="display:inline-block; width:auto; min-width:150px; margin-left:0.25rem;" disabled><option value="">All lists</option></select>
+                            <select id="rankingHistoryChartDefaultList" class="form-input" style="display:inline-block; width:auto; min-width:150px; margin-left:0.25rem;"><option value="">All lists for selected organization</option></select>
                         </label>
                         <button id="saveRankingHistoryChartDefaults" type="button" class="export-cancel-button">Save chart defaults</button>
                         <span id="rankingHistoryChartDefaultsStatus" class="text-xs" role="status" aria-live="polite"></span>
@@ -646,6 +649,35 @@ require_once __DIR__.'/includes/header.php';
             function renderCards() {
                 const selectedCategory = categoryFilter.value || 'all';
                 const searchTerm = (cardSearch.value || '').trim().toLocaleLowerCase();
+                const draftCards = cards.filter(card => !card.is_published);
+                const publishAllButton = document.getElementById('publishAllSummaryCards');
+                const publishAllCount = document.getElementById('publishAllSummaryCardsCount');
+                if (publishAllButton) publishAllButton.style.display = draftCards.length ? 'inline-block' : 'none';
+                if (publishAllCount) publishAllCount.textContent = String(draftCards.length);
+                if (publishAllButton) {
+                    publishAllButton.onclick = async () => {
+                        const draftCards = cards.filter(card => !card.is_published);
+                        if (!draftCards.length) return;
+                        if (!confirm(`Publish all ${draftCards.length} draft Summary Card(s)?`)) return;
+                        publishAllButton.disabled = true;
+                        const count = document.getElementById('publishAllSummaryCardsCount');
+                        if (count) count.textContent = '…';
+                        let hasError = false;
+                        for (const card of draftCards) {
+                            try {
+                                const response = await fetch(summaryCardApi + '&id=' + encodeURIComponent(card.id), {
+                                    method: 'PUT',
+                                    headers: mutationHeaders(),
+                                    body: JSON.stringify({ is_published: true })
+                                });
+                                if (!response.ok) hasError = true;
+                            } catch (error) { hasError = true; }
+                        }
+                        if (hasError) alert('Some summary cards could not be published.');
+                        await refreshSummaryCardEditor();
+                        publishAllButton.disabled = false;
+                    };
+                }
                 const visibleCards = cards.filter(card => {
                     const categoryMatches = selectedCategory === 'all'
                     || (selectedCategory === 'uncategorized'

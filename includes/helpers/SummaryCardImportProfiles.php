@@ -77,17 +77,7 @@ final class SummaryCardImportProfiles
                 WHERE template_id IS NULL AND profile_name = 'Unified Ranking History' AND destination = 'ranking_history'
             );
 
-            INSERT INTO summary_card_import_settings (id, active_profile_id)
-            SELECT 1, id FROM template_import_profiles
-            WHERE template_id IS NULL AND profile_name = 'Unified Summary Cards' AND destination = 'summary_cards'
-            ORDER BY id LIMIT 1
-            ON DUPLICATE KEY UPDATE active_profile_id = VALUES(active_profile_id);
-
-            INSERT INTO summary_card_import_settings (id, active_profile_id)
-            SELECT 2, id FROM template_import_profiles
-            WHERE template_id IS NULL AND profile_name = 'Unified Ranking History' AND destination = 'ranking_history'
-            ORDER BY id LIMIT 1
-            ON DUPLICATE KEY UPDATE active_profile_id = VALUES(active_profile_id);");
+            ");
     }
 
     private static function decode(array $profile): array
@@ -108,10 +98,10 @@ final class SummaryCardImportProfiles
 
     public static function get(PDO $pdo, int $profileId, bool $requireActiveTemplate = false, ?string $destination = 'summary_cards'): array
     {
-        $sql = 'SELECT profiles.*, templates.name AS template_name, templates.original_filename, templates.is_active AS template_is_active
+        $sql = 'SELECT profiles.*, profiles.import_profile_id AS id, templates.name AS template_name, templates.original_filename, templates.is_active AS template_is_active
             FROM template_import_profiles profiles
-            LEFT JOIN templates ON templates.id = profiles.template_id
-            WHERE profiles.id = ?';
+            LEFT JOIN templates ON templates.template_id = profiles.template_id
+            WHERE profiles.import_profile_id = ?';
         $parameters = [$profileId];
         if ($destination !== null) {
             $sql .= ' AND profiles.destination = ?';
@@ -127,22 +117,18 @@ final class SummaryCardImportProfiles
         return self::decode($profile);
     }
 
-    private static function settingsId(string $destination): int
-    {
-        return match ($destination) {
-            'summary_cards' => 1,
-            'ranking_history' => 2,
-            default => throw new InvalidArgumentException('Choose a valid import destination.')
-        };
-    }
-
     public static function activeId(PDO $pdo, string $destination = 'summary_cards'): ?int
     {
         self::ensureDefaultProfiles($pdo);
-        $query = $pdo->prepare('SELECT active_profile_id FROM summary_card_import_settings WHERE id = ?');
-        $query->execute([self::settingsId($destination)]);
-        $value = $query->fetchColumn();
-        return $value === false || $value === null ? null : (int)$value;
+        if (!in_array($destination, ['summary_cards', 'ranking_history'], true)) throw new InvalidArgumentException('Choose a valid import destination.');
+        $state = json_decode((string)$pdo->query('SELECT state_data FROM app_change_state WHERE id = 1')->fetchColumn(), true);
+        $value = $state['summary_card_import_profiles'][$destination]['active_profile_id'] ?? null;
+        if (is_numeric($value) && (int)$value > 0) return (int)$value;
+        $profileName = $destination === 'summary_cards' ? 'Unified Summary Cards' : 'Unified Ranking History';
+        $query = $pdo->prepare('SELECT import_profile_id FROM template_import_profiles WHERE template_id IS NULL AND profile_name = ? AND destination = ? ORDER BY import_profile_id LIMIT 1');
+        $query->execute([$profileName, $destination]);
+        $profileId = $query->fetchColumn();
+        return $profileId === false ? null : (int)$profileId;
     }
 
     public static function active(PDO $pdo, string $destination = 'summary_cards'): array
@@ -156,15 +142,15 @@ final class SummaryCardImportProfiles
     {
         self::ensureDefaultProfiles($pdo);
         $activeId = self::activeId($pdo, $destination);
-        $query = $pdo->query('SELECT profiles.id, profiles.template_id,
+        $query = $pdo->query('SELECT profiles.import_profile_id AS id, profiles.template_id,
                 COALESCE(NULLIF(profiles.profile_name, \'\'), templates.name) AS profile_name,
                 templates.original_filename,
                 profiles.destination
             FROM template_import_profiles profiles
-            LEFT JOIN templates ON templates.id = profiles.template_id
+            LEFT JOIN templates ON templates.template_id = profiles.template_id
             WHERE profiles.destination = ' . $pdo->quote($destination) . '
                 AND (profiles.template_id IS NULL OR templates.is_active = 1)
-            ORDER BY profile_name ASC, profiles.id ASC');
+            ORDER BY profile_name ASC, profiles.import_profile_id ASC');
         $profiles = $query->fetchAll(PDO::FETCH_ASSOC);
         foreach ($profiles as &$profile) $profile['is_active'] = (int)$profile['id'] === $activeId;
         unset($profile);
@@ -174,8 +160,11 @@ final class SummaryCardImportProfiles
     public static function activate(PDO $pdo, int $profileId, int $userId, string $destination = 'summary_cards'): array
     {
         $profile = self::get($pdo, $profileId, true, $destination);
-        $update = $pdo->prepare('UPDATE summary_card_import_settings SET active_profile_id = ?, updated_by = ? WHERE id = ?');
-        $update->execute([$profileId, $userId, self::settingsId($destination)]);
+        if (!in_array($destination, ['summary_cards', 'ranking_history'], true)) throw new InvalidArgumentException('Choose a valid import destination.');
+        $path = '$.summary_card_import_profiles.' . $destination . '.active_profile_id';
+        $update = $pdo->prepare('INSERT INTO app_change_state (id, state_data) VALUES (1, JSON_SET(JSON_OBJECT(), ?, CAST(? AS UNSIGNED)))
+            ON DUPLICATE KEY UPDATE state_data = JSON_SET(COALESCE(state_data, JSON_OBJECT()), ?, CAST(? AS UNSIGNED))');
+        $update->execute([$path, $profileId, $path, $profileId]);
         return $profile;
     }
 }

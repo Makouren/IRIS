@@ -1,5 +1,7 @@
-IRIS WORKFLOW FILE MAP AND CODE
+LEGACY WORKFLOW FILE MAP AND CODE (IRIS V2.0.1)
 ================================
+
+Historical reference only. The excerpts below predate the normalized `iris_db_3nf` conversion and may show retired table/column names. Do not use these snippets or the legacy `database.sql` to provision or modify the V4.5.0 database.
 
 WORKSPACE ROOT
 --------------

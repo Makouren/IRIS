@@ -1,16 +1,18 @@
 <?php
 require_once __DIR__ . '/../includes/functions.php';
 requireRole(['admin']);
-$accountQuery = db()->prepare('SELECT office_name FROM users WHERE id = ?');
+$accountQuery = db()->prepare('SELECT offices.office_name
+    FROM users LEFT JOIN offices ON offices.office_id = users.office_id
+    WHERE users.user_id = ?');
 $accountQuery->execute([(int)$_SESSION['user_id']]);
 $officeName = (string)($accountQuery->fetchColumn() ?: '');
-$uploadsQuery = db()->prepare('SELECT records.fileName, records.fileType, records.fileSize, records.scannedAt, records.uploaded_at, records.status, records.adminNotes, records.metadata,
+$uploadsQuery = db()->prepare('SELECT records.file_name AS fileName, records.file_type AS fileType, records.file_size AS fileSize, records.scanned_at AS scannedAt, records.uploaded_at, records.status, records.metadata,
     COALESCE(upload_profiles.destination, profiles.destination, JSON_UNQUOTE(JSON_EXTRACT(records.metadata, "$.upload_purpose")), "analytics") AS profile_purpose
     FROM records
-    LEFT JOIN templates ON templates.id = records.template_id
-    LEFT JOIN template_import_profiles upload_profiles ON upload_profiles.id = records.import_profile_id
+    LEFT JOIN templates ON templates.template_id = records.template_id
+    LEFT JOIN template_import_profiles upload_profiles ON upload_profiles.import_profile_id = records.import_profile_id
     LEFT JOIN template_import_profiles profiles ON profiles.template_id = records.template_id
-        WHERE records.uploaded_by = ? ORDER BY records.uploaded_at DESC, records.scannedAt DESC');
+        WHERE records.uploaded_by = ? ORDER BY records.uploaded_at DESC, records.scanned_at DESC');
 $uploadsQuery->execute([(int)$_SESSION['user_id']]);
 $uploads = $uploadsQuery->fetchAll(PDO::FETCH_ASSOC);
 foreach ($uploads as &$upload) {
@@ -20,15 +22,14 @@ foreach ($uploads as &$upload) {
         : $upload['profile_purpose'];
 }
 unset($upload);
-$templateQuery = db()->prepare('SELECT templates.id, templates.name, templates.original_filename,
+$templateQuery = db()->prepare('SELECT templates.template_id AS id, templates.name, templates.original_filename,
     COALESCE(profiles.destination, "analytics") AS upload_purpose
     FROM templates
-    LEFT JOIN template_import_profiles profiles ON profiles.template_id = templates.id
+    LEFT JOIN template_import_profiles profiles ON profiles.template_id = templates.template_id
     WHERE templates.is_active = 1
-    ORDER BY templates.name ASC, templates.id DESC');
+    ORDER BY templates.name ASC, templates.template_id DESC');
 $templateQuery->execute();
 $templates = $templateQuery->fetchAll(PDO::FETCH_ASSOC);
-$officeVisibleTemplates = $templates;
 $success = flash('success');
 $error = flash('error');
 ?>
@@ -43,20 +44,35 @@ $error = flash('error');
     <link href="https://cdnjs.cloudflare.com/ajax/libs/flowbite/2.3.0/flowbite.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link rel="stylesheet" href="<?= e(base_url('scanner/css/tokens.css')) ?>">
+    <link rel="stylesheet" href="<?= e(base_url('scanner/css/styles.css')) ?>?v=<?= (int) filemtime(__DIR__ . '/../scanner/css/styles.css') ?>">
+    <script src="<?= e(base_url('scanner/js/dotBackground.js')) ?>?v=<?= (int) filemtime(__DIR__ . '/../scanner/js/dotBackground.js') ?>" defer></script>
 </head>
-<body class="min-h-screen bg-gray-50 text-gray-900 dark:bg-gray-950 dark:text-slate-100">
-    <header class="border-b border-gray-200 bg-white dark:border-slate-800 dark:bg-slate-900">
-        <div class="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-4 px-4 py-4">
-            <div><p class="text-xs font-bold uppercase tracking-widest text-emerald-700 dark:text-emerald-400">IRIS Office Portal</p><h1 class="text-xl font-extrabold"><?= e($officeName) ?> Uploads</h1></div>
-            <nav class="flex items-center gap-2 text-sm font-semibold">
-                <a class="rounded-lg px-3 py-2 text-emerald-800 hover:bg-emerald-50 dark:text-emerald-300 dark:hover:bg-slate-800" href="<?= e(base_url('user/dashboard.php')) ?>">Public dashboards</a>
-                <a class="rounded-lg px-3 py-2 hover:bg-gray-100 dark:hover:bg-slate-800" href="<?= e(base_url('auth/change_password.php')) ?>">Change password</a>
-                <form method="POST" action="<?= e(base_url('auth/logout.php')) ?>"><?= csrf_field() ?><button class="rounded-lg bg-gray-100 px-3 py-2 hover:bg-gray-200 dark:bg-slate-800 dark:hover:bg-slate-700" type="submit">Sign out</button></form>
+<body class="dot-grid-dashboard min-h-screen text-gray-900 dark:text-gray-100">
+    <div id="dashboard-dot-background" aria-hidden="true"></div>
+    <header class="app-header office-upload-header">
+        <div class="app-header-inner">
+            <div class="brand-container min-w-0">
+                <div class="brand-logo-seal w-52 h-11 flex items-center justify-center overflow-hidden shrink-0 rounded-lg bg-white px-3 py-1.5">
+                    <img src="<?= e(base_url('images/iris-panel-logo.svg')) ?>" alt="IRIS SielMetrics+ Logo" class="h-10 w-full object-contain object-left">
+                </div>
+                <div class="min-w-0">
+                    <h1 class="brand-title">Office Upload</h1>
+                    <p class="brand-subline">Central Luzon State University</p>
+                </div>
+            </div>
+            <nav class="header-nav office-header-nav" aria-label="Office portal navigation">
+                <a class="nav-btn" href="<?= e(base_url('user/dashboard.php')) ?>"><i class="fa-solid fa-chart-column" aria-hidden="true"></i><span>Public dashboards</span></a>
+                <button id="officeThemeToggle" class="nav-btn" type="button" aria-label="Switch to dark theme" title="Switch to dark theme" aria-pressed="false"><i class="fa-solid fa-moon" aria-hidden="true"></i><span>Theme</span></button>
+                <a class="nav-btn" href="<?= e(base_url('auth/change_password.php')) ?>"><i class="fa-solid fa-key" aria-hidden="true"></i><span>Change password</span></a>
+                <form method="POST" action="<?= e(base_url('auth/logout.php')) ?>" class="m-0">
+                    <?= csrf_field() ?>
+                    <button class="nav-btn" type="submit"><i class="fa-solid fa-right-from-bracket" aria-hidden="true"></i><span>Sign out</span></button>
+                </form>
             </nav>
         </div>
     </header>
-    <main class="mx-auto grid max-w-6xl gap-8 px-4 py-8 lg:grid-cols-[minmax(280px,0.8fr)_minmax(0,1.5fr)]">
-        <section class="h-fit rounded-xl border border-gray-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+    <main class="dashboard-container office-upload-layout">
+        <section class="studio-left-card office-upload-form-card h-fit">
             <h2 class="mb-1 text-lg font-bold">Upload a file</h2>
             <p class="mb-5 text-sm text-gray-500 dark:text-slate-400">Files are sent to the Super Admin for review.</p>
             <?php if ($success): ?><div class="mb-4 rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-900 dark:border-emerald-900 dark:bg-emerald-950 dark:text-emerald-200" role="status"><?= e($success) ?></div><?php endif; ?>
@@ -64,7 +80,7 @@ $error = flash('error');
             <form method="POST" action="<?= e(base_url('admin/upload_process.php')) ?>" enctype="multipart/form-data" class="space-y-4">
                 <?= csrf_field() ?>
                 <label for="officeUploadPurpose" class="block text-sm font-semibold">Upload purpose</label>
-                <select id="officeUploadPurpose" name="upload_purpose" required class="block w-full rounded-lg border border-gray-300 bg-gray-50 px-3 py-3 text-sm dark:border-slate-700 dark:bg-slate-800">
+                <select id="officeUploadPurpose" name="upload_purpose" required class="form-input">
                     <option value="">Choose a destination</option>
                     <option value="analytics">Data and Report Visualization</option>
                     <option value="summary_cards">Summary Cards</option>
@@ -72,7 +88,7 @@ $error = flash('error');
                 </select>
                 <div data-template-control>
                     <label for="officeTemplateSelect" class="block text-sm font-semibold">Template profile (optional)</label>
-                    <select id="officeTemplateSelect" name="template_id" disabled class="block w-full rounded-lg border border-gray-300 bg-gray-50 px-3 py-3 text-sm disabled:opacity-50 dark:border-slate-700 dark:bg-slate-800">
+                    <select id="officeTemplateSelect" name="template_id" disabled class="form-input disabled:opacity-50">
                         <option value="">Use active destination profile</option>
                         <?php foreach ($templates as $template): ?>
                             <option value="<?= (int)$template['id'] ?>" data-purpose="<?= e($template['upload_purpose']) ?>">
@@ -81,38 +97,46 @@ $error = flash('error');
                         <?php endforeach; ?>
                     </select>
                 </div>
-                <div data-active-profile-control data-api="<?= e(base_url('api/templates.php')) ?>" class="hidden">
-                    <label data-active-profile-label class="block text-sm font-semibold">Active import profile</label>
-                    <p data-summary-profile-name class="mt-1 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2.5 text-sm text-emerald-900 dark:border-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-200">Loading active profile…</p>
-                    <p data-summary-profile-help class="mt-1 text-xs text-gray-500 dark:text-slate-400"></p>
-                </div>
-                <a data-profile-download-link class="hidden items-center gap-2 text-sm font-semibold text-emerald-800 underline dark:text-emerald-300" href="<?= e(base_url('admin/template_download.php?destination=ranking_history')) ?>"><i class="fa-solid fa-download" aria-hidden="true"></i> Download template</a>
                 <p data-template-filter-help class="text-xs text-gray-500 dark:text-slate-400">Choose a purpose to see its upload requirements.</p>
                 <label for="officeFile" class="block text-sm font-semibold">Select document</label>
-                    <input id="officeFile" name="office_file" type="file" required accept=".xlsx,.csv,.tsv" class="block w-full cursor-pointer rounded-lg border border-gray-300 bg-gray-50 text-sm file:mr-4 file:border-0 file:bg-emerald-700 file:px-4 file:py-3 file:font-semibold file:text-white dark:border-slate-700 dark:bg-slate-800">
+                    <input id="officeFile" name="office_file" type="file" required accept=".xlsx,.csv,.tsv" class="form-input office-file-input block cursor-pointer">
                     <p class="text-xs text-gray-500 dark:text-slate-400">XLSX, CSV, or TSV. Maximum 10 MB. Other file types cannot be read automatically yet.</p>
-                <button class="w-full rounded-lg bg-emerald-700 px-4 py-3 text-sm font-bold text-white hover:bg-emerald-800 focus:outline-none focus:ring-4 focus:ring-emerald-300 dark:focus:ring-emerald-900" type="submit"><i class="fa-solid fa-cloud-arrow-up mr-2" aria-hidden="true"></i>Send for review</button>
+                <button class="btn-save-modal w-full justify-center" type="submit"><i class="fa-solid fa-cloud-arrow-up mr-2" aria-hidden="true"></i>Send for review</button>
             </form>
         </section>
-        <section>
-            <div class="mb-4 flex items-end justify-between gap-3"><div><h2 class="text-lg font-bold">Your uploads</h2><p class="text-sm text-gray-500 dark:text-slate-400">Only files submitted by this office are shown.</p></div><span class="rounded-full bg-gray-200 px-2.5 py-1 text-xs font-bold dark:bg-slate-800"><?= count($uploads) ?> total</span></div>
-            <div class="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900">
-                <div class="overflow-x-auto"><table class="w-full text-left text-sm"><thead class="bg-gray-100 text-xs uppercase text-gray-600 dark:bg-slate-800 dark:text-slate-300"><tr><th class="px-4 py-3">File</th><th class="px-4 py-3">Purpose</th><th class="px-4 py-3">Date</th><th class="px-4 py-3">Status</th><th class="px-4 py-3">Verification notes</th></tr></thead><tbody class="divide-y divide-gray-200 dark:divide-slate-800">
-                <?php foreach ($uploads as $upload): ?><tr><td class="max-w-56 px-4 py-3 font-semibold"><span class="block truncate" title="<?= e($upload['fileName']) ?>"><?= e($upload['fileName']) ?></span><span class="text-xs font-normal text-gray-500 dark:text-slate-400"><?= e(strtoupper((string)$upload['fileType'])) ?> · <?= number_format((int)$upload['fileSize'] / 1048576, 2) ?> MB</span></td><td class="whitespace-nowrap px-4 py-3"><?= e(match ($upload['upload_purpose']) { 'summary_cards' => 'Latest Snapshot', 'ranking_history' => 'Ranking History', default => 'Data and Report Visualization' }) ?></td><td class="whitespace-nowrap px-4 py-3 text-gray-600 dark:text-slate-300"><?= e($upload['uploaded_at'] ?: $upload['scannedAt']) ?></td><td class="whitespace-nowrap px-4 py-3"><span class="rounded-full bg-amber-100 px-2 py-1 text-xs font-bold text-amber-900 dark:bg-amber-900/40 dark:text-amber-200"><?= e($upload['status'] ?: 'Pending Review') ?></span></td><td class="min-w-48 px-4 py-3 text-gray-600 dark:text-slate-300"><?= e($upload['adminNotes'] ?: 'No notes yet.') ?></td></tr><?php endforeach; ?>
-                <?php if (!$uploads): ?><tr><td colspan="5" class="px-4 py-10 text-center text-gray-500 dark:text-slate-400">No uploads yet.</td></tr><?php endif; ?>
-                </tbody></table></div>
+        <section class="studio-right-card office-uploads-panel">
+            <div class="mb-4 flex flex-wrap items-end justify-between gap-3"><div><h2 class="text-lg font-bold">Your uploads</h2><p class="text-sm text-gray-500 dark:text-slate-400">Only files submitted by this office are shown.</p></div><span class="badge badge-low"><?= count($uploads) ?> total</span></div>
+            <div class="table-container">
+                <table class="data-table office-uploads-table">
+                    <thead><tr><th>File</th><th>Purpose</th><th>Date</th><th>Status</th></tr></thead>
+                    <tbody>
+                    <?php foreach ($uploads as $upload): ?>
+                        <?php $uploadStatus = $upload['status'] ?: 'Pending Review'; ?>
+                        <tr>
+                            <td><span class="office-file-name" title="<?= e($upload['fileName']) ?>"><?= e($upload['fileName']) ?></span><span class="block text-xs font-normal text-gray-500 dark:text-slate-400"><?= e(strtoupper((string)$upload['fileType'])) ?> · <?= number_format((int)$upload['fileSize'] / 1048576, 2) ?> MB</span></td>
+                            <td><?= e(match ($upload['upload_purpose']) { 'summary_cards' => 'Summary Cards', 'ranking_history' => 'Ranking History', default => 'Data & Report Visualization' }) ?></td>
+                            <td><?= e($upload['uploaded_at'] ?: $upload['scannedAt']) ?></td>
+                            <td><span class="badge <?= $uploadStatus === 'Approved' ? 'badge-low' : 'badge-medium' ?> office-status-badge"><?= e($uploadStatus === 'Approved' ? 'Published' : $uploadStatus) ?></span></td>
+                        </tr>
+                    <?php endforeach; ?>
+                    <?php if (!$uploads): ?><tr><td colspan="4" class="text-center">No uploads yet.</td></tr><?php endif; ?>
+                    </tbody>
+                </table>
             </div>
         </section>
-        <section class="lg:col-span-2">
-            <div class="mb-3"><h2 class="text-lg font-bold">Active templates</h2><p class="text-sm text-gray-500 dark:text-slate-400">Templates provided by the Super Admin for office use.</p></div>
-            <div id="activeTemplatesList" data-api="<?= e(base_url('api/templates.php')) ?>" data-download-base="<?= e(base_url('admin/template_download.php')) ?>" class="divide-y divide-gray-200 overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm dark:divide-slate-800 dark:border-slate-800 dark:bg-slate-900">
-                <?php foreach ($officeVisibleTemplates as $template): ?>
-                    <div class="flex flex-wrap items-center justify-between gap-3 px-4 py-3">
-                        <div><p class="font-semibold"><?= e($template['name']) ?></p><p class="text-xs text-gray-500 dark:text-slate-400"><?= e($template['original_filename']) ?></p></div>
-                        <a class="inline-flex items-center gap-2 rounded-lg border border-gray-300 px-3 py-2 text-sm font-semibold hover:bg-gray-100 dark:border-slate-700 dark:hover:bg-slate-800" href="<?= e(base_url('admin/template_download.php?id=' . (int)$template['id'])) ?>"><i class="fa-solid fa-download" aria-hidden="true"></i>Download</a>
-                    </div>
-                <?php endforeach; ?>
-                <?php if (!$officeVisibleTemplates): ?><p class="px-4 py-6 text-sm text-gray-500 dark:text-slate-400">No active templates are available.</p><?php endif; ?>
+        <section class="studio-right-card office-templates-section">
+            <div class="mb-3 flex flex-wrap items-end justify-between gap-3">
+                <div><h2 class="text-lg font-bold">Active templates</h2><p class="text-sm text-gray-500 dark:text-slate-400">Templates provided by the Super Admin for office use.</p></div>
+                <label for="activeTemplateDestination" class="grid gap-1 text-sm font-semibold">Template category
+                    <select id="activeTemplateDestination" class="form-input min-w-64">
+                        <option value="analytics">Data &amp; Report Visualization</option>
+                        <option value="summary_cards">Summary Cards</option>
+                        <option value="ranking_history">Ranking History</option>
+                    </select>
+                </label>
+            </div>
+            <div id="activeTemplatesList" data-api="<?= e(base_url('api/templates.php')) ?>" data-download-base="<?= e(base_url('admin/template_download.php')) ?>" class="office-active-templates">
+                <p class="py-4 text-sm text-gray-500 dark:text-slate-400">Loading active templates…</p>
             </div>
         </section>
     </main>

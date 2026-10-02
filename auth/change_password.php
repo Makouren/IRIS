@@ -8,7 +8,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $current = (string)($_POST['current_password'] ?? '');
     $new = (string)($_POST['new_password'] ?? '');
     $confirm = (string)($_POST['confirm_password'] ?? '');
-    $query = db()->prepare('SELECT password FROM users WHERE id = ? LIMIT 1');
+    $query = db()->prepare('SELECT password FROM users WHERE user_id = ? LIMIT 1');
     $query->execute([(int)$_SESSION['user_id']]);
     $hash = (string)$query->fetchColumn();
     if (!password_verify($current, $hash)) {
@@ -17,7 +17,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if (strlen($new) < 8 || !hash_equals($new, $confirm)) {
         flash_redirect('auth/change_password.php', 'error', 'New passwords must match and contain at least 8 characters.');
     }
-    $update = db()->prepare('UPDATE users SET password = ? WHERE id = ?');
+    $update = db()->prepare('UPDATE users SET password = ? WHERE user_id = ?');
     $update->execute([password_hash($new, PASSWORD_DEFAULT), (int)$_SESSION['user_id']]);
     flash_redirect('auth/change_password.php', 'success', 'Password updated.');
 }

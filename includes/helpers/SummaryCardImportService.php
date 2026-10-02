@@ -62,7 +62,7 @@ final class SummaryCardImportService
 
     private static function identityQuery(PDO $pdo, string $key, bool $lock): ?array
     {
-        $query = $pdo->prepare('SELECT * FROM summary_cards WHERE import_key = ?' . ($lock ? ' FOR UPDATE' : ''));
+        $query = $pdo->prepare('SELECT summary_cards.*, summary_cards.card_id AS id FROM summary_cards WHERE import_key = ?' . ($lock ? ' FOR UPDATE' : ''));
         $query->execute([$key]);
         $card = $query->fetch(PDO::FETCH_ASSOC);
         return $card ?: null;
@@ -73,12 +73,6 @@ final class SummaryCardImportService
         $matches = [];
         $card = self::identityQuery($pdo, $legacyKey, $lock);
         if ($card) $matches[(string)$card['id']] = $card;
-        $batches = $pdo->query("SELECT content_sha256 FROM import_batches WHERE destination = 'summary_cards' AND status = 'applied' ORDER BY id DESC");
-        foreach ($batches->fetchAll(PDO::FETCH_COLUMN) as $contentHash) {
-            $oldKey = 'snapshot-' . substr(hash('sha256', (string)$contentHash . "\0" . $legacyKey), 0, 90);
-            $card = self::identityQuery($pdo, $oldKey, $lock);
-            if ($card) $matches[(string)$card['id']] = $card;
-        }
         if (count($matches) > 1) throw new RuntimeException('Multiple legacy Summary Cards match this Global Label. Resolve the duplicate cards and retry.', 409);
         return $matches ? reset($matches) : null;
     }
@@ -259,12 +253,20 @@ final class SummaryCardImportService
 
     private static function insertCard(PDO $pdo, string $key, array $state, int $displayPrecision): array
     {
-        $id = 'summary_card_' . bin2hex(random_bytes(12));
-        $query = $pdo->prepare('INSERT INTO summary_cards (id, import_key, title, main_value, main_label, year_date, secondary_label, secondary_value, description, secondary_description, info_text, is_published, display_order, display_precision) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 0, ?)');
-        $query->execute([$id, $key, $state['title'], $state['main_value'], $state['main_label'], $state['year_date'], $state['secondary_label'], $state['secondary_value'], $state['description'], $state['secondary_description'], $state['info_text'], $displayPrecision]);
-        $saved = $pdo->prepare('SELECT * FROM summary_cards WHERE id = ?');
+        $query = $pdo->prepare('INSERT INTO summary_cards (import_key, title, is_published, display_order, display_precision) VALUES (?, ?, 0, 0, ?)');
+        $query->execute([$key, $state['title'], $displayPrecision]);
+        $id = (int)$pdo->lastInsertId();
+        $saved = $pdo->prepare('SELECT summary_cards.*, summary_cards.card_id AS id FROM summary_cards WHERE card_id = ?');
         $saved->execute([$id]);
         return $saved->fetch(PDO::FETCH_ASSOC);
+    }
+
+    private static function periodDate(mixed $value): ?string
+    {
+        $value = trim((string)($value ?? ''));
+        if ($value === '') return null;
+        $timestamp = strtotime($value);
+        return $timestamp === false ? null : date('Y-m-d', $timestamp);
     }
 
     private static function savePeriod(PDO $pdo, array $row, string $cardId, string $recordId, int $batchId): void
@@ -273,14 +275,22 @@ final class SummaryCardImportService
         $values = $row['snapshot_after'];
         if (!$before) {
             $insert = $pdo->prepare('INSERT INTO summary_card_snapshots (card_id, title, period_key, period_label, period_sort, period_precision, is_published, main_value, main_label, secondary_label, secondary_value, year_date, description, secondary_description, info_text, source_info, source_record_id, batch_id, last_source_record_id, last_batch_id) VALUES (?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
-            $insert->execute([$cardId, $values['title'], $row['period_key'], $row['period_label'], $row['period_sort'], $row['period_precision'], $values['main_value'], $values['main_label'], $values['secondary_label'], $values['secondary_value'], $values['year_date'], $values['description'], $values['secondary_description'], $values['info_text'], $values['source_info'], $recordId, $batchId, $recordId, $batchId]);
+            $insert->execute([$cardId, $values['title'], $row['period_key'], $row['period_label'], $row['period_sort'], $row['period_precision'], $values['main_value'], $values['main_label'], $values['secondary_label'], $values['secondary_value'], self::periodDate($values['year_date']), $values['description'], $values['secondary_description'], $values['info_text'], $values['source_info'], $recordId, $batchId, $recordId, $batchId]);
         } else {
-            $update = $pdo->prepare('UPDATE summary_card_snapshots SET title = ?, period_label = ?, period_sort = ?, period_precision = ?, main_value = ?, main_label = ?, secondary_label = ?, secondary_value = ?, year_date = ?, description = ?, secondary_description = ?, info_text = ?, source_info = ?, last_source_record_id = ?, last_batch_id = ? WHERE id = ?');
-            $update->execute([$values['title'], $row['period_label'], $row['period_sort'], $row['period_precision'], $values['main_value'], $values['main_label'], $values['secondary_label'], $values['secondary_value'], $values['year_date'], $values['description'], $values['secondary_description'], $values['info_text'], $values['source_info'], $recordId, $batchId, $before['id']]);
+            $update = $pdo->prepare('UPDATE summary_card_snapshots SET title = ?, period_label = ?, period_sort = ?, period_precision = ?, main_value = ?, main_label = ?, secondary_label = ?, secondary_value = ?, year_date = ?, description = ?, secondary_description = ?, info_text = ?, source_info = ?, last_source_record_id = ?, last_batch_id = ? WHERE snapshot_id = ?');
+            $update->execute([$values['title'], $row['period_label'], $row['period_sort'], $row['period_precision'], $values['main_value'], $values['main_label'], $values['secondary_label'], $values['secondary_value'], self::periodDate($values['year_date']), $values['description'], $values['secondary_description'], $values['info_text'], $values['source_info'], $recordId, $batchId, $before['snapshot_id']]);
         }
-        $query = $pdo->prepare('SELECT * FROM summary_card_snapshots WHERE card_id = ? AND period_key = ?');
+        $query = $pdo->prepare('SELECT * FROM summary_card_snapshots WHERE card_id = ? AND period_key = ? ORDER BY snapshot_id DESC LIMIT 1');
         $query->execute([$cardId, $row['period_key']]);
-        ImportBatchAudit::row($pdo, $batchId, 'summary_card', 'snapshot:' . $cardId . ':' . $row['period_key'], $row['sheet_name'], $row['row_number'], $before, $query->fetch(PDO::FETCH_ASSOC));
+        $after = $query->fetch(PDO::FETCH_ASSOC);
+        $period = $pdo->prepare('INSERT INTO summary_card_periods (card_id, period_key, period_label, period_sort, period_precision, main_value, main_label, secondary_label, secondary_value, year_date, description, secondary_description, info_text, source_info, is_published)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ON DUPLICATE KEY UPDATE period_label = VALUES(period_label), period_sort = VALUES(period_sort), period_precision = VALUES(period_precision),
+                main_value = VALUES(main_value), main_label = VALUES(main_label), secondary_label = VALUES(secondary_label),
+                secondary_value = VALUES(secondary_value), year_date = VALUES(year_date), description = VALUES(description),
+                secondary_description = VALUES(secondary_description), info_text = VALUES(info_text), source_info = VALUES(source_info), is_published = VALUES(is_published)');
+        $period->execute([$cardId, $row['period_key'], $row['period_label'], $row['period_sort'], $row['period_precision'], $values['main_value'], $values['main_label'], $values['secondary_label'], $values['secondary_value'], self::periodDate($values['year_date']), $values['description'], $values['secondary_description'], $values['info_text'], $values['source_info'], !empty($before['is_published']) ? 1 : 0]);
+        ImportBatchAudit::row($pdo, $batchId, 'summary_card_snapshot', (string)$after['snapshot_id'], $row['sheet_name'], $row['row_number'], $before, $after);
     }
 
     public static function apply(PDO $pdo, array $parsed, array $versions, bool $reviewed, int $userId): array
@@ -317,7 +327,7 @@ final class SummaryCardImportService
                     ImportBatchAudit::row($pdo, $batchId, 'summary_card', (string)$card['id'], $changes[0]['sheet_name'], $changes[0]['row_number'], null, $card);
                 } elseif ((string)$card['import_key'] !== (string)$key) {
                     $beforeIdentity = $card;
-                    $pdo->prepare('UPDATE summary_cards SET import_key = ? WHERE id = ?')->execute([$key, $card['id']]);
+                    $pdo->prepare('UPDATE summary_cards SET import_key = ? WHERE card_id = ?')->execute([$key, $card['id']]);
                     $card = self::identityQuery($pdo, $key, true);
                     ImportBatchAudit::row($pdo, $batchId, 'summary_card', (string)$card['id'], $changes[0]['sheet_name'], $changes[0]['row_number'], $beforeIdentity, $card);
                 }
@@ -325,7 +335,7 @@ final class SummaryCardImportService
                 $settingsChanged = !$createdCard && $group['card_settings_changed'];
                 if ($settingsChanged) {
                     if ((int)$settingsBefore['display_precision'] !== (int)$settingsAfter['display_precision']) {
-                        $pdo->prepare('UPDATE summary_cards SET display_precision = ? WHERE id = ?')->execute([(int)$settingsAfter['display_precision'], $card['id']]);
+                        $pdo->prepare('UPDATE summary_cards SET display_precision = ? WHERE card_id = ?')->execute([(int)$settingsAfter['display_precision'], $card['id']]);
                     }
                     if (!self::sameCategories($settingsBefore['category_names'], $settingsAfter['category_names'])) {
                         SummaryCardCategoryStorage::replace($pdo, (string)$card['id'], $settingsAfter['category_names']);

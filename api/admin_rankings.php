@@ -24,14 +24,14 @@ function admin_rankings_body(PDO $pdo, array $data): array
 {
     $organization = trim((string)($data['organization'] ?? ''));
     if ($organization === '' || strlen($organization) > 100) admin_rankings_bad('Organization is required and must not exceed 100 characters.');
-    $query = $pdo->prepare('SELECT id, name, short_name FROM ranking_bodies WHERE LOWER(name) = LOWER(?) OR LOWER(short_name) = LOWER(?) LIMIT 1');
+    $query = $pdo->prepare('SELECT ranking_body_id AS id, name, short_name FROM ranking_bodies WHERE LOWER(name) = LOWER(?) OR LOWER(short_name) = LOWER(?) LIMIT 1');
     $query->execute([$organization, $organization]);
     $body = $query->fetch(PDO::FETCH_ASSOC);
     if ($body) return $body;
     $baseName = function_exists('mb_substr') ? mb_substr($organization, 0, 20, 'UTF-8') : substr($organization, 0, 20);
     $shortName = $baseName;
     $suffix = 1;
-    $shortCheck = $pdo->prepare('SELECT id FROM ranking_bodies WHERE LOWER(short_name) = LOWER(?) LIMIT 1');
+    $shortCheck = $pdo->prepare('SELECT ranking_body_id FROM ranking_bodies WHERE LOWER(short_name) = LOWER(?) LIMIT 1');
     do {
         $shortCheck->execute([$shortName]);
         if (!$shortCheck->fetchColumn()) break;
@@ -42,6 +42,24 @@ function admin_rankings_body(PDO $pdo, array $data): array
     $insert = $pdo->prepare('INSERT INTO ranking_bodies (name, short_name) VALUES (?, ?)');
     $insert->execute([$organization, $shortName]);
     return ['id' => (int)$pdo->lastInsertId(), 'name' => $organization, 'short_name' => $shortName];
+}
+
+function admin_rankings_type(PDO $pdo, int $bodyId, string $name): int
+{
+    $query = $pdo->prepare('SELECT ranking_type_id FROM ranking_types WHERE ranking_body_id = ? AND LOWER(name) = LOWER(?) LIMIT 1');
+    $query->execute([$bodyId, $name]);
+    $typeId = $query->fetchColumn();
+    if ($typeId) return (int)$typeId;
+    try {
+        $insert = $pdo->prepare('INSERT INTO ranking_types (ranking_body_id, name) VALUES (?, ?)');
+        $insert->execute([$bodyId, $name]);
+        return (int)$pdo->lastInsertId();
+    } catch (PDOException $exception) {
+        $query->execute([$bodyId, $name]);
+        $typeId = $query->fetchColumn();
+        if ($typeId) return (int)$typeId;
+        throw $exception;
+    }
 }
 
 function admin_rankings_payload(PDO $pdo, array $data, int $currentId = 0): array
@@ -61,8 +79,9 @@ function admin_rankings_payload(PDO $pdo, array $data, int $currentId = 0): arra
     }
 
     $body = admin_rankings_body($pdo, $data);
-    $duplicate = $pdo->prepare('SELECT id FROM rankings WHERE ranking_body_id = ? AND LOWER(ranking_type) = LOWER(?) AND year = ? AND id <> ? LIMIT 1');
-    $duplicate->execute([(int)$body['id'], $type, (int)$year, $currentId]);
+    $typeId = admin_rankings_type($pdo, (int)$body['id'], $type);
+    $duplicate = $pdo->prepare('SELECT ranking_id FROM rankings WHERE ranking_body_id = ? AND ranking_type_id = ? AND year = ? AND ranking_id <> ? LIMIT 1');
+    $duplicate->execute([(int)$body['id'], $typeId, (int)$year, $currentId]);
     $duplicateId = $duplicate->fetchColumn();
     if ($duplicateId) {
         http_response_code(409);
@@ -72,9 +91,10 @@ function admin_rankings_payload(PDO $pdo, array $data, int $currentId = 0): arra
 
     return [
         'ranking_body_id' => (int)$body['id'],
-        'ranking_type' => $type,
+        'ranking_type_id' => $typeId,
         'year' => (int)$year,
-        'global_rank' => $rank,
+        'global_rank' => $rankLow,
+        'global_rank_display' => $rank,
         'rank_low' => $rankLow,
         'rank_high' => $rankHigh,
         'rank_value' => $rankValue,
@@ -84,9 +104,16 @@ function admin_rankings_payload(PDO $pdo, array $data, int $currentId = 0): arra
 
 function admin_rankings_row(PDO $pdo, int $id): array
 {
-    $query = $pdo->prepare('SELECT r.id, bodies.name AS organization, bodies.short_name AS organization_short_name,
-            r.ranking_type, r.year, r.global_rank, r.rank_value, r.info_text
-        FROM rankings r INNER JOIN ranking_bodies bodies ON bodies.id = r.ranking_body_id WHERE r.id = ?');
+        $query = $pdo->prepare("SELECT r.ranking_id AS id, bodies.name AS organization, bodies.short_name AS organization_short_name,
+            bodies.sort_order AS organization_sort_order,
+            types.name AS ranking_type, r.year,
+            COALESCE(r.global_rank_display, CASE WHEN r.rank_low IS NOT NULL AND r.rank_high IS NOT NULL AND r.rank_low <> r.rank_high
+                THEN CONCAT(r.rank_low, '-', r.rank_high) ELSE CAST(r.global_rank AS CHAR) END) AS global_rank,
+            r.rank_value, r.info_text
+        FROM rankings r
+        INNER JOIN ranking_bodies bodies ON bodies.ranking_body_id = r.ranking_body_id
+        LEFT JOIN ranking_types types ON types.ranking_type_id = r.ranking_type_id
+        WHERE r.ranking_id = ?");
     $query->execute([$id]);
     $row = $query->fetch(PDO::FETCH_ASSOC);
     if (!$row) admin_rankings_bad('Ranking row not found.', 404);
@@ -97,14 +124,28 @@ try {
     $pdo = db();
     $method = $_SERVER['REQUEST_METHOD'] ?? 'GET';
     if ($method === 'GET') {
-        $bodies = $pdo->query('SELECT id, name, short_name FROM ranking_bodies ORDER BY name ASC')->fetchAll(PDO::FETCH_ASSOC);
-        $rankings = $pdo->query('SELECT r.id, bodies.id AS ranking_body_id, bodies.name AS organization,
-                bodies.short_name AS organization_short_name, r.ranking_type, r.year, r.global_rank,
-            r.rank_value, r.info_text
-            FROM rankings r INNER JOIN ranking_bodies bodies ON bodies.id = r.ranking_body_id
-            ORDER BY r.year DESC, bodies.name ASC, r.ranking_type ASC, r.rank_value IS NULL ASC, r.rank_value ASC')->fetchAll(PDO::FETCH_ASSOC);
-        $defaultsQuery = $pdo->query('SELECT default_organization, default_list FROM ranking_history_display_settings WHERE id = 1');
-        $defaults = $defaultsQuery->fetch(PDO::FETCH_ASSOC) ?: ['default_organization' => null, 'default_list' => null];
+        $bodies = $pdo->query('SELECT ranking_body_id AS id, name, short_name, sort_order FROM ranking_bodies ORDER BY sort_order ASC, name ASC')->fetchAll(PDO::FETCH_ASSOC);
+        $rankings = $pdo->query("SELECT r.ranking_id AS id, bodies.ranking_body_id, bodies.name AS organization,
+            bodies.short_name AS organization_short_name, bodies.sort_order AS organization_sort_order, types.name AS ranking_type, r.year,
+                COALESCE(r.global_rank_display, CASE WHEN r.rank_low IS NOT NULL AND r.rank_high IS NOT NULL AND r.rank_low <> r.rank_high
+                    THEN CONCAT(r.rank_low, '-', r.rank_high) ELSE CAST(r.global_rank AS CHAR) END) AS global_rank,
+                r.rank_value, r.info_text
+            FROM rankings r
+            INNER JOIN ranking_bodies bodies ON bodies.ranking_body_id = r.ranking_body_id
+            LEFT JOIN ranking_types types ON types.ranking_type_id = r.ranking_type_id
+            ORDER BY bodies.sort_order ASC, CASE
+                WHEN UPPER(bodies.short_name) = 'WURI' AND LOWER(types.name) LIKE '%overall%' THEN 0
+                WHEN UPPER(bodies.short_name) = 'QS' AND LOWER(types.name) LIKE '%asia%' AND LOWER(types.name) NOT LIKE '%south eastern%' THEN 1
+                WHEN UPPER(bodies.short_name) = 'QS' AND LOWER(types.name) LIKE '%south eastern%' THEN 2
+                WHEN LOWER(bodies.name) LIKE '%webometrics%' THEN 3
+                ELSE 4
+            END,
+            bodies.name ASC, types.name ASC, r.year ASC,
+            r.rank_value IS NULL ASC, r.rank_value ASC")->fetchAll(PDO::FETCH_ASSOC);
+        $state = json_decode((string)$pdo->query('SELECT state_data FROM app_change_state WHERE id = 1')->fetchColumn(), true);
+        $defaults = is_array($state['ranking_history'] ?? null)
+            ? $state['ranking_history']
+            : ['default_organization' => null, 'default_list' => null];
         echo json_encode(['bodies' => $bodies, 'rankings' => $rankings, 'chart_defaults' => $defaults], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT);
         exit;
     }
@@ -119,22 +160,26 @@ try {
         if ($organization === '' && $list !== '') admin_rankings_bad('Choose an organization before setting a default ranking list.');
         if ($organization !== '') {
             $organizationQuery = $pdo->prepare('SELECT 1 FROM rankings r
-                INNER JOIN ranking_bodies bodies ON bodies.id = r.ranking_body_id
+                INNER JOIN ranking_bodies bodies ON bodies.ranking_body_id = r.ranking_body_id
                 WHERE bodies.name = ? AND bodies.short_name <> \'DEMO\' AND r.rank_value IS NOT NULL LIMIT 1');
             $organizationQuery->execute([$organization]);
             if (!$organizationQuery->fetchColumn()) admin_rankings_bad('The default organization has no numeric ranking rows.', 404);
         }
         if ($list !== '') {
             $listQuery = $pdo->prepare('SELECT 1 FROM rankings r
-                INNER JOIN ranking_bodies bodies ON bodies.id = r.ranking_body_id
-                WHERE bodies.name = ? AND bodies.short_name <> \'DEMO\' AND r.ranking_type = ? AND r.rank_value IS NOT NULL LIMIT 1');
+                INNER JOIN ranking_bodies bodies ON bodies.ranking_body_id = r.ranking_body_id
+                INNER JOIN ranking_types types ON types.ranking_type_id = r.ranking_type_id
+                WHERE bodies.name = ? AND bodies.short_name <> \'DEMO\' AND types.name = ? AND r.rank_value IS NOT NULL LIMIT 1');
             $listQuery->execute([$organization, $list]);
             if (!$listQuery->fetchColumn()) admin_rankings_bad('The selected ranking list does not belong to this organization.', 404);
         }
-        $save = $pdo->prepare('INSERT INTO ranking_history_display_settings (id, default_organization, default_list, updated_by)
-            VALUES (1, ?, ?, ?) ON DUPLICATE KEY UPDATE default_organization = VALUES(default_organization),
-                default_list = VALUES(default_list), updated_by = VALUES(updated_by)');
-        $save->execute([$organization !== '' ? $organization : null, $list !== '' ? $list : null, (int)$_SESSION['user_id']]);
+        $save = $pdo->prepare("INSERT INTO app_change_state (id, state_data) VALUES (1,
+            JSON_OBJECT('ranking_history', JSON_OBJECT('default_organization', ?, 'default_list', ?)))
+            ON DUPLICATE KEY UPDATE state_data = JSON_SET(COALESCE(state_data, JSON_OBJECT()),
+                '$.ranking_history', JSON_OBJECT('default_organization', ?, 'default_list', ?))");
+        $organizationDefault = $organization !== '' ? $organization : null;
+        $listDefault = $list !== '' ? $list : null;
+        $save->execute([$organizationDefault, $listDefault, $organizationDefault, $listDefault]);
         echo json_encode(['success' => true, 'chart_defaults' => ['default_organization' => $organization ?: null, 'default_list' => $list ?: null]], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT);
         exit;
     }
@@ -154,18 +199,19 @@ try {
     if ($method === 'PUT' || $method === 'PATCH') {
         $values = admin_rankings_payload($pdo, $data, (int)$id);
         $sets = implode(', ', array_map(static fn(string $column): string => '`' . $column . '` = ?', array_keys($values)));
-        $pdo->prepare('UPDATE rankings SET ' . $sets . ', seed_managed = 0 WHERE id = ?')->execute([...array_values($values), (int)$id]);
+        $pdo->prepare('UPDATE rankings SET ' . $sets . ', seed_managed = 0 WHERE ranking_id = ?')->execute([...array_values($values), (int)$id]);
         echo json_encode(admin_rankings_row($pdo, (int)$id), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT);
         exit;
     }
     if ($method === 'DELETE') {
-        $delete = $pdo->prepare('DELETE FROM rankings WHERE id = ?');
+        $delete = $pdo->prepare('DELETE FROM rankings WHERE ranking_id = ?');
         $delete->execute([(int)$id]);
         echo json_encode(['success' => true, 'deleted' => $delete->rowCount() > 0]);
         exit;
     }
     admin_rankings_bad('Method not allowed.', 405);
 } catch (Throwable $exception) {
+    error_log('IRIS ranking administration failed: ' . $exception->getMessage());
     if (!headers_sent()) http_response_code(500);
     echo json_encode(['error' => 'Unable to manage ranking data.']);
 }

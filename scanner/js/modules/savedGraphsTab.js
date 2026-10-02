@@ -186,6 +186,45 @@ export function initSavedGraphsTab(ctx) {
     const typeLabel = chartType.replace(/([a-z])([A-Z])/g, '$1 $2').toUpperCase();
     card.querySelector('.graph-card-header')?.nextElementSibling?.querySelector('strong')?.replaceChildren(document.createTextNode(typeLabel));
 
+    const scopeEditor = document.createElement('div');
+    scopeEditor.style.cssText = 'display:flex;align-items:end;gap:.6rem;margin:.75rem 0;border:1px solid var(--border-light);border-radius:8px;padding:.75rem;';
+    const scopeLabel = document.createElement('label');
+    scopeLabel.style.cssText = 'display:grid;flex:1;gap:.3rem;font-size:.75rem;font-weight:700;color:var(--text-muted);';
+    scopeLabel.textContent = 'Published scope';
+    const scopeInput = document.createElement('input');
+    scopeInput.type = 'text';
+    scopeInput.maxLength = 150;
+    scopeInput.value = graph.scope || '';
+    scopeInput.placeholder = 'Leave blank for General';
+    scopeInput.className = 'form-input';
+    scopeLabel.append(scopeInput);
+    const saveScope = document.createElement('button');
+    saveScope.type = 'button';
+    saveScope.className = 'archive-load-button';
+    saveScope.textContent = 'Save scope';
+    saveScope.addEventListener('click', async () => {
+      const scope = scopeInput.value.trim();
+      saveScope.disabled = true;
+      try {
+        const response = await fetch(ctx.dbManager.config.endpoints.graphById(graph.id), {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': $('savedDashboardGraphsContainer').dataset.csrf || '' },
+          body: JSON.stringify({ scope })
+        });
+        const result = await response.json().catch(() => ({}));
+        if (!response.ok) throw new Error(result.error || 'Unable to save graph scope.');
+        graph.scope = result.scope || '';
+        showSavedGraphToast('Published scope saved.');
+      } catch (error) {
+        window.alert(error.message || 'Unable to save graph scope.');
+      } finally {
+        saveScope.disabled = false;
+      }
+    });
+    const chartHostForScope = card.querySelector(`#${canvasId}`);
+    if (chartHostForScope) chartHostForScope.parentNode.insertBefore(scopeEditor, chartHostForScope);
+    scopeEditor.append(scopeLabel, saveScope);
+
     const render = () => {
       const chartHost = $(canvasId);
       if (!chartHost) return;

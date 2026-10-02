@@ -86,7 +86,26 @@ try {
     <!-- Google Fonts -->
     <link href="https://fonts.googleapis.com/css2?family=Libre+Franklin:wght@400;500;600;700;800&family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="<?= e(base_url('scanner/css/tokens.css')) ?>">
+    <script src="<?= e(base_url('scanner/js/dotBackground.js')) ?>?v=<?= (int) filemtime(__DIR__ . '/../scanner/js/dotBackground.js') ?>" defer></script>
     <style>
+        .summary-card-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(min(270px, 100%), 1fr));
+            gap: 1rem;
+        }
+        @media (max-width: 767px) {
+            .admin-nav-inner > .logo-refresh-trigger > div:last-child { display: none !important; }
+            #user-menu-button > span { display: none !important; }
+        }
+        @media (max-width: 640px) {
+            .admin-nav-inner { gap: .5rem; }
+            .admin-nav-inner > .logo-refresh-trigger > div:first-child { width: clamp(8rem, 32vw, 13rem); }
+            .admin-nav-actions { gap: .25rem; }
+            .admin-nav-link { padding: .5rem; }
+            .admin-nav-link span { display: none; }
+            .admin-theme-btn { padding: .5rem !important; }
+            .admin-profile-btn { gap: .25rem !important; padding: .25rem !important; }
+        }
         body { font-family: 'Libre Franklin', 'Inter', sans-serif; }
         .admin-nav { background: linear-gradient(180deg, rgba(15,23,42,.98), rgba(15,23,42,.92)) !important; border-bottom: 1px solid rgba(148,163,184,.22) !important; box-shadow: 0 10px 30px rgba(2,6,23,.24) !important; }
         .admin-nav-inner { min-height: 76px; }
@@ -128,14 +147,15 @@ try {
         @keyframes spin{to{transform:rotate(360deg)}}
     </style>
 </head>
-<body data-role="<?= e($_SESSION['role'] ?? 'user') ?>" class="bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-gray-100 min-h-screen flex flex-col">
+<body data-role="<?= e($_SESSION['role'] ?? 'user') ?>" class="dot-grid-dashboard text-gray-900 dark:text-gray-100 min-h-screen flex flex-col">
+    <div id="dashboard-dot-background" aria-hidden="true"></div>
     <div id="page-loader" aria-live="polite" aria-label="Loading page">
         <div class="iris-loader" aria-hidden="true"></div>
     </div>
 
     <!-- Top Navigation Bar -->
     <nav class="admin-nav sticky top-0 z-50 backdrop-blur-md bg-opacity-95">
-        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div class="dashboard-container">
             <div class="admin-nav-inner flex items-center justify-between gap-4">
                 <a href="<?= e(base_url('user/dashboard.php')) ?>" class="logo-refresh-trigger flex items-center gap-3 min-w-0" data-target="<?= e(base_url('user/dashboard.php')) ?>">
                     <div class="w-52 h-11 flex items-center justify-center overflow-hidden shrink-0 rounded-lg bg-white px-3 py-1.5">
@@ -155,16 +175,10 @@ try {
                         <a href="<?= e(base_url('admin/review_editor.php')) ?>" class="admin-nav-link public-link" aria-label="Edit Observatory data" title="Edit Observatory data">
                             <i class="fa-solid fa-pen-to-square" aria-hidden="true"></i><span>Edit</span>
                         </a>
-                        <div class="relative">
-                            <button type="button" class="admin-profile-btn flex items-center justify-center p-2.5 rounded-lg focus:ring-2 focus:ring-emerald-500" id="observatory-menu-button" aria-expanded="false" data-dropdown-toggle="observatory-menu" data-dropdown-placement="bottom" aria-label="Open navigation menu">
-                                <i class="fa-solid fa-bars text-base" aria-hidden="true"></i>
-                            </button>
-                            <div class="admin-dropdown z-50 hidden my-3 w-56 text-base list-none rounded-xl shadow-2xl" id="observatory-menu">
-                                <ul class="py-2" aria-labelledby="observatory-menu-button">
-                                    <li><a href="#scanner-published-graphs"><i class="fa-solid fa-chart-column"></i> Scanner Analytics</a></li>
-                                </ul>
-                            </div>
-                        </div>
+                    <?php elseif (($_SESSION['role'] ?? null) === 'admin'): ?>
+                        <a href="<?= e(base_url('admin/office_upload.php')) ?>" class="admin-nav-link public-link" aria-label="Back to IAO Uploads" title="Back to Uploads">
+                            <i class="fa-solid fa-cloud-arrow-up" aria-hidden="true"></i><span>Back to Uploads</span>
+                        </a>
                     <?php endif; ?>
                     <button id="theme-toggle" type="button" class="admin-theme-btn rounded-lg text-sm p-2.5" aria-label="Toggle theme">
                         <i id="theme-toggle-dark-icon" class="hidden fa-solid fa-moon text-base"></i>
@@ -221,7 +235,6 @@ try {
         }
 
         body { font-size: var(--iris-font-base); }
-        .ranking-panel { background: var(--iris-surface); border: 1px solid var(--iris-border); box-shadow: 0 12px 32px rgba(30, 96, 49, 0.08); }
         .ranking-table th { color: var(--iris-text-faint); font-size: var(--iris-font-xs); letter-spacing: .08em; text-transform: uppercase; }
         .ranking-table td { color: var(--iris-text); font-size: var(--iris-font-sm); }
 
@@ -365,106 +378,27 @@ try {
         }
     </style>
 
-    <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 flex-1 w-full space-y-8" id="overview">
+    <main class="dashboard-container py-8 flex-1 space-y-8" id="overview">
         <?php if (flash('error')): ?>
             <div class="flex items-center p-4 text-red-800 rounded-xl bg-red-50 dark:bg-gray-800 dark:text-red-400 border border-red-200 dark:border-red-800" role="alert"><i class="fa-solid fa-circle-exclamation text-lg mr-3"></i><div class="text-sm font-medium"><?= htmlspecialchars(flash('error')) ?></div></div>
         <?php endif; ?>
 
-        <section id="summary-card-section" class="space-y-4">
+        <section id="summary-card-section" class="space-y-4 rounded-2xl border border-gray-200 bg-white/70 p-4 shadow-sm dark:border-gray-700 dark:bg-gray-800/50 sm:p-5">
             <div class="flex flex-col sm:flex-row sm:items-end justify-between gap-3">
                 <div>
                     <h2 class="text-xl font-bold text-gray-900 dark:text-white flex items-center">
                         <i class="fa-solid fa-chart-simple text-amber-500 mr-2"></i> Latest Performance Snapshot
                     </h2>
                 </div>
-                <?php if (($_SESSION['role'] ?? null) === 'super_admin'): ?>
-                    <button type="button" id="toggleSummaryCardForm" class="inline-flex items-center px-3 py-2 rounded-xl text-sm font-semibold bg-emerald-600 text-white hover:bg-emerald-500">
-                        <i class="fa-solid fa-plus mr-2"></i> Add summary card
-                    </button>
-                <?php endif; ?>
             </div>
-
-            <?php if (($_SESSION['role'] ?? null) === 'super_admin'): ?>
-                <div id="summaryCardsAdminFormPanel" class="hidden rounded-2xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 p-5 shadow-sm">
-                    <form id="summaryCardsAdminForm" class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <input type="hidden" name="id" id="summaryCardId" />
-                        <label class="block text-sm font-semibold text-gray-700 dark:text-gray-200">
-                            Global Label
-                            <input type="text" name="import_key" id="summaryCardImportKey" maxlength="100" class="mt-1 w-full rounded-xl border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 px-3 py-2 text-sm" required>
-                        </label>
-                        <label class="block text-sm font-semibold text-gray-700 dark:text-gray-200">
-                            Title
-                            <input type="text" name="title" id="summaryCardTitle" class="mt-1 w-full rounded-xl border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 px-3 py-2 text-sm" required>
-                        </label>
-                        <label class="block text-sm font-semibold text-gray-700 dark:text-gray-200">
-                            Main Value
-                            <input type="text" name="main_value" id="summaryCardMainValue" class="mt-1 w-full rounded-xl border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 px-3 py-2 text-sm" required>
-                        </label>
-                        <label class="block text-sm font-semibold text-gray-700 dark:text-gray-200">
-                            Main Label
-                            <input type="text" name="main_label" id="summaryCardMainLabel" class="mt-1 w-full rounded-xl border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 px-3 py-2 text-sm" required>
-                        </label>
-                        <label class="block text-sm font-semibold text-gray-700 dark:text-gray-200">
-                            Year / Date
-                            <input type="text" name="year_date" id="summaryCardYearDate" class="mt-1 w-full rounded-xl border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 px-3 py-2 text-sm">
-                        </label>
-                        <label class="block text-sm font-semibold text-gray-700 dark:text-gray-200">
-                            Secondary Label
-                            <input type="text" name="secondary_label" id="summaryCardSecondaryLabel" class="mt-1 w-full rounded-xl border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 px-3 py-2 text-sm">
-                        </label>
-                        <label class="block text-sm font-semibold text-gray-700 dark:text-gray-200">
-                            Secondary Value
-                            <input type="text" name="secondary_value" id="summaryCardSecondaryValue" class="mt-1 w-full rounded-xl border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 px-3 py-2 text-sm">
-                        </label>
-                        <label class="block text-sm font-semibold text-gray-700 dark:text-gray-200 md:col-span-2">
-                            Description
-                            <textarea name="description" id="summaryCardDescription" rows="2" class="mt-1 w-full rounded-xl border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 px-3 py-2 text-sm"></textarea>
-                        </label>
-                        <label class="block text-sm font-semibold text-gray-700 dark:text-gray-200 md:col-span-2">
-                            Italic Supporting Text
-                            <textarea name="secondary_description" id="summaryCardSecondaryDescription" rows="2" class="mt-1 w-full rounded-xl border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 px-3 py-2 text-sm"></textarea>
-                        </label>
-                        <label class="block text-sm font-semibold text-gray-700 dark:text-gray-200 md:col-span-2">
-                            ⓘ Information
-                            <textarea name="info_text" id="summaryCardInfoText" rows="2" class="mt-1 w-full rounded-xl border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 px-3 py-2 text-sm"></textarea>
-                        </label>
-                        <label class="block text-sm font-semibold text-gray-700 dark:text-gray-200">
-                            Display Order
-                            <input type="number" name="display_order" id="summaryCardDisplayOrder" value="0" min="0" class="mt-1 w-full rounded-xl border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 px-3 py-2 text-sm">
-                        </label>
-                        <label class="block text-sm font-semibold text-gray-700 dark:text-gray-200">
-                            Categories
-                            <select name="category_ids[]" id="summaryCardCategory" multiple size="3" aria-describedby="summaryCardCategoryHelp" class="mt-1 w-full rounded-xl border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 px-3 py-2 text-sm"></select>
-                            <span id="summaryCardCategoryHelp" class="mt-1 block text-xs font-normal text-gray-500 dark:text-gray-400">Select one or more; leave empty for Uncategorized.</span>
-                            <span class="mt-2 flex items-center gap-2"><button type="button" id="summaryCardAddCategory" class="rounded-lg border border-green-800/30 px-2.5 py-1 text-xs font-semibold text-green-900 hover:bg-green-50 dark:border-gray-600 dark:text-gray-100 dark:hover:bg-gray-700">+ New category</button><input type="text" id="summaryCardNewCategory" maxlength="40" placeholder="Category name" class="hidden min-w-0 flex-1 rounded-xl border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 px-3 py-2 text-sm"></span>
-                        </label>
-                        <label class="block text-sm font-semibold text-gray-700 dark:text-gray-200">
-                            Display Precision
-                            <select name="display_precision" id="summaryCardDisplayPrecision" class="mt-1 w-full rounded-xl border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 px-3 py-2 text-sm">
-                                <option value="0">No decimals</option>
-                                <option value="1">1 decimal</option>
-                                <option value="2" selected>2 decimals</option>
-                            </select>
-                        </label>
-                        <label class="inline-flex items-center gap-2 text-sm font-semibold text-gray-700 dark:text-gray-200 md:col-span-2">
-                            <input type="checkbox" id="summaryCardPublished" name="is_published">
-                            Publish this card
-                        </label>
-                        <div class="md:col-span-2 flex items-center justify-end gap-3">
-                            <button type="button" id="cancelSummaryCardForm" class="rounded-xl border border-gray-300 dark:border-gray-700 px-4 py-2 text-sm font-semibold text-gray-700 dark:text-gray-200">Cancel</button>
-                            <button type="submit" class="rounded-xl bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-500">Save card</button>
-                        </div>
-                    </form>
-                </div>
-            <?php endif; ?>
 
             <div id="summaryCardCategoryFilter" class="hidden -mx-4 px-4 sm:mx-0 sm:px-0 overflow-x-auto" aria-label="Filter summary cards by category">
                 <div id="summaryCardCategoryChips" class="flex w-max min-w-full items-center gap-2 pb-1" role="group" aria-label="Summary card categories"></div>
             </div>
-            <div id="summaryCardsGrid" class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4"></div>
+            <div id="summaryCardsGrid" class="summary-card-grid"></div>
         </section>
 
-        <section id="ranking-history" class="space-y-4">
+        <section id="ranking-history" class="space-y-4 rounded-2xl border border-gray-200 bg-white/70 p-4 shadow-sm dark:border-gray-700 dark:bg-gray-800/50 sm:p-5">
             <div class="flex flex-col sm:flex-row sm:items-end justify-between gap-3">
                 <div>
                     <h2 class="text-xl font-bold text-gray-900 dark:text-white flex items-center">
@@ -488,9 +422,7 @@ try {
                     </label>
                 </div>
             </div>
-            <div class="ranking-panel w-full rounded-2xl p-5">
-                <div id="rankingChart" class="grid min-h-64 w-full grid-cols-1 gap-4 xl:grid-cols-2"></div>
-            </div>
+            <div id="rankingChart" class="grid min-h-64 w-full grid-cols-1 gap-4 xl:grid-cols-2"></div>
         </section>
 
         <section id="star-rating-cards-section" class="hidden space-y-4">
@@ -504,13 +436,13 @@ try {
             <div id="star-rating-cards-grid" class="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3"></div>
         </section>
 
-        <section id="scanner-published-graphs" class="space-y-4">
+        <section id="scanner-published-graphs" class="space-y-4 rounded-2xl border border-gray-200 bg-white/70 p-4 shadow-sm dark:border-gray-700 dark:bg-gray-800/50 sm:p-5">
             <div class="flex flex-col sm:flex-row sm:items-end justify-between gap-3">
                 <div>
                     <h2 class="text-xl font-bold text-gray-900 dark:text-white flex items-center">
-                        <i class="fa-solid fa-chart-column text-emerald-500 mr-2"></i> Scanner-Published Analytics
+                        <i class="fa-solid fa-chart-column text-emerald-500 mr-2"></i> Data &amp; Report Visualization
                     </h2>
-                    <p class="text-xs text-gray-500 dark:text-gray-400">Published visualizations available from the IRIS Scanner</p>
+                    <p class="text-xs text-gray-500 dark:text-gray-400">Published institutional data and reports</p>
                 </div>
                 <span id="publishedGraphCount" class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-emerald-100 text-emerald-800 dark:bg-emerald-900/60 dark:text-emerald-300">
                     <i class="fa-solid fa-circle-check mr-1"></i> Loading published graphs
@@ -518,7 +450,7 @@ try {
             </div>
             <div id="scannerPublishedGraphsGrid" class="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 <div id="scannerPublishedGraphsEmpty" class="lg:col-span-2 p-6 rounded-2xl border border-dashed border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-800/60 text-center text-sm text-gray-500 dark:text-gray-400">
-                    <i class="fa-solid fa-chart-simple text-lg mr-1"></i> No published scanner graphs are available yet.
+                    <i class="fa-solid fa-chart-simple text-lg mr-1"></i> No published data and report visualizations are available yet.
                 </div>
             </div>
         </section>
@@ -526,7 +458,7 @@ try {
 
     <!-- Footer -->
     <footer class="admin-footer bg-white dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700 py-6 mt-12">
-        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row items-center justify-between text-xs text-gray-500 dark:text-gray-400 gap-4">
+        <div class="dashboard-container flex flex-col sm:flex-row items-center justify-between text-xs text-gray-500 dark:text-gray-400 gap-4">
             <div class="flex items-center space-x-2">
                 <span class="font-bold admin-footer-title text-gray-800 dark:text-gray-200">CLSU Observatory</span>
                 <span>&bull; IAO'S INTERNATIONAL RAPPORT INSIGHT SYSTEM</span>
@@ -705,7 +637,6 @@ try {
             }).join('');
         }
 
-        const summaryCardsCsrfToken = <?= json_encode(csrf_token()) ?>;
         let summaryCardsData = [];
         let summaryCardCategories = [];
         let activeSummaryCategorySlug = '';
@@ -767,7 +698,6 @@ try {
                 return;
             }
 
-            const isAdmin = <?= json_encode(($_SESSION['role'] ?? null) === 'super_admin') ?>;
             grid.innerHTML = visibleCards
                 .slice()
                 .sort((a, b) => Number(a.display_order || 0) - Number(b.display_order || 0))
@@ -781,27 +711,21 @@ try {
                     const mainLabel = escapeHtmlDashboard(card.main_label || 'Current snapshot');
                     const yearDate = escapeHtmlDashboard(card.year_date || '');
                     const infoLabel = escapeHtmlDashboard(`Information about ${card.title || 'this card'}`);
-                    const adminControls = isAdmin ? `
-                        <div class="mt-4 flex flex-wrap gap-2">
-                            <button type="button" class="summary-card-edit rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 px-2.5 py-1.5 text-[11px] font-semibold text-gray-700 dark:text-gray-200" data-id="${escapeHtmlDashboard(card.id)}">Edit</button>
-                            <button type="button" class="summary-card-toggle rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 px-2.5 py-1.5 text-[11px] font-semibold text-gray-700 dark:text-gray-200" data-id="${escapeHtmlDashboard(card.id)}" data-published="${card.is_published ? '1' : '0'}">${card.is_published ? 'Unpublish' : 'Publish'}</button>
-                            <button type="button" class="summary-card-delete rounded-lg border border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-900/20 px-2.5 py-1.5 text-[11px] font-semibold text-red-700 dark:text-red-300" data-id="${escapeHtmlDashboard(card.id)}">Delete</button>
-                        </div>` : '';
                     const historyControl = Number(card.history_count || 0) > 1 ? `
                         <div class="mt-3">
                             <button type="button" class="summary-card-history-toggle text-xs font-semibold text-emerald-700 hover:underline dark:text-emerald-300" data-id="${escapeHtmlDashboard(card.id)}" aria-expanded="false">View Historical Data</button>
                             <div class="summary-card-history-panel mt-2 hidden rounded-lg border border-gray-200 p-3 dark:border-gray-700" data-id="${escapeHtmlDashboard(card.id)}"></div>
                         </div>` : '';
                     return `
-                        <article class="summary-card-shell rounded-2xl p-5 shadow-sm">
+                        <article class="summary-card-shell relative overflow-visible rounded-2xl p-5 shadow-sm">
                             <div class="flex items-start justify-between gap-3">
                                 <div>
                                     <div class="summary-card-title text-[10px] font-bold uppercase tracking-[0.14em]">${escapeHtmlDashboard(card.title || 'Performance Snapshot')}</div>
-                                    <div class="mt-2 text-3xl font-extrabold text-gray-900 dark:text-white">${escapeHtmlDashboard(mainValue)}</div>
+                                    <div class="mt-2 whitespace-nowrap text-3xl font-extrabold text-gray-900 dark:text-white">${escapeHtmlDashboard(mainValue)}</div>
                                 </div>
                                 <div class="flex items-center gap-2">
                                     ${yearDate ? `<span class="summary-card-year-badge rounded-full px-2 py-1 text-[10px] font-bold uppercase tracking-wide">${yearDate}</span>` : ''}
-                                    ${infoText ? `<details class="relative"><summary class="flex h-7 w-7 cursor-pointer list-none items-center justify-center rounded-full border border-gray-500/40 text-sm text-gray-500 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700" aria-label="${infoLabel}" title="More information"><i class="fa-solid fa-circle-info" aria-hidden="true"></i></summary><div role="note" class="absolute right-0 top-full z-20 mt-2 w-64 max-w-[75vw] rounded-lg border border-gray-200 bg-white p-3 text-left text-xs font-normal normal-case text-gray-700 shadow-xl dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200">${infoText}</div></details>` : ''}
+                                    ${infoText ? `<div class="summary-card-info-control relative z-40"><button type="button" class="flex h-7 w-7 cursor-pointer items-center justify-center rounded-full border border-gray-500/40 text-sm text-gray-500 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700" data-info-trigger aria-label="${infoLabel}" aria-controls="summary-card-info-${escapeHtmlDashboard(card.id)}" aria-expanded="false" title="More information"><i class="fa-solid fa-circle-info" aria-hidden="true"></i></button><div id="summary-card-info-${escapeHtmlDashboard(card.id)}" data-info-panel role="tooltip" hidden class="absolute right-0 top-full z-40 mt-2 w-64 max-w-[75vw] rounded-lg border border-gray-200 bg-white p-3 text-left text-xs font-normal normal-case text-gray-700 shadow-xl dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200">${infoText}</div></div>` : ''}
                                 </div>
                             </div>
                             <div class="summary-card-label mt-2 text-xs font-semibold uppercase tracking-wide">${mainLabel}</div>
@@ -812,9 +736,32 @@ try {
                             ${secondaryDescription ? `<p class="mt-2 text-sm italic text-gray-500 dark:text-gray-400">${secondaryDescription}</p>` : ''}
                             ${description ? `<p class="mt-3 text-sm text-gray-600 dark:text-gray-300">${description}</p>` : ''}
                             ${historyControl}
-                            ${adminControls}
                         </article>`;
                 }).join('');
+
+            grid.querySelectorAll('.summary-card-info-control').forEach(wrapper => {
+                const trigger = wrapper.querySelector('[data-info-trigger]');
+                const panel = wrapper.querySelector('[data-info-panel]');
+                if (!trigger || !panel) return;
+                const open = () => { panel.hidden = false; trigger.setAttribute('aria-expanded', 'true'); };
+                const close = () => { panel.hidden = true; trigger.setAttribute('aria-expanded', 'false'); };
+                let touchToggleHandled = false;
+                trigger.addEventListener('mouseenter', open);
+                trigger.addEventListener('focus', open);
+                wrapper.addEventListener('mouseleave', event => { if (!panel.contains(event.relatedTarget)) close(); });
+                trigger.addEventListener('blur', close);
+                trigger.addEventListener('keydown', event => { if (event.key === 'Escape') { close(); trigger.blur(); } });
+                trigger.addEventListener('pointerdown', event => {
+                    if (event.pointerType !== 'touch') return;
+                    event.preventDefault();
+                    touchToggleHandled = true;
+                    panel.hidden ? open() : close();
+                });
+                trigger.addEventListener('click', event => {
+                    if (touchToggleHandled) { touchToggleHandled = false; return; }
+                    if (event.detail === 0) return;
+                });
+            });
 
             document.querySelectorAll('.summary-card-history-toggle').forEach(button => {
                 button.addEventListener('click', async () => {
@@ -873,62 +820,6 @@ try {
                 });
             });
 
-            if (isAdmin) {
-                document.querySelectorAll('.summary-card-edit').forEach(button => {
-                    button.addEventListener('click', () => {
-                        const id = button.dataset.id;
-                        const cardsLookup = Array.isArray(cards) ? cards : [];
-                        const card = cardsLookup.find(item => String(item.id) === String(id));
-                        if (!card) return;
-                        document.getElementById('summaryCardId').value = card.id || '';
-                        document.getElementById('summaryCardTitle').value = card.title || '';
-                        document.getElementById('summaryCardMainValue').value = card.main_value || '';
-                        document.getElementById('summaryCardMainLabel').value = card.main_label || '';
-                        document.getElementById('summaryCardYearDate').value = card.year_date || '';
-                        document.getElementById('summaryCardSecondaryLabel').value = card.secondary_label || '';
-                        document.getElementById('summaryCardSecondaryValue').value = card.secondary_value || '';
-                        document.getElementById('summaryCardDescription').value = card.description || '';
-                        document.getElementById('summaryCardSecondaryDescription').value = card.secondary_description || '';
-                        document.getElementById('summaryCardInfoText').value = card.info_text || '';
-                        document.getElementById('summaryCardDisplayOrder').value = card.display_order ?? 0;
-                        document.getElementById('summaryCardDisplayPrecision').value = String(card.display_precision ?? 2);
-                        document.getElementById('summaryCardPublished').checked = !!card.is_published;
-                        summaryCardsAdminFormPanel.classList.remove('hidden');
-                        summaryCardsAdminForm.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-                    });
-                });
-
-                document.querySelectorAll('.summary-card-toggle').forEach(button => {
-                    button.addEventListener('click', async () => {
-                        const id = button.dataset.id;
-                        const published = button.dataset.published === '1';
-                        await fetch('<?= e(base_url('api/iris.php')) ?>?resource=summary_cards&id=' + encodeURIComponent(id), {
-                            method: 'PUT',
-                            headers: { 'Content-Type': 'application/json', 'Accept': 'application/json', 'X-CSRF-Token': summaryCardsCsrfToken },
-                            body: JSON.stringify({ is_published: !published })
-                        });
-                        if (typeof refreshSummaryCardsAdmin === 'function') {
-                            refreshSummaryCardsAdmin();
-                        }
-                        loadSummaryCards();
-                    });
-                });
-
-                document.querySelectorAll('.summary-card-delete').forEach(button => {
-                    button.addEventListener('click', async () => {
-                        const id = button.dataset.id;
-                        if (!confirm('Delete this summary card?')) return;
-                        await fetch('<?= e(base_url('api/iris.php')) ?>?resource=summary_cards&id=' + encodeURIComponent(id), {
-                            method: 'DELETE',
-                            headers: { Accept: 'application/json', 'X-CSRF-Token': summaryCardsCsrfToken }
-                        });
-                        if (typeof refreshSummaryCardsAdmin === 'function') {
-                            refreshSummaryCardsAdmin();
-                        }
-                        loadSummaryCards();
-                    });
-                });
-            }
         }
 
         async function loadSummaryCards() {
@@ -950,194 +841,6 @@ try {
             }
         }
 
-        <?php if (($_SESSION['role'] ?? null) === 'super_admin'): ?>
-            const summaryCardsAdminForm = document.getElementById('summaryCardsAdminForm');
-            const summaryCardsAdminFormPanel = document.getElementById('summaryCardsAdminFormPanel');
-            const toggleSummaryCardFormButton = document.getElementById('toggleSummaryCardForm');
-            const cancelSummaryCardFormButton = document.getElementById('cancelSummaryCardForm');
-            const summaryCardCategorySelect = document.getElementById('summaryCardCategory');
-            const summaryCardNewCategory = document.getElementById('summaryCardNewCategory');
-            const summaryCardAddCategory = document.getElementById('summaryCardAddCategory');
-
-            async function refreshSummaryCardsAdmin() {
-                const [response, categoryResponse] = await Promise.all([
-                    fetch('<?= e(base_url('api/iris.php')) ?>?resource=summary_cards', { headers: { Accept: 'application/json' } }),
-                    fetch('<?= e(base_url('api/iris.php')) ?>?resource=summary_card_categories', { headers: { Accept: 'application/json' } })
-                ]);
-                if (!response.ok || !categoryResponse.ok) throw new Error('Unable to load summary cards');
-                const cards = await response.json();
-                const categories = await categoryResponse.json();
-                const selectedCategories = [...summaryCardCategorySelect.selectedOptions].map(option => option.value);
-                summaryCardCategorySelect.innerHTML = categories.map(category => `<option value="${escapeHtmlDashboard(category.id)}">${escapeHtmlDashboard(category.name)}</option>`).join('');
-                [...summaryCardCategorySelect.options].forEach(option => { option.selected = selectedCategories.includes(option.value); });
-                const container = document.getElementById('summaryCardAdminList');
-                if (!container) return;
-                if (!Array.isArray(cards) || cards.length === 0) {
-                    container.innerHTML = '<div class="rounded-xl border border-dashed border-gray-300 dark:border-gray-700 px-4 py-6 text-sm text-gray-500 dark:text-gray-400 text-center">No summary cards yet.</div>';
-                    return;
-                }
-                container.innerHTML = cards
-                    .sort((a, b) => Number(a.display_order || 0) - Number(b.display_order || 0))
-                    .map(card => `
-                        <div class="rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/60 p-3">
-                            <div class="flex items-start justify-between gap-3">
-                                <div>
-                                    <div class="text-sm font-bold text-gray-900 dark:text-white">${escapeHtmlDashboard(card.title || 'Snapshot Card')}</div>
-                                    <div class="text-xs text-gray-500 dark:text-gray-400">Global Label: ${escapeHtmlDashboard(card.import_key || '')}</div>
-                                    <div class="text-xs text-gray-500 dark:text-gray-400">${escapeHtmlDashboard(card.main_value || '')} · ${escapeHtmlDashboard(card.main_label || '')}</div>
-                                    <div class="mt-1 text-xs text-gray-500 dark:text-gray-400">Public: ${escapeHtmlDashboard(card.current_public_period || 'None')} · Latest imported: ${escapeHtmlDashboard(card.latest_imported_period || 'None')} · Periods: ${Number(card.history_count || 0)}</div>
-                                    <span class="mt-1 inline-flex rounded-full bg-green-100 px-2 py-0.5 text-[10px] font-semibold text-green-900 dark:bg-green-900/30 dark:text-green-200">${escapeHtmlDashboard(card.category_name || 'Uncategorized')}</span>
-                                </div>
-                                <span class="rounded-full px-2 py-1 text-[10px] font-bold uppercase tracking-wide ${card.is_published ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-300' : 'bg-gray-200 text-gray-700 dark:bg-gray-800 dark:text-gray-300'}">${card.is_published ? 'Published' : 'Draft'}</span>
-                            </div>
-                            <div class="mt-3 flex flex-wrap gap-2">
-                                <button type="button" class="summary-card-edit rounded-lg border border-gray-300 dark:border-gray-700 px-2.5 py-1.5 text-xs font-semibold text-gray-700 dark:text-gray-200" data-id="${escapeHtmlDashboard(card.id)}">Edit</button>
-                                <button type="button" class="summary-card-toggle rounded-lg border border-gray-300 dark:border-gray-700 px-2.5 py-1.5 text-xs font-semibold text-gray-700 dark:text-gray-200" data-id="${escapeHtmlDashboard(card.id)}" data-published="${card.is_published ? '1' : '0'}">${card.is_published ? 'Unpublish' : 'Publish'}</button>
-                                <button type="button" class="summary-card-delete rounded-lg border border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-900/20 px-2.5 py-1.5 text-xs font-semibold text-red-700 dark:text-red-300" data-id="${escapeHtmlDashboard(card.id)}">Delete</button>
-                            </div>
-                        </div>
-                    `).join('');
-
-                document.querySelectorAll('.summary-card-edit').forEach(button => {
-                    button.addEventListener('click', async () => {
-                        const id = button.dataset.id;
-                        const card = cards.find(item => item.id === id);
-                        if (!card) return;
-                        document.getElementById('summaryCardId').value = card.id;
-                        document.getElementById('summaryCardImportKey').value = card.import_key || card.id || '';
-                        document.getElementById('summaryCardTitle').value = card.title || '';
-                        document.getElementById('summaryCardMainValue').value = card.main_value || '';
-                        document.getElementById('summaryCardMainLabel').value = card.main_label || '';
-                        document.getElementById('summaryCardYearDate').value = card.year_date || '';
-                        document.getElementById('summaryCardSecondaryLabel').value = card.secondary_label || '';
-                        document.getElementById('summaryCardSecondaryValue').value = card.secondary_value || '';
-                        document.getElementById('summaryCardDescription').value = card.description || '';
-                        document.getElementById('summaryCardSecondaryDescription').value = card.secondary_description || '';
-                        document.getElementById('summaryCardInfoText').value = card.info_text || '';
-                        document.getElementById('summaryCardDisplayOrder').value = card.display_order ?? 0;
-                        const selectedIds = (card.category_ids || (card.category_id ? [card.category_id] : [])).map(String);
-                        [...summaryCardCategorySelect.options].forEach(option => { option.selected = selectedIds.includes(option.value); });
-                        summaryCardNewCategory.value = '';
-                        summaryCardNewCategory.classList.add('hidden');
-                        document.getElementById('summaryCardDisplayPrecision').value = String(card.display_precision ?? 2);
-                        document.getElementById('summaryCardPublished').checked = !!card.is_published;
-                        summaryCardsAdminFormPanel.classList.remove('hidden');
-                        summaryCardsAdminForm.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-                    });
-                });
-
-                document.querySelectorAll('.summary-card-toggle').forEach(button => {
-                    button.addEventListener('click', async () => {
-                        const id = button.dataset.id;
-                        const published = button.dataset.published === '1';
-                        await fetch('<?= e(base_url('api/iris.php')) ?>?resource=summary_cards&id=' + encodeURIComponent(id), {
-                            method: 'PUT',
-                            headers: { 'Content-Type': 'application/json', 'Accept': 'application/json', 'X-CSRF-Token': summaryCardsCsrfToken },
-                            body: JSON.stringify({ is_published: !published })
-                        });
-                        refreshSummaryCardsAdmin();
-                        loadSummaryCards();
-                    });
-                });
-
-                document.querySelectorAll('.summary-card-delete').forEach(button => {
-                    button.addEventListener('click', async () => {
-                        const id = button.dataset.id;
-                        if (!confirm('Delete this summary card?')) return;
-                        await fetch('<?= e(base_url('api/iris.php')) ?>?resource=summary_cards&id=' + encodeURIComponent(id), {
-                            method: 'DELETE',
-                            headers: { Accept: 'application/json', 'X-CSRF-Token': summaryCardsCsrfToken }
-                        });
-                        refreshSummaryCardsAdmin();
-                        loadSummaryCards();
-                    });
-                });
-            }
-
-            summaryCardsAdminForm.addEventListener('submit', async (event) => {
-                event.preventDefault();
-                const payload = {
-                    import_key: document.getElementById('summaryCardImportKey').value,
-                    title: document.getElementById('summaryCardTitle').value.trim(),
-                    main_value: document.getElementById('summaryCardMainValue').value.trim(),
-                    main_label: document.getElementById('summaryCardMainLabel').value.trim(),
-                    year_date: document.getElementById('summaryCardYearDate').value.trim(),
-                    secondary_label: document.getElementById('summaryCardSecondaryLabel').value.trim(),
-                    secondary_value: document.getElementById('summaryCardSecondaryValue').value.trim(),
-                    description: document.getElementById('summaryCardDescription').value.trim(),
-                    secondary_description: document.getElementById('summaryCardSecondaryDescription').value.trim(),
-                    info_text: document.getElementById('summaryCardInfoText').value.trim(),
-                    display_order: Number(document.getElementById('summaryCardDisplayOrder').value || 0),
-                    display_precision: (() => {
-                        const precisionValue = Number(document.getElementById('summaryCardDisplayPrecision').value);
-                        return Number.isFinite(precisionValue) ? precisionValue : 2;
-                    })(),
-                    is_published: document.getElementById('summaryCardPublished').checked
-                };
-                payload.category_ids = [...summaryCardCategorySelect.selectedOptions].map(option => Number(option.value));
-                const newCategoryName = summaryCardNewCategory.value.trim();
-                if (newCategoryName) payload.category_names = [newCategoryName];
-
-                const id = document.getElementById('summaryCardId').value;
-                const url = '<?= e(base_url('api/iris.php')) ?>?resource=summary_cards' + (id ? '&id=' + encodeURIComponent(id) : '');
-                const method = id ? 'PUT' : 'POST';
-                const response = await fetch(url, {
-                    method,
-                    headers: { 'Content-Type': 'application/json', 'Accept': 'application/json', 'X-CSRF-Token': summaryCardsCsrfToken },
-                    body: JSON.stringify(payload)
-                });
-                if (!response.ok) {
-                    const error = await response.json().catch(() => ({}));
-                    alert(error.error || 'Unable to save summary card');
-                    return;
-                }
-                summaryCardsAdminForm.reset();
-                [...summaryCardCategorySelect.options].forEach(option => { option.selected = false; });
-                summaryCardNewCategory.classList.add('hidden');
-                summaryCardNewCategory.value = '';
-                document.getElementById('summaryCardDisplayOrder').value = '0';
-                document.getElementById('summaryCardDisplayPrecision').value = '2';
-                document.getElementById('summaryCardPublished').checked = false;
-                summaryCardsAdminFormPanel.classList.add('hidden');
-                await refreshSummaryCardsAdmin();
-                loadSummaryCards();
-            });
-
-            toggleSummaryCardFormButton?.addEventListener('click', () => {
-                summaryCardsAdminForm.reset();
-                summaryCardsAdminFormPanel.classList.toggle('hidden');
-                document.getElementById('summaryCardId').value = '';
-                [...summaryCardCategorySelect.options].forEach(option => { option.selected = false; });
-                summaryCardNewCategory.classList.add('hidden');
-                summaryCardNewCategory.value = '';
-                document.getElementById('summaryCardDisplayOrder').value = '0';
-                document.getElementById('summaryCardDisplayPrecision').value = '2';
-                document.getElementById('summaryCardPublished').checked = false;
-            });
-
-            cancelSummaryCardFormButton?.addEventListener('click', () => {
-                summaryCardsAdminForm.reset();
-                [...summaryCardCategorySelect.options].forEach(option => { option.selected = false; });
-                summaryCardNewCategory.classList.add('hidden');
-                summaryCardNewCategory.value = '';
-                summaryCardsAdminFormPanel.classList.add('hidden');
-            });
-
-            summaryCardAddCategory.addEventListener('click', () => {
-                summaryCardNewCategory.classList.toggle('hidden');
-                if (!summaryCardNewCategory.classList.contains('hidden')) summaryCardNewCategory.focus();
-            });
-
-            const summaryCardAdminList = document.createElement('div');
-            summaryCardAdminList.id = 'summaryCardAdminList';
-            summaryCardAdminList.className = 'grid gap-3';
-            const formPanel = document.getElementById('summaryCardsAdminFormPanel');
-            if (formPanel) {
-                formPanel.appendChild(summaryCardAdminList);
-            }
-            refreshSummaryCardsAdmin().catch(() => {});
-        <?php endif; ?>
-
         // --- Published Observatory Graphs ---
         let chartInstances = [];
 
@@ -1157,6 +860,7 @@ try {
                 if (el._publishedChart) replacedCharts.add(el._publishedChart);
                 el.remove();
             });
+            grid.querySelectorAll('.scanner-published-scope').forEach(el => el.remove());
             chartInstances = chartInstances.filter(chart => !replacedCharts.has(chart));
             if (!Array.isArray(graphs) || graphs.length === 0) {
                 if (empty) empty.style.display = '';
@@ -1166,10 +870,28 @@ try {
             if (empty) empty.style.display = 'none';
             count.innerHTML = `<i class="fa-solid fa-circle-check mr-1"></i> ${graphs.length} published graph${graphs.length === 1 ? '' : 's'}`;
 
-            graphs.forEach((graph, index) => {
+            const scopes = new Map();
+            graphs.forEach(graph => {
+                const scope = String(graph.scope || '').trim() || 'General';
+                if (!scopes.has(scope)) scopes.set(scope, []);
+                scopes.get(scope).push(graph);
+            });
+            const orderedScopes = [...scopes.entries()].sort(([left], [right]) => {
+                if (left === 'General') return 1;
+                if (right === 'General') return -1;
+                return left.localeCompare(right);
+            });
+            let chartIndex = 0;
+            orderedScopes.forEach(([scope, scopedGraphs]) => {
+                const scopeCard = document.createElement('section');
+                scopeCard.className = 'scanner-published-scope col-span-full rounded-2xl border border-gray-200 bg-white p-4 shadow-sm dark:border-gray-700 dark:bg-gray-800';
+                scopeCard.innerHTML = `<header class="mb-4 flex items-center justify-between gap-3 border-b border-gray-100 pb-3 dark:border-gray-700"><h3 class="text-base font-bold text-gray-900 dark:text-white">${escapeHtmlDashboard(scope)}</h3><span class="text-xs font-semibold text-gray-500 dark:text-gray-300">${scopedGraphs.length} graph${scopedGraphs.length === 1 ? '' : 's'}</span></header><div class="grid grid-cols-1 gap-6 lg:grid-cols-2" data-scope-graphs></div>`;
+                grid.appendChild(scopeCard);
+                const scopeGrid = scopeCard.querySelector('[data-scope-graphs]');
+                scopedGraphs.forEach(graph => {
                 const card = document.createElement('div');
                 card.className = 'scanner-published-card bg-white dark:bg-gray-800 p-6 rounded-2xl border border-gray-200 dark:border-gray-700 shadow-sm';
-                const chartId = `scannerPublishedChart_${index}`;
+                const chartId = `scannerPublishedChart_${chartIndex++}`;
                 card.innerHTML = `
                     <div class="flex items-start justify-between gap-4 pb-4 border-b border-gray-100 dark:border-gray-700">
                         <div class="min-w-0">
@@ -1183,7 +905,7 @@ try {
                         </div>
                     </div>
                     <div id="${chartId}" class="w-full h-72 pt-4"></div>`;
-                grid.appendChild(card);
+                scopeGrid.appendChild(card);
 
                 card.querySelector('.published-graph-delete')?.addEventListener('click', async event => {
                     const button = event.currentTarget;
@@ -1218,6 +940,7 @@ try {
                     width: elem.clientWidth,
                     theme: { dark: document.documentElement.classList.contains('dark') }
                 }));
+                });
             });
         }
 

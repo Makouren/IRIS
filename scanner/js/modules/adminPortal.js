@@ -2,6 +2,12 @@ import { $, all } from '../utils/helpers.js';
 
 export function initAdminPortal(ctx) {
   const selectedRecordIds = new Set();
+  let archiveRecords = [];
+  const importDestinations = new Set(['summary_cards', 'ranking_history']);
+  const recordPurpose = record => {
+    const purpose = String(record.metadata?.upload_purpose || record.import_destination || '');
+    return ['analytics', 'summary_cards', 'ranking_history'].includes(purpose) ? purpose : 'analytics';
+  };
 
   const escape = value => String(value ?? '').replace(/[&<>"']/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[ch]));
   const projectBase = ctx.dbManager.config.endpoints.records.split('/api/iris.php')[0];
@@ -159,11 +165,11 @@ export function initAdminPortal(ctx) {
   });
 
   const updateBulkActions = () => {
-    const bar = $('adminBulkActions');
-    const count = $('adminBulkSelectionCount');
-    const deleteBtn = $('adminBulkDelete');
-    const publishBtn = $('adminBulkPublish');
-    const unpublishBtn = $('adminBulkUnpublish');
+    const bar = $('fileArchivesBulkActions');
+    const count = $('fileArchivesBulkSelectionCount');
+    const deleteBtn = $('fileArchivesBulkDelete');
+    const publishBtn = $('fileArchivesBulkPublish');
+    const unpublishBtn = $('fileArchivesBulkUnpublish');
     const n = selectedRecordIds.size;
     if (bar) bar.hidden = n === 0;
     if (count) count.textContent = `${n} record${n === 1 ? '' : 's'} selected`;
@@ -173,8 +179,8 @@ export function initAdminPortal(ctx) {
   };
 
   const syncSelectAll = () => {
-    const boxes = [...document.querySelectorAll('#adminRecordsTableBody .admin-record-checkbox')];
-    const selectAll = $('adminSelectAll');
+    const boxes = [...document.querySelectorAll('#fileArchivesTableBody .admin-record-checkbox')];
+    const selectAll = $('fileArchivesSelectAll');
     if (!selectAll) return;
     const visibleIds = boxes.map(box => box.dataset.id).filter(Boolean);
     selectAll.checked = visibleIds.length > 0 && visibleIds.every(id => selectedRecordIds.has(id));
@@ -182,7 +188,7 @@ export function initAdminPortal(ctx) {
   };
 
   const bindSelection = () => {
-    document.querySelectorAll('#adminRecordsTableBody .admin-record-checkbox').forEach(box => {
+    document.querySelectorAll('#fileArchivesTableBody .admin-record-checkbox').forEach(box => {
       box.checked = selectedRecordIds.has(box.dataset.id);
       box.onchange = () => {
         if (box.checked) selectedRecordIds.add(box.dataset.id);
@@ -191,9 +197,9 @@ export function initAdminPortal(ctx) {
         syncSelectAll();
       };
     });
-    const selectAll = $('adminSelectAll');
+    const selectAll = $('fileArchivesSelectAll');
     if (selectAll) selectAll.onchange = () => {
-      document.querySelectorAll('#adminRecordsTableBody .admin-record-checkbox').forEach(box => {
+      document.querySelectorAll('#fileArchivesTableBody .admin-record-checkbox').forEach(box => {
         if (selectAll.checked) selectedRecordIds.add(box.dataset.id);
         else selectedRecordIds.delete(box.dataset.id);
         box.checked = selectAll.checked;
@@ -206,7 +212,7 @@ export function initAdminPortal(ctx) {
   };
 
   const renderRows = filtered => {
-    const body = $('adminRecordsTableBody');
+    const body = $('fileArchivesTableBody');
     if (!body) return;
     const html = filtered.map(record => {
       const scannedDate = record.scannedAt || (() => {
@@ -242,7 +248,7 @@ export function initAdminPortal(ctx) {
         </div></td>
       </tr>`;
     }).join('');
-    body.innerHTML = html || '<tr><td colspan="8">No matching scanned records in database.</td></tr>';
+    body.innerHTML = html || '<tr><td colspan="8">No files match these archive filters.</td></tr>';
 
     all('.btn-table-load-studio').forEach(button => button.onclick = async () => {
       const record = filtered.find(item => String(item.id) === String(button.dataset.id));
@@ -307,7 +313,7 @@ export function initAdminPortal(ctx) {
   const confirmBulk = async mode => {
     const ids = [...selectedRecordIds];
     if (!ids.length) return;
-    const records = await ctx.dbManager.getAllRecords({ excludeImportRecords: true });
+    const records = await ctx.dbManager.getAllRecords();
     const selected = records.filter(record => ids.includes(String(record.id)));
     const verb = mode;
     const description = mode === 'delete'
@@ -348,6 +354,33 @@ export function initAdminPortal(ctx) {
     };
   };
 
+  const renderFileArchives = records => {
+    archiveRecords = Array.isArray(records) ? records : archiveRecords;
+    const officeFilter = $('fileArchiveOfficeFilter');
+    const selectedOffice = officeFilter?.value || 'all';
+    const offices = [...new Set(archiveRecords.map(record => record.office_name).filter(Boolean))].sort((a, b) => a.localeCompare(b));
+    if (officeFilter) {
+      officeFilter.innerHTML = '<option value="all">All offices</option>' + offices.map(name => `<option value="${escape(name)}">${escape(name)}</option>`).join('');
+      officeFilter.value = offices.includes(selectedOffice) ? selectedOffice : 'all';
+    }
+    const term = (($('fileArchiveSearchInput')?.value || '')).toLowerCase();
+    const purpose = $('fileArchivePurposeFilter')?.value || 'all';
+    const status = $('fileArchiveStatusFilter')?.value || 'all';
+    const office = officeFilter?.value || 'all';
+    const filtered = archiveRecords.filter(record => {
+      const haystack = [record.id, record.fileName, record.docType, record.rawText].join(' ').toLowerCase();
+      return (purpose === 'all' || recordPurpose(record) === purpose)
+        && haystack.includes(term)
+        && (status === 'all' || record.status === status || (status === 'Pending Review' && !record.status))
+        && (office === 'all' || record.office_name === office);
+    });
+    const visible = new Set(filtered.map(record => String(record.id)));
+    [...selectedRecordIds].forEach(id => { if (!visible.has(String(id))) selectedRecordIds.delete(id); });
+    renderRows(filtered);
+  };
+
+  ctx.api.renderFileArchives = async () => renderFileArchives(await ctx.dbManager.getAllRecords());
+
   ctx.api.renderAdminPortal = async (preferredRecordId = null) => {
     const select = $('studioRecordSelect');
     const urlParams = new URLSearchParams(window.location.search);
@@ -361,19 +394,12 @@ export function initAdminPortal(ctx) {
         globalThis.IRISFieldColors = globalThis.IRISFieldColors || {};
         console.warn('Field colors are temporarily unavailable:', error);
       }
-      const records = await ctx.dbManager.getAllRecords({ excludeImportRecords: true });
+      const allRecords = await ctx.dbManager.getAllRecords();
+      const records = allRecords.filter(record => !importDestinations.has(recordPurpose(record)));
       if ($('statTotalDb')) $('statTotalDb').textContent = records.length;
       if ($('statPendingDb')) $('statPendingDb').textContent = records.filter(r => r.status === 'Pending Review' || !r.status).length;
       if ($('statVerifiedDb')) $('statVerifiedDb').textContent = records.filter(r => ['Approved', 'Verified & Approved'].includes(r.status)).length;
       if ($('statTablesDb')) $('statTablesDb').textContent = records.reduce((sum, r) => sum + Object.keys(r.extractedData || {}).length, 0);
-      const officeFilter = $('adminOfficeFilter');
-      if (officeFilter) {
-        const selectedOffice = officeFilter.value || 'all';
-        const offices = [...new Set(records.map(record => record.office_name).filter(Boolean))].sort((a, b) => a.localeCompare(b));
-        officeFilter.innerHTML = '<option value="all">All offices</option>' + offices.map(name => `<option value="${escape(name)}">${escape(name)}</option>`).join('');
-        officeFilter.value = offices.includes(selectedOffice) ? selectedOffice : 'all';
-      }
-
       if (records.length) {
         if (select) {
           select.innerHTML = records.map(r => `<option value="${escape(r.id)}">${escape(r.fileName)} (${escape((r.fileType || '').toUpperCase())})${r.office_name ? ` · Uploaded by ${escape(r.office_name)}` : ''}${r.template_name ? ` · via ${escape(r.template_name)}` : ''}</option>`).join('');
@@ -410,32 +436,23 @@ export function initAdminPortal(ctx) {
 
       if (graphId) await restoreSavedGraph(graphId, ctx.state.studioActiveRecord, records, urlRecordId);
 
-      const term = (($('adminSearchInput')?.value || '')).toLowerCase();
-      const status = $('adminStatusFilter')?.value || 'all';
-      const office = $('adminOfficeFilter')?.value || 'all';
-      const filtered = records.filter(record => {
-        const haystack = [record.id, record.fileName, record.docType, record.rawText].join(' ').toLowerCase();
-        return haystack.includes(term) && (status === 'all' || record.status === status || (status === 'Pending Review' && !record.status))
-          && (office === 'all' || record.office_name === office);
-      });
-      const visible = new Set(filtered.map(r => String(r.id)));
-      [...selectedRecordIds].forEach(id => { if (!visible.has(String(id))) selectedRecordIds.delete(id); });
-      renderRows(filtered);
+      renderFileArchives(allRecords);
     } catch (error) {
       console.error(error);
-      if ($('adminRecordsTableBody')) {
-        $('adminRecordsTableBody').innerHTML = '<tr><td colspan="8">Please upload files to inspect scanner records.</td></tr>';
+      if ($('fileArchivesTableBody')) {
+        $('fileArchivesTableBody').innerHTML = '<tr><td colspan="8">File archives are temporarily unavailable.</td></tr>';
       }
     }
   };
 
-  $('adminBulkDelete')?.addEventListener('click', () => confirmBulk('delete'));
-  $('adminBulkPublish')?.addEventListener('click', () => confirmBulk('publish'));
-  $('adminBulkUnpublish')?.addEventListener('click', () => confirmBulk('unpublish'));
-  $('adminClearSelection')?.addEventListener('click', () => { selectedRecordIds.clear(); bindSelection(); });
-  $('adminSearchInput')?.addEventListener('input', () => ctx.api.renderAdminPortal());
-  $('adminStatusFilter')?.addEventListener('change', () => ctx.api.renderAdminPortal());
-  $('adminOfficeFilter')?.addEventListener('change', () => ctx.api.renderAdminPortal());
+  $('fileArchivesBulkDelete')?.addEventListener('click', () => confirmBulk('delete'));
+  $('fileArchivesBulkPublish')?.addEventListener('click', () => confirmBulk('publish'));
+  $('fileArchivesBulkUnpublish')?.addEventListener('click', () => confirmBulk('unpublish'));
+  $('fileArchivesClearSelection')?.addEventListener('click', () => { selectedRecordIds.clear(); bindSelection(); });
+  $('fileArchiveSearchInput')?.addEventListener('input', () => renderFileArchives());
+  $('fileArchivePurposeFilter')?.addEventListener('change', () => renderFileArchives());
+  $('fileArchiveStatusFilter')?.addEventListener('change', () => renderFileArchives());
+  $('fileArchiveOfficeFilter')?.addEventListener('change', () => renderFileArchives());
   document.addEventListener('iris:template-review-complete', () => ctx.api.renderAdminPortal());
   document.addEventListener('iris:template-review-complete', () => ctx.api.renderAdminPortal());
 
@@ -443,27 +460,13 @@ export function initAdminPortal(ctx) {
   const refreshArchive = async () => {
     if (document.visibilityState !== 'visible') return;
     try {
-      const records = await ctx.dbManager.getAllRecords({ excludeImportRecords: true });
-      const term = (($('adminSearchInput')?.value || '')).toLowerCase();
-      const status = $('adminStatusFilter')?.value || 'all';
-      const office = $('adminOfficeFilter')?.value || 'all';
-      const officeFilter = $('adminOfficeFilter');
-      if (officeFilter) {
-        const offices = [...new Set(records.map(record => record.office_name).filter(Boolean))].sort((a, b) => a.localeCompare(b));
-        const selectedOffice = offices.includes(office) ? office : 'all';
-        officeFilter.innerHTML = '<option value="all">All offices</option>' + offices.map(name => `<option value="${escape(name)}">${escape(name)}</option>`).join('');
-        officeFilter.value = selectedOffice;
-      }
-      const filtered = records.filter(record => {
-        const haystack = [record.id, record.fileName, record.docType, record.rawText].join(' ').toLowerCase();
-        return haystack.includes(term) && (status === 'all' || record.status === status || (status === 'Pending Review' && !record.status))
-          && (office === 'all' || record.office_name === office);
-      });
-      renderRows(filtered);
-      if ($('statTotalDb')) $('statTotalDb').textContent = records.length;
-      if ($('statPendingDb')) $('statPendingDb').textContent = records.filter(record => record.status === 'Pending Review' || !record.status).length;
-      if ($('statVerifiedDb')) $('statVerifiedDb').textContent = records.filter(record => ['Approved', 'Verified & Approved'].includes(record.status)).length;
-      if ($('statTablesDb')) $('statTablesDb').textContent = records.reduce((sum, record) => sum + Object.keys(record.extractedData || {}).length, 0);
+      const records = await ctx.dbManager.getAllRecords();
+      renderFileArchives(records);
+      const studioRecords = records.filter(record => !importDestinations.has(recordPurpose(record)));
+      if ($('statTotalDb')) $('statTotalDb').textContent = studioRecords.length;
+      if ($('statPendingDb')) $('statPendingDb').textContent = studioRecords.filter(record => record.status === 'Pending Review' || !record.status).length;
+      if ($('statVerifiedDb')) $('statVerifiedDb').textContent = studioRecords.filter(record => ['Approved', 'Verified & Approved'].includes(record.status)).length;
+      if ($('statTablesDb')) $('statTablesDb').textContent = studioRecords.reduce((sum, record) => sum + Object.keys(record.extractedData || {}).length, 0);
     } catch (error) { console.warn('Archive refresh failed:', error); }
   };
   window.addEventListener('focus', refreshArchive);

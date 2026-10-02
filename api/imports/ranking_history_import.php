@@ -25,12 +25,18 @@ function ranking_import_row(PDO $pdo, array $data, array $defaults, int $rowNumb
 {
     $organization = trim((string)($data['organization'] ?? ''));
     if ($organization === '' || strlen($organization) > 100) throw new RuntimeException("Row {$rowNumber}: Organization is required and must not exceed 100 characters.");
-    $bodyQuery = $pdo->prepare('SELECT id, name FROM ranking_bodies WHERE LOWER(name) = LOWER(?) OR LOWER(short_name) = LOWER(?) LIMIT 1');
+    $bodyQuery = $pdo->prepare('SELECT ranking_body_id AS id, name FROM ranking_bodies WHERE LOWER(name) = LOWER(?) OR LOWER(short_name) = LOWER(?) LIMIT 1');
     $bodyQuery->execute([$organization, $organization]);
     $body = $bodyQuery->fetch(PDO::FETCH_ASSOC) ?: null;
 
     $type = trim((string)($data['ranking_type'] ?? ''));
     if ($type === '' || strlen($type) > 320) throw new RuntimeException("Row {$rowNumber}: Ranking Type is required and must not exceed 320 characters.");
+    $typeId = null;
+    if ($body) {
+        $typeQuery = $pdo->prepare('SELECT ranking_type_id FROM ranking_types WHERE ranking_body_id = ? AND LOWER(name) = LOWER(?) LIMIT 1');
+        $typeQuery->execute([(int)$body['id'], $type]);
+        $typeId = $typeQuery->fetchColumn();
+    }
     $year = filter_var($data['year'] ?? null, FILTER_VALIDATE_INT);
     if ($year === false || $year < 1900 || $year > 2200) throw new RuntimeException("Row {$rowNumber}: Year must be between 1900 and 2200.");
     $rank = trim((string)($data['global_rank'] ?? ''));
@@ -47,10 +53,12 @@ function ranking_import_row(PDO $pdo, array $data, array $defaults, int $rowNumb
     return [
         'organization' => $organization,
         'ranking_body_id' => $body ? (int)$body['id'] : null,
+        'ranking_type_id' => $typeId ? (int)$typeId : null,
         'organization_name' => $body['name'] ?? $organization,
         'ranking_type' => $type,
         'year' => (int)$year,
-        'global_rank' => $rank,
+        'global_rank' => $low,
+        'global_rank_display' => $rank,
         'rank_low' => $low,
         'rank_high' => $high,
         'rank_value' => $value,
@@ -70,9 +78,14 @@ function ranking_import_key(array $row): string
 
 function ranking_import_find(PDO $pdo, array $identity, bool $lock): array
 {
-    $sql = 'SELECT id, ranking_body_id, ranking_type, year, global_rank, rank_low, rank_high, rank_value,
-            ph_rank, ph_rank_value, source, seed_managed
-        FROM rankings WHERE ranking_body_id = ? AND LOWER(ranking_type) = LOWER(?) AND year = ? ORDER BY id ASC';
+    $sql = 'SELECT rankings.ranking_id AS id, rankings.ranking_body_id, rankings.ranking_type_id,
+            ranking_types.name AS ranking_type, rankings.year, rankings.global_rank, rankings.global_rank_display, rankings.rank_low,
+            rankings.rank_high, rankings.rank_value, rankings.ph_rank, rankings.ph_rank_display, rankings.ph_rank_value,
+            rankings.source, rankings.seed_managed
+        FROM rankings
+        INNER JOIN ranking_types ON ranking_types.ranking_type_id = rankings.ranking_type_id
+        WHERE rankings.ranking_body_id = ? AND LOWER(ranking_types.name) = LOWER(?) AND rankings.year = ?
+        ORDER BY rankings.ranking_id ASC';
     if ($lock) $sql .= ' FOR UPDATE';
     $query = $pdo->prepare($sql);
     $query->execute([$identity['ranking_body_id'], $identity['ranking_type'], $identity['year']]);
@@ -86,12 +99,12 @@ function ranking_import_version(array $matches): string
 
 function ranking_import_values_match(array $existing, array $incoming): bool
 {
-    foreach (['global_rank', 'rank_low', 'rank_high', 'rank_value', 'ph_rank', 'ph_rank_value', 'source'] as $field) {
+    foreach (['global_rank', 'global_rank_display', 'rank_low', 'rank_high', 'rank_value', 'ph_rank', 'ph_rank_display', 'ph_rank_value', 'source'] as $field) {
         $current = $existing[$field] ?? null;
         $next = $incoming[$field] ?? null;
         if ($current === null || $next === null || $current === '' || $next === '') {
             if ((string)($current ?? '') !== (string)($next ?? '')) return false;
-        } elseif (in_array($field, ['rank_low', 'rank_high', 'rank_value', 'ph_rank_value'], true) && is_numeric($current) && is_numeric($next)) {
+        } elseif (in_array($field, ['rank_low', 'rank_high', 'rank_value', 'ph_rank', 'ph_rank_value'], true) && is_numeric($current) && is_numeric($next)) {
             if ((float)$current !== (float)$next) return false;
         } elseif ((string)$current !== (string)$next) {
             return false;
@@ -104,7 +117,7 @@ function ranking_import_preview(PDO $pdo, array $parsed, bool $lock = false, boo
 {
     $rows = [];
     $seen = [];
-    $typeExists = $pdo->prepare('SELECT 1 FROM rankings WHERE LOWER(ranking_type) = LOWER(?) LIMIT 1');
+    $typeExists = $pdo->prepare('SELECT 1 FROM ranking_types WHERE ranking_body_id = ? AND LOWER(name) = LOWER(?) LIMIT 1');
     foreach ($parsed['rows'] as $input) {
         try {
             $incoming = ranking_import_row($pdo, $input['values'], $parsed['profile']['defaults_json'], $input['row_number']);
@@ -134,28 +147,35 @@ function ranking_import_preview(PDO $pdo, array $parsed, bool $lock = false, boo
         $existing = $matches[0] ?? null;
         foreach (['ph_rank', 'source'] as $field) {
             $inputKey = $field . '_input';
+            $existingValue = $field === 'ph_rank'
+                ? ($existing['ph_rank_display'] ?? (isset($existing['ph_rank']) ? (string)$existing['ph_rank'] : null))
+                : ($existing[$field] ?? null);
             $effective = $incoming[$inputKey]['mode'] === 'preserve'
-                ? ($existing[$field] ?? null)
+                ? $existingValue
                 : ($incoming[$inputKey]['mode'] === 'clear' ? null : $incoming[$inputKey]['value']);
             $incoming[$field] = $effective;
         }
-        $incoming['ph_rank_value'] = $incoming['ph_rank'] === null ? null : parse_rank_to_value((string)$incoming['ph_rank']);
+        $incoming['ph_rank_display'] = $incoming['ph_rank'];
+        $incoming['ph_rank'] = $incoming['ph_rank'] === null ? null : parse_rank_to_value((string)$incoming['ph_rank']);
+        $incoming['ph_rank_value'] = $incoming['ph_rank'];
         $identity = [
             'ranking_body_id' => $incoming['ranking_body_id'],
             'organization' => $incoming['organization_name'],
             'ranking_type' => $incoming['ranking_type'],
             'year' => $incoming['year'],
             'global_rank' => $incoming['global_rank'],
+            'global_rank_display' => $incoming['global_rank_display'],
             'rank_low' => $incoming['rank_low'],
             'rank_high' => $incoming['rank_high'],
             'rank_value' => $incoming['rank_value'],
             'ph_rank' => $incoming['ph_rank'],
+            'ph_rank_display' => $incoming['ph_rank_display'],
             'ph_rank_value' => $incoming['ph_rank_value'],
             'source' => $incoming['source'],
             'seed_managed' => 0
         ];
         $same = $existing !== null && ranking_import_values_match($existing, $identity);
-        $typeExists->execute([$incoming['ranking_type']]);
+        $typeExists->execute([$incoming['ranking_body_id'], $incoming['ranking_type']]);
         $displayIdentity = $identity;
         $displayExisting = $existing;
         if (!$includeRankBounds) {
@@ -223,12 +243,20 @@ TemplateImportSupport::response(static function () use ($data): array {
         $inserted = count(array_filter($work, static fn(array $row): bool => $row['kind'] === 'insert'));
         $updated = count($work) - $inserted;
         $batchId = ImportBatchAudit::create($pdo, $parsed['record'], 'ranking_history', (int)$_SESSION['user_id'], $inserted, $updated);
-        $columns = ['ranking_body_id', 'ranking_type', 'year', 'global_rank', 'rank_low', 'rank_high', 'rank_value', 'ph_rank', 'ph_rank_value', 'source'];
+        $columns = ['ranking_body_id', 'ranking_type_id', 'year', 'global_rank', 'global_rank_display', 'rank_low', 'rank_high', 'rank_value', 'ph_rank', 'ph_rank_display', 'ph_rank_value', 'source'];
         $insert = $pdo->prepare('INSERT INTO rankings (' . implode(', ', $columns) . ', seed_managed) VALUES (' . implode(', ', array_fill(0, count($columns), '?')) . ', 0)');
         $set = implode(', ', array_map(static fn(string $column): string => '`' . $column . '` = ?', $columns));
-        $update = $pdo->prepare('UPDATE rankings SET ' . $set . ', seed_managed = 0 WHERE id = ?');
+        $update = $pdo->prepare('UPDATE rankings SET ' . $set . ', seed_managed = 0 WHERE ranking_id = ?');
         foreach ($work as $row) {
             $identity = $row['identity'];
+            $typeId = $identity['ranking_type_id'] ?? null;
+            if (!$typeId) {
+                $typeInsert = $pdo->prepare('INSERT INTO ranking_types (ranking_body_id, name) VALUES (?, ?)
+                    ON DUPLICATE KEY UPDATE ranking_type_id = LAST_INSERT_ID(ranking_type_id)');
+                $typeInsert->execute([$identity['ranking_body_id'], $identity['ranking_type']]);
+                $typeId = (int)$pdo->lastInsertId();
+            }
+            $identity['ranking_type_id'] = (int)$typeId;
             $values = array_map(static fn(string $column) => $identity[$column] ?? null, $columns);
             $before = $row['existing'];
             if ($row['kind'] === 'insert') {
@@ -238,7 +266,7 @@ TemplateImportSupport::response(static function () use ($data): array {
                 $id = (int)$row['existing_id'];
                 $update->execute([...$values, $id]);
             }
-            $savedQuery = $pdo->prepare('SELECT id, ranking_body_id, ranking_type, year, global_rank, rank_low, rank_high, rank_value, ph_rank, ph_rank_value, source, seed_managed FROM rankings WHERE id = ?');
+            $savedQuery = $pdo->prepare('SELECT ranking_id AS id, ranking_body_id, ranking_type_id, year, global_rank, global_rank_display, rank_low, rank_high, rank_value, ph_rank, ph_rank_display, ph_rank_value, source, seed_managed FROM rankings WHERE ranking_id = ?');
             $savedQuery->execute([$id]);
             $after = $savedQuery->fetch(PDO::FETCH_ASSOC);
             ImportBatchAudit::row($pdo, $batchId, 'ranking', (string)$id, $row['sheet_name'], $row['row_number'], $before, $after);

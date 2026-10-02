@@ -1,6 +1,6 @@
 # Scanner Tests
 
-V4.5.0 adds workbook-profile mapping and Ranking History import coverage alongside the existing Unified Summary Cards tests. Run the PHP mapping test as well as the JavaScript suite; also manually verify profile selection, diff review, selected-row application, history archival, stale-preview rejection, and import recovery against the local XAMPP database. See [README_V4.5.0.md](../../README_V4.5.0.md) for release verification details.
+V5.3.0 adds coverage for destination-aware imports and mapping alongside the existing Unified Summary Cards tests. Run the PHP mapping test as well as the JavaScript suite; also manually verify office upload destinations, File Archives filters and row actions, role-gated navigation, ranking defaults and viewer filters, graph scope editing and grouping, and import recovery against the local XAMPP database. See [README_V5.3.0.md](../../README_V5.3.0.md) for release verification details.
 
 ```powershell
 php scanner/test/templateImportMapping.test.php

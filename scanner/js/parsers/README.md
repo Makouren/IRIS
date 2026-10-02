@@ -1,6 +1,6 @@
 # Browser Parsers and Viewers
 
-V4.5.0 office uploads separate general Data and Report Visualization from Ranking History and Summary Card imports. The latter use server-side PHP profile parsing for preview and approval; browser parsers documented here continue to power Scanner ingestion and viewing.
+V5.3.0 office uploads separate general Data and Report Visualization from Ranking History and Summary Card imports, with destination-specific server-side PHP profiles. The browser parsers documented here continue to power Scanner ingestion and viewing.
 
 Parser modules convert browser-selected files into scan data used by the Scanner UI and PHP-backed record persistence. Libraries are loaded by the scanner page; this directory does not contain a separate parser service.
 

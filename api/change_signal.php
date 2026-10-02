@@ -10,5 +10,10 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') !== 'GET') {
     exit;
 }
 
-$query = db()->query('SELECT version, updated_at FROM app_change_state WHERE id = 1');
-echo json_encode($query->fetch(PDO::FETCH_ASSOC) ?: ['version' => 1, 'updated_at' => null]);
+$query = db()->query('SELECT state_data, updated_at FROM app_change_state WHERE id = 1');
+$state = $query->fetch(PDO::FETCH_ASSOC) ?: [];
+$stateData = json_decode((string)($state['state_data'] ?? ''), true);
+echo json_encode([
+    'version' => is_array($stateData) ? (int)($stateData['version'] ?? 1) : 1,
+    'updated_at' => $state['updated_at'] ?? null
+]);
