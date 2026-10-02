@@ -6,7 +6,10 @@ V3.4.5 extends the Super Admin and office workflows with template-driven spreads
 
 - Super Admins configure import profiles with header mappings, required fields, and defaults.
 - Office uploads can be previewed before approval; writes require the explicit “I reviewed this diff” acknowledgement.
-- Summary cards use their Global Label (`import_key`) as the stable identity. Changed periods are archived in `summary_card_snapshots`; one row per label is selected for the current card, defaulting to the newest period.
+- Summary cards require an explicit Global Label (`import_key`) as the stable identity. Periods are canonicalized and compared against complete database history; older imports backfill history without moving current state.
+- Canonical keys distinguish year, quarter, month, day, and legacy display periods; equal end dates sort by granularity, with day after month, month after quarter, and quarter after year. Excel serial 60 is rejected because it is not a real date.
+- Snapshot rows contain period-specific titles, labels, values, content, publication, and provenance. New periods remain unpublished; the public card uses the latest explicitly published period.
+- Blank fields preserve prior period values; the explicit `__CLEAR__` marker clears a field.
 - Ranking History previews use the full identity tuple and block ambiguous matches. Legacy ranking candidates are opt-in.
 - Row versions reject stale approvals. Import batches and row states provide guarded recovery.
 - Server-side imports support CSV, TSV, and XLSX through the existing native reader.
@@ -22,16 +25,20 @@ After the earlier schema migrations, apply:
 - `migrations/20261002_template_driven_imports.sql`
 - `migrations/20261002_allow_builtin_snapshot_imports.sql`
 - `migrations/20261002_create_app_change_state.sql`
+- `migrations/20261002_summary_card_history_v2.sql`
+
+Built-in Snapshot files must include a `Global Label` column (or the template profile must provide an explicit default). Do not use changing descriptive labels as card identities.
 
 The app also ensures `app_change_state` exists when connecting to the database.
 
 ## Manual Verification
 
-1. Configure a Summary Cards profile and import several years under one Global Label. Confirm one live row is selected and other changed periods are archived.
-2. Change the selected row and approve; confirm the existing card updates without a duplicate.
-3. Re-preview unchanged data and confirm it reports no changes.
-4. Preview ranking data with a duplicate identity and confirm the row is blocked.
-5. Revert an import batch and confirm prior values are restored.
-6. Open multiple role sessions, make a Super Admin change, and confirm Super Admin pages refresh promptly and other roles refresh within five seconds. Unsaved edits should defer refresh.
+1. With 2026 published, import only 2024. Confirm 2024 is added as a backfill and 2026 stays public/current.
+2. Import a newer period. Confirm it stays unpublished until explicitly published; publishing it makes it current and unpublishing restores the prior published period.
+3. Import unchanged data repeatedly and confirm no duplicate or unnecessary update occurs.
+4. Test quarter, month, date, mixed-granularity, and Excel-serial periods, including an invalid date and serial 60.
+5. Correct and publish a period in the Admin history manager; verify provenance and rollback records.
+6. Open published history on the Observatory and confirm unpublished periods are hidden and viewing history leaves the current card unchanged.
+7. Revert an import batch and confirm complete period state and provenance are restored.
 
-See [README.md](README.md) for setup and architecture, and [README_PHP.md](README_PHP.md) for PHP deployment details.
+See [README_V3.4.7.md](README_V3.4.7.md) for the current release, [README.md](README.md) for setup and architecture, and [README_PHP.md](README_PHP.md) for PHP deployment details.

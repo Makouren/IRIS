@@ -1,5 +1,6 @@
 <?php
 require_once __DIR__ . '/../includes/functions.php';
+require_once __DIR__ . '/../includes/helpers/SummaryCardHistory.php';
 requireRole(['super_admin', 'admin', 'user'], true);
 
 header('Content-Type: application/json; charset=utf-8');
@@ -52,7 +53,7 @@ try {
         }
     }
 
-    $cardRows = $pdo->query("SELECT * FROM summary_cards WHERE is_published = 1 ORDER BY display_order ASC, created_at DESC")->fetchAll(PDO::FETCH_ASSOC);
+    $cardRows = SummaryCardHistory::publishedCards($pdo);
     $publishedCardIds = array_column($cardRows, 'id');
     $cardCategories = [];
     if ($publishedCardIds) {

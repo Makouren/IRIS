@@ -1,6 +1,6 @@
 # Graph Generation and Chart Data
 
-V3.4.5 template-driven office imports are handled by the PHP import pipeline and do not change chart suggestion or chart rendering behavior in this folder.
+V3.4.7's Unified Summary Cards profile is handled by the PHP import pipeline and does not change chart suggestion or chart rendering behavior in this folder.
 
 This folder contains browser-side chart recommendations. It does not call an external AI service. The `AI` label describes the recommendation logic, not a remote model dependency.
 

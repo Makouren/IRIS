@@ -193,7 +193,8 @@ TemplateImportSupport::response(static function () use ($data): array {
     $pdo = db();
     $recordId = trim((string)($data['record_id'] ?? ''));
     if ($recordId === '') throw new InvalidArgumentException('Record id is required.');
-    $parsed = TemplateImportSupport::parse($pdo, $recordId, 'ranking_history');
+    $selectedSheet = isset($data['sheet_name']) ? (string)$data['sheet_name'] : null;
+    $parsed = TemplateImportSupport::parse($pdo, $recordId, 'ranking_history', $selectedSheet);
     $bodyQuery = $pdo->prepare('SELECT ranking_body_id FROM templates WHERE id = ?');
     $bodyQuery->execute([(int)$parsed['record']['template_id']]);
     $bodyId = (int)$bodyQuery->fetchColumn();

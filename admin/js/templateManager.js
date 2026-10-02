@@ -9,11 +9,19 @@
   const downloadBase = modal.dataset.downloadBase;
   const notice = document.getElementById('templateManagerNotice');
   const rankingBodySelect = document.getElementById('templateRankingBodySelect');
+  const summaryProfileSelect = modal.querySelector('[data-summary-profile-select]');
+  const summaryProfileName = modal.querySelector('[data-summary-profile-name]');
+  const summaryProfileEditor = modal.querySelector('[data-summary-profile-json]');
+  const activeSummaryProfileLabel = modal.querySelector('[data-active-summary-profile]');
+  const summaryProfileActivate = modal.querySelector('[data-summary-profile-activate]');
+  const summaryProfileSave = modal.querySelector('[data-summary-profile-save]');
   let templates = [];
   let rankingBodies = [];
   let summaryCards = [];
   let rankingScopes = [];
   let rankingLevels = [];
+  let summaryImportProfiles = [];
+  let activeSummaryProfileId = null;
 
   function showNotice(message, isError = false) {
     notice.textContent = message;
@@ -94,13 +102,14 @@
         sheet_selector: template.sheet_selector,
         header_aliases: template.header_aliases,
         required_columns: template.required_columns,
+        identity_fields: template.identity_fields,
         mapping_rules: template.mapping_rules,
         defaults: template.defaults_json
       } : {};
       profileEditor.value = JSON.stringify(profile, null, 2);
       profileEditor.placeholder = template.import_destination === 'ranking_history'
         ? '{\n  "sheet_selector": "Rankings",\n  "header_aliases": {"year": ["Year"], "global_rank": ["Rank", "Overall Rank"]},\n  "required_columns": ["year", "global_rank"],\n  "mapping_rules": {"year": "Year", "global_rank": "Rank"},\n  "defaults": {"ranking_type": "QS Asia", "scope_id": 1, "level_id": 2, "edition": "Annual", "category": "Overall"}\n}'
-        : '{\n  "sheet_selector": null,\n  "header_aliases": {"import_key": ["Card Key"], "period_key": ["Period"], "main_value": ["Rank"], "secondary_description": ["Italic Description"], "info_text": ["Info"]},\n  "required_columns": ["import_key", "period_key", "main_value"],\n  "mapping_rules": {"import_key": "Card Key", "period_key": "Period", "main_value": "Rank", "year_date": "Year", "secondary_description": "Italic Description", "info_text": "Info"},\n  "defaults": {}\n}';
+        : '{\n  "sheet_selector": null,\n  "identity_fields": ["import_key", "source", "metric", "category", "record_type"],\n  "header_aliases": {"import_key": ["Global Label", "Card Key"], "period_key": ["Period"], "main_value": ["Rank"]},\n  "required_columns": ["import_key", "period_key", "main_value"],\n  "mapping_rules": {"import_key": "Global Label", "source": "Source", "metric": "Metric", "category": "Category", "record_type": "Record Type", "period_key": "Period", "main_value": "Rank"},\n  "defaults": {}\n}';
       const keyGuide = document.createElement('p');
       keyGuide.className = 'mt-1 text-xs text-gray-500 dark:text-slate-400';
       keyGuide.textContent = template.import_destination === 'summary_cards'
@@ -139,6 +148,58 @@
     summaryCards = result;
   }
 
+  async function loadSummaryProfileDetails(profileId) {
+    if (!profileId) return;
+    const response = await fetch(`${api}?resource=summary_card_profile&profile_id=${encodeURIComponent(profileId)}`, { headers: { Accept: 'application/json' }, cache: 'no-store' });
+    const profile = await response.json();
+    if (!response.ok) throw new Error(profile.error || 'Unable to load the Summary Card profile.');
+    summaryProfileName.value = profile.profile_name || '';
+    summaryProfileEditor.value = JSON.stringify({
+      sheet_selector: profile.sheet_selector,
+      identity_fields: profile.identity_fields,
+      header_aliases: profile.header_aliases,
+      required_columns: profile.required_columns,
+      mapping_rules: profile.mapping_rules,
+      defaults: profile.defaults
+    }, null, 2);
+  }
+
+  async function loadSummaryProfiles(selectActive = true) {
+    const response = await fetch(`${api}?resource=summary_card_profiles`, { headers: { Accept: 'application/json' }, cache: 'no-store' });
+    const result = await response.json();
+    if (!response.ok || !Array.isArray(result.profiles)) throw new Error(result.error || 'Unable to load Summary Card profiles.');
+    summaryImportProfiles = result.profiles;
+    activeSummaryProfileId = result.active_profile_id ? String(result.active_profile_id) : '';
+    summaryProfileSelect.replaceChildren();
+    for (const profile of summaryImportProfiles) {
+      const option = new Option(`${profile.profile_name}${profile.is_active ? ' · Active' : ''}${profile.original_filename ? ` · ${profile.original_filename}` : ''}`, String(profile.id));
+      summaryProfileSelect.add(option);
+    }
+    if (!summaryImportProfiles.length) {
+      summaryProfileSelect.add(new Option('No Summary Card profiles available', ''));
+      activeSummaryProfileLabel.textContent = 'No Summary Card import profile is configured.';
+      return;
+    }
+    if (selectActive && activeSummaryProfileId) summaryProfileSelect.value = activeSummaryProfileId;
+    else if (!summaryProfileSelect.value) summaryProfileSelect.value = String(summaryImportProfiles[0].id);
+    const active = summaryImportProfiles.find(profile => String(profile.id) === activeSummaryProfileId);
+    activeSummaryProfileLabel.textContent = active
+      ? `Currently active: ${active.profile_name}${active.original_filename ? ` · ${active.original_filename}` : ''}`
+      : 'No active Summary Card profile is configured.';
+    await loadSummaryProfileDetails(summaryProfileSelect.value);
+  }
+
+  async function postSummaryProfileAction(action, values) {
+    const data = new FormData();
+    data.set('action', action);
+    data.set('_csrf', token);
+    for (const [key, value] of Object.entries(values)) data.set(key, value);
+    const response = await fetch(api, { method: 'POST', headers: { 'X-CSRF-Token': token, Accept: 'application/json' }, body: data });
+    const result = await response.json();
+    if (!response.ok) throw new Error(result.error || 'Unable to update the Summary Card profile.');
+    return result;
+  }
+
   async function loadRankingTaxonomies() {
     const endpoint = api.replace(/templates\.php(?:\?.*)?$/, 'admin_rankings.php');
     const [scopeResponse, levelResponse] = await Promise.all([
@@ -154,7 +215,7 @@
     modal.classList.remove('hidden');
     modal.classList.add('flex');
     modal.setAttribute('aria-hidden', 'false');
-    Promise.all([loadTemplates(), loadRankingBodies(), loadSummaryCards(), loadRankingTaxonomies()]).then(renderTemplates).catch(error => showNotice(error.message, true));
+    Promise.all([loadTemplates(), loadRankingBodies(), loadSummaryCards(), loadRankingTaxonomies(), loadSummaryProfiles()]).then(renderTemplates).catch(error => showNotice(error.message, true));
   }
 
   function closeModal() {
@@ -172,6 +233,36 @@
   });
   modal.querySelectorAll('[data-template-manager-close]').forEach(element => element.addEventListener('click', closeModal));
   modal.addEventListener('click', event => { if (event.target === modal) closeModal(); });
+  summaryProfileSelect.addEventListener('change', () => loadSummaryProfileDetails(summaryProfileSelect.value).catch(error => showNotice(error.message, true)));
+  summaryProfileActivate.addEventListener('click', async () => {
+    if (!summaryProfileSelect.value) return;
+    summaryProfileActivate.disabled = true;
+    try {
+      const result = await postSummaryProfileAction('activate-summary-card-profile', { profile_id: summaryProfileSelect.value });
+      await loadSummaryProfiles();
+      showNotice(`Active Summary Card profile: ${result.profile_name}`);
+    } catch (error) { showNotice(error.message, true); }
+    finally { summaryProfileActivate.disabled = false; }
+  });
+  summaryProfileSave.addEventListener('click', async () => {
+    if (!summaryProfileSelect.value) return;
+    let profile;
+    try {
+      profile = JSON.parse(summaryProfileEditor.value || '{}');
+      if (!profile || typeof profile !== 'object' || Array.isArray(profile)) throw new Error('Profile must be a JSON object.');
+    } catch (error) { showNotice(`Invalid Summary Card profile JSON: ${error.message}`, true); return; }
+    summaryProfileSave.disabled = true;
+    try {
+      const result = await postSummaryProfileAction('save-summary-card-profile', {
+        profile_id: summaryProfileSelect.value,
+        profile_name: summaryProfileName.value,
+        profile: JSON.stringify(profile)
+      });
+      await loadSummaryProfiles(false);
+      showNotice(`Saved Summary Card profile: ${result.profile_name}`);
+    } catch (error) { showNotice(error.message, true); }
+    finally { summaryProfileSave.disabled = false; }
+  });
 
   form.addEventListener('submit', async event => {
     event.preventDefault();

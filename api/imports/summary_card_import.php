@@ -2,6 +2,7 @@
 require_once __DIR__ . '/../../includes/functions.php';
 require_once __DIR__ . '/../../includes/helpers/LatestYearResolver.php';
 require_once __DIR__ . '/../../includes/helpers/TemplateImportSupport.php';
+require_once __DIR__ . '/../../includes/helpers/SummaryCardImportService.php';
 require_once __DIR__ . '/../../includes/helpers/ImportBatchAudit.php';
 requireRole(['super_admin'], true);
 header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
@@ -160,177 +161,45 @@ TemplateImportSupport::response(static function () use ($data): array {
     $pdo = db();
     $recordId = trim((string)($data['record_id'] ?? ''));
     if ($recordId === '') throw new InvalidArgumentException('Record id is required.');
-    $parsed = TemplateImportSupport::parse($pdo, $recordId, 'summary_cards');
-    if (($data['action'] ?? 'preview') === 'preview') {
-        $pdo->beginTransaction();
-        try {
-            $rows = summary_import_preview($pdo, $parsed, true);
-            $pdo->commit();
-        } catch (Throwable $exception) {
-            if ($pdo->inTransaction()) $pdo->rollBack();
-            throw $exception;
-        }
-        return ['record' => ['id' => $recordId, 'file_name' => $parsed['record']['fileName']], 'sheet_name' => $parsed['sheet']['name'], 'rows' => $rows];
+    $selectedSheet = isset($data['sheet_name']) ? (string)$data['sheet_name'] : null;
+    $parsed = TemplateImportSupport::parse($pdo, $recordId, 'summary_cards', $selectedSheet);
+    $action = (string)($data['action'] ?? 'preview');
+    if ($action === 'preview') {
+        return [
+            'record' => ['id' => $recordId, 'file_name' => $parsed['record']['fileName']],
+            'sheet_name' => $parsed['sheet']['name'],
+            'rows' => SummaryCardImportService::preview($pdo, $parsed)
+        ];
     }
-    if (($data['action'] ?? '') !== 'apply') throw new InvalidArgumentException('Unknown summary-card import action.');
-    $versions = $data['row_versions'] ?? [];
-    $currentKeys = $data['current_keys'] ?? [];
-    if (empty($data['reviewed_diff']) || !is_array($versions) || !is_array($currentKeys)) {
-        throw new InvalidArgumentException('Review the diff and provide valid import selections.');
+    if ($action !== 'apply') throw new InvalidArgumentException('Unknown summary-card import action.');
+    $selectedRows = $data['selected_rows'] ?? null;
+    if (!is_array($selectedRows) || !array_is_list($selectedRows) || !$selectedRows) {
+        throw new InvalidArgumentException('Select at least one Summary Card row to apply.');
     }
-
-    $pdo->beginTransaction();
-    try {
-        $rows = summary_import_preview($pdo, $parsed, true);
-        foreach ($rows as $row) {
-            if (!isset($versions[$row['key']]) || !hash_equals((string)$versions[$row['key']], $row['row_version'])) {
-                throw new RuntimeException('The preview is stale because summary-card data changed. Preview the upload again.', 409);
-            }
+    $selectedCoordinates = [];
+    foreach ($selectedRows as $selectedRow) {
+        if (!is_array($selectedRow)) throw new InvalidArgumentException('Selected Summary Card rows are invalid.');
+        $selectedSheet = trim((string)($selectedRow['sheet_name'] ?? ''));
+        $selectedRowNumber = filter_var($selectedRow['row_number'] ?? null, FILTER_VALIDATE_INT);
+        if ($selectedSheet === '' || $selectedRowNumber === false || $selectedRowNumber < 1) {
+            throw new InvalidArgumentException('Select valid Summary Card rows to apply.');
         }
-        $rowByKey = array_column($rows, null, 'key');
-        $labels = [];
-        foreach ($rows as $row) $labels[$row['import_key']] = true;
-        $currentRows = [];
-        foreach ($currentKeys as $logicalKey => $rowKey) {
-            $currentRow = is_string($rowKey) ? ($rowByKey[$rowKey] ?? null) : null;
-            if (!$currentRow || $currentRow['import_key'] !== (string)$logicalKey || $currentRow['kind'] === 'blocked') {
-                throw new InvalidArgumentException('A selected row does not match its Global Label. Refresh the preview.');
-            }
-            $currentRows[(string)$logicalKey] = $currentRow;
-        }
-        if (array_diff_key($labels, $currentRows) || array_diff_key($currentRows, $labels)) {
-            throw new InvalidArgumentException('Select exactly one row per Global Label.');
-        }
-        $acceptedSet = [];
-        foreach ($rows as $row) {
-            if (in_array($row['kind'], ['insert', 'replace'], true)) $acceptedSet[$row['key']] = true;
-        }
-        $workByKey = [];
-        foreach ($rows as $row) {
-            if (isset($acceptedSet[$row['key']]) && in_array($row['kind'], ['insert', 'replace'], true)) $workByKey[$row['key']] = $row;
-        }
-        foreach ($currentRows as $currentRow) {
-            if ($currentRow['new_card'] || $currentRow['current_changed'] || in_array($currentRow['kind'], ['insert', 'replace'], true)) {
-                $workByKey[$currentRow['key']] = $currentRow;
-            }
-        }
-        $work = array_values($workByKey);
-        if (!$work) {
-            $pdo->commit();
-            return ['success' => true, 'inserted' => 0, 'updated' => 0, 'message' => 'No changes detected.'];
-        }
-        $inserted = count(array_filter($work, static fn(array $row): bool => $row['kind'] === 'insert'));
-        $updated = count($work) - $inserted;
-        $batchId = ImportBatchAudit::create($pdo, $parsed['record'], 'summary_cards', (int)$_SESSION['user_id'], $inserted, $updated);
-        $newCardRows = array_filter($currentRows, static fn(array $row): bool => $row['new_card']);
-        $createdCards = [];
-        foreach ($newCardRows as $logicalKey => $row) {
-            $values = $row['incoming'];
-            $cardId = 'summary_snapshot_' . bin2hex(random_bytes(12));
-            $insertCard = $pdo->prepare('INSERT INTO summary_cards (id, import_key, title, main_value, main_label, year_date, secondary_label, secondary_value, description, secondary_description, info_text, display_order, display_precision, is_published) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)');
-            $insertCard->execute([
-                $cardId,
-                $row['card_import_key'],
-                $row['sheet_name'],
-                $values['main_value'] ?? $row['snapshot_after']['main_value'],
-                $values['main_label'] ?? '',
-                $values['year_date'] ?? $row['period_key'],
-                $values['secondary_label'] ?? '',
-                $values['secondary_value'] ?? '',
-                $values['description'] ?? '',
-                $values['secondary_description'] ?? '',
-                $values['info_text'] ?? '',
-                0,
-                0
-            ]);
-            $createdCards[$logicalKey] = $cardId;
-            $cardQuery = $pdo->prepare('SELECT * FROM summary_cards WHERE id = ?');
-            $cardQuery->execute([$cardId]);
-            $savedCard = $cardQuery->fetch(PDO::FETCH_ASSOC);
-            ImportBatchAudit::row($pdo, $batchId, 'summary_card', $cardId, $row['sheet_name'], $row['row_number'], null, $savedCard);
-        }
-
-        foreach ($currentRows as $logicalKey => $row) {
-            if (!$row['card_id'] || (string)($row['current']['import_key'] ?? '') === $logicalKey) continue;
-            $cardQuery = $pdo->prepare('SELECT * FROM summary_cards WHERE id = ? FOR UPDATE');
-            $cardQuery->execute([$row['card_id']]);
-            $before = $cardQuery->fetch(PDO::FETCH_ASSOC);
-            if (!$before) throw new RuntimeException('The selected summary card no longer exists. Refresh the preview.');
-            $pdo->prepare('UPDATE summary_cards SET import_key = ? WHERE id = ?')->execute([$logicalKey, $row['card_id']]);
-            $cardQuery->execute([$row['card_id']]);
-            ImportBatchAudit::row($pdo, $batchId, 'summary_card', (string)$row['card_id'], $row['sheet_name'], $row['row_number'], $before, $cardQuery->fetch(PDO::FETCH_ASSOC));
-        }
-
-        foreach ($currentRows as $logicalKey => $row) {
-            if (!$row['current_changed'] || $row['new_card']) continue;
-            $cardId = (string)$row['card_id'];
-            $currentCard = $row['current'];
-            $previousPeriod = trim((string)($currentCard['year_date'] ?? '')) ?: 'previous-' . $batchId;
-            if (strlen($previousPeriod) > 20) throw new RuntimeException('The existing card period is too long to archive.');
-            if (!summary_import_snapshot($pdo, $cardId, $previousPeriod, true)) {
-                $pdo->prepare('INSERT INTO summary_card_snapshots (card_id, period_key, main_value, secondary_value, year_date, description, secondary_description, info_text, source_record_id, batch_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')->execute([
-                    $cardId, $previousPeriod, $currentCard['main_value'], $currentCard['secondary_value'] ?? '', $currentCard['year_date'] ?? '', $currentCard['description'] ?? '', $currentCard['secondary_description'] ?? '', $currentCard['info_text'] ?? '', $recordId, $batchId
-                ]);
-                $snapshotId = (int)$pdo->lastInsertId();
-                $snapshotQuery = $pdo->prepare('SELECT * FROM summary_card_snapshots WHERE id = ?');
-                $snapshotQuery->execute([$snapshotId]);
-                ImportBatchAudit::row($pdo, $batchId, 'summary_card', 'snapshot:' . $cardId . ':' . $previousPeriod, $row['sheet_name'], $row['row_number'], null, $snapshotQuery->fetch(PDO::FETCH_ASSOC));
-            }
-        }
-        usort($work, static fn(array $left, array $right): int => $left['period_end'] <=> $right['period_end']);
-        foreach ($work as $row) {
-            $logicalKey = $row['import_key'];
-            $cardId = $createdCards[$logicalKey] ?? $row['card_id'];
-            if (!$cardId) throw new RuntimeException('A new snapshot card was not created. Preview the upload again.');
-            $snapshotValues = $row['snapshot_after'];
-            $isCurrentRow = ($currentRows[$row['import_key']]['key'] ?? null) === $row['key'];
-            $storeSnapshot = (isset($acceptedSet[$row['key']]) && in_array($row['kind'], ['insert', 'replace'], true))
-                || ($isCurrentRow && in_array($row['kind'], ['insert', 'replace'], true));
-            if ($storeSnapshot) {
-                $snapshotBefore = summary_import_snapshot($pdo, $cardId, $row['period_key'], true);
-                if ($snapshotBefore) {
-                    $same = true;
-                    foreach ($snapshotValues as $field => $value) {
-                        if ((string)($snapshotBefore[$field] ?? '') !== (string)$value) $same = false;
-                    }
-                    if (!$same) {
-                        $pdo->prepare('UPDATE summary_card_snapshots SET main_value = ?, secondary_value = ?, year_date = ?, description = ?, secondary_description = ?, info_text = ?, source_record_id = ?, batch_id = ? WHERE id = ?')->execute([
-                            $snapshotValues['main_value'], $snapshotValues['secondary_value'], $snapshotValues['year_date'], $snapshotValues['description'], $snapshotValues['secondary_description'], $snapshotValues['info_text'], $recordId, $batchId, (int)$snapshotBefore['id']
-                        ]);
-                        $snapshotQuery = $pdo->prepare('SELECT * FROM summary_card_snapshots WHERE id = ?');
-                        $snapshotQuery->execute([(int)$snapshotBefore['id']]);
-                        ImportBatchAudit::row($pdo, $batchId, 'summary_card', 'snapshot:' . $cardId . ':' . $row['period_key'], $row['sheet_name'], $row['row_number'], $snapshotBefore, $snapshotQuery->fetch(PDO::FETCH_ASSOC));
-                    }
-                } else {
-                $pdo->prepare('INSERT INTO summary_card_snapshots (card_id, period_key, main_value, secondary_value, year_date, description, secondary_description, info_text, source_record_id, batch_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')->execute([
-                    $cardId, $row['period_key'], $snapshotValues['main_value'], $snapshotValues['secondary_value'], $snapshotValues['year_date'], $snapshotValues['description'], $snapshotValues['secondary_description'], $snapshotValues['info_text'], $recordId, $batchId
-                ]);
-                $snapshotId = (int)$pdo->lastInsertId();
-                $snapshotQuery = $pdo->prepare('SELECT * FROM summary_card_snapshots WHERE id = ?');
-                $snapshotQuery->execute([$snapshotId]);
-                ImportBatchAudit::row($pdo, $batchId, 'summary_card', 'snapshot:' . $cardId . ':' . $row['period_key'], $row['sheet_name'], $row['row_number'], null, $snapshotQuery->fetch(PDO::FETCH_ASSOC));
-                }
-            }
-
-            if ($isCurrentRow && !isset($createdCards[$row['import_key']]) && $row['current_changed']) {
-                $currentValues = array_intersect_key($row['incoming'], array_flip(['main_value', 'main_label', 'year_date', 'secondary_label', 'secondary_value', 'description', 'secondary_description', 'info_text']));
-                $sets = [];
-                $params = [];
-                foreach ($currentValues as $field => $value) { $sets[] = '`' . $field . '` = ?'; $params[] = $value; }
-                if ($sets) {
-                    $cardQuery = $pdo->prepare('SELECT * FROM summary_cards WHERE id = ? FOR UPDATE');
-                    $cardQuery->execute([$cardId]);
-                    $before = $cardQuery->fetch(PDO::FETCH_ASSOC);
-                    $pdo->prepare('UPDATE summary_cards SET ' . implode(', ', $sets) . ' WHERE id = ?')->execute([...$params, $cardId]);
-                    $cardQuery->execute([$cardId]);
-                    ImportBatchAudit::row($pdo, $batchId, 'summary_card', $cardId, $row['sheet_name'], $row['row_number'], $before, $cardQuery->fetch(PDO::FETCH_ASSOC));
-                }
-            }
-        }
-        $pdo->commit();
-        return ['success' => true, 'inserted' => $inserted, 'updated' => $updated, 'batch_id' => $batchId, 'message' => 'Selected summary-card rows were applied.'];
-    } catch (Throwable $exception) {
-        if ($pdo->inTransaction()) $pdo->rollBack();
-        throw $exception;
+        $coordinate = json_encode([$selectedSheet, $selectedRowNumber], JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR);
+        if (isset($selectedCoordinates[$coordinate])) throw new InvalidArgumentException('A Summary Card row was selected more than once.');
+        $selectedCoordinates[$coordinate] = true;
     }
+    $parsed['rows'] = array_values(array_filter($parsed['rows'], static function (array $row) use ($selectedCoordinates): bool {
+        $coordinate = json_encode([(string)$row['sheet_name'], (int)$row['row_number']], JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR);
+        return isset($selectedCoordinates[$coordinate]);
+    }));
+    if (count($parsed['rows']) !== count($selectedCoordinates)) {
+        throw new InvalidArgumentException('One or more selected rows are not in the current worksheet. Refresh the preview and select rows again.');
+    }
+    return SummaryCardImportService::apply(
+        $pdo,
+        $parsed,
+        is_array($data['row_versions'] ?? null) ? $data['row_versions'] : [],
+        !empty($data['reviewed_diff']),
+        (int)$_SESSION['user_id']
+    );
 });

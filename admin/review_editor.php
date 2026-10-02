@@ -31,7 +31,10 @@ require_once __DIR__.'/includes/header.php';
                     <button type="button" id="closeSummaryCardEditor" class="export-cancel-button" aria-label="Close">&times;</button>
                 </div>
                 <div id="summaryCardManagerView">
-                    <div style="display:flex; justify-content:space-between; align-items:center; gap:0.75rem; margin-bottom:0.75rem; flex-wrap:wrap;">
+                    <div style="display:flex; justify-content:space-between; align-items:end; gap:0.75rem; margin-bottom:0.75rem; flex-wrap:wrap;">
+                        <label class="form-label" for="summaryCardSearch" style="margin:0;">Search cards
+                            <input id="summaryCardSearch" type="search" class="form-input" placeholder="Title, label, value, year…" autocomplete="off" style="display:inline-block; width:min(300px, 65vw); margin-left:0.35rem;">
+                        </label>
                         <label class="form-label" style="margin:0;">Filter category
                             <select id="summaryCardCategoryFilter" class="form-input" style="display:inline-block; width:auto; min-width:150px; margin-left:0.35rem;">
                                 <option value="all">All categories</option>
@@ -45,6 +48,12 @@ require_once __DIR__.'/includes/header.php';
                             <button id="bulkDeleteSummaryCards" type="button" class="export-cancel-button" style="display:none; color:#B91C1C; border-color:#FECACA; background-color:#FEF2F2;">
                                 <i class="fa-solid fa-trash" aria-hidden="true"></i> Delete Selected (<span id="bulkDeleteSummaryCardsCount">0</span>)
                             </button>
+                            <button id="bulkPublishSummaryCards" type="button" class="btn-save-modal" style="display:none;">
+                                <i class="fa-solid fa-circle-check" aria-hidden="true"></i> Publish Selected (<span id="bulkPublishSummaryCardsCount">0</span>)
+                            </button>
+                            <button id="bulkUnpublishSummaryCards" type="button" class="export-cancel-button" style="display:none;">
+                                <i class="fa-solid fa-circle-minus" aria-hidden="true"></i> Unpublish Selected (<span id="bulkUnpublishSummaryCardsCount">0</span>)
+                            </button>
                             <button id="addSummaryCardFromManager" type="button" class="btn-save-modal"><i class="fa-solid fa-plus" aria-hidden="true"></i> Add summary card</button>
                         </div>
                     </div>
@@ -57,6 +66,7 @@ require_once __DIR__.'/includes/header.php';
                 <form id="summaryCardEditorForm" style="display:none;">
                     <input type="hidden" id="summaryCardEditorId">
                     <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem;">
+                        <div><label class="form-label" for="summaryCardEditorImportKey">Global Label</label><input type="text" id="summaryCardEditorImportKey" class="form-input" maxlength="100" required></div>
                         <div><label class="form-label" for="summaryCardEditorTitle">Title</label><input type="text" id="summaryCardEditorTitle" class="form-input" required></div>
                         <div><label class="form-label" for="summaryCardEditorMainValue">Main Value</label><input type="text" id="summaryCardEditorMainValue" class="form-input" required></div>
                         <div><label class="form-label" for="summaryCardEditorMainLabel">Main Label</label><input type="text" id="summaryCardEditorMainLabel" class="form-input" required></div>
@@ -69,7 +79,7 @@ require_once __DIR__.'/includes/header.php';
                         <div><label class="form-label" for="summaryCardEditorDisplayOrder">Display Order</label><input type="number" id="summaryCardEditorDisplayOrder" class="form-input" value="0" min="0"></div>
                         <div><label class="form-label" for="summaryCardEditorCategory">Categories</label><select id="summaryCardEditorCategory" class="form-input" multiple size="3" aria-describedby="summaryCardEditorCategoryHelp"></select><span id="summaryCardEditorCategoryHelp" class="text-xs" style="color:var(--text-muted);">Select one or more; leave empty for Uncategorized.</span><div style="display:flex; gap:0.5rem; margin-top:0.5rem;"><button type="button" id="summaryCardEditorAddCategory" class="btn-studio-action">+ New category</button><input type="text" id="summaryCardEditorNewCategory" class="form-input" maxlength="40" placeholder="Category name" style="display:none;"></div></div>
                         <div><label class="form-label" for="summaryCardEditorPrecision">Display Precision</label><select id="summaryCardEditorPrecision" class="form-input"><option value="0">No decimals</option><option value="1">1 decimal</option><option value="2" selected>2 decimals</option></select></div>
-                        <label style="display:flex; align-items:center; gap:0.5rem; margin-top:0.6rem; font-size:0.8rem; font-weight:700; color: var(--text-muted);"><input type="checkbox" id="summaryCardEditorPublished" checked> Publish card</label>
+                        <label style="display:flex; align-items:center; gap:0.5rem; margin-top:0.6rem; font-size:0.8rem; font-weight:700; color: var(--text-muted);"><input type="checkbox" id="summaryCardEditorPublished"> Publish card</label>
                     </div>
                     <div style="display:flex; justify-content:flex-end; gap:0.75rem; margin-top:1rem;">
                         <button type="button" id="cancelSummaryCardEditor" class="export-cancel-button">Cancel</button>
@@ -617,6 +627,7 @@ require_once __DIR__.'/includes/header.php';
             const categorySelect = document.getElementById('summaryCardEditorCategory');
             const newCategoryInput = document.getElementById('summaryCardEditorNewCategory');
             const categoryFilter = document.getElementById('summaryCardCategoryFilter');
+            const cardSearch = document.getElementById('summaryCardSearch');
             let cards = [];
             let categories = [];
             const escapeHtml = value => String(value ?? '').replace(/[&<>"']/g, character => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[character]));
@@ -695,12 +706,24 @@ require_once __DIR__.'/includes/header.php';
 
             function renderCards() {
                 const selectedCategory = categoryFilter.value || 'all';
-                const visibleCards = cards.filter(card => selectedCategory === 'all'
+                const searchTerm = (cardSearch.value || '').trim().toLocaleLowerCase();
+                const visibleCards = cards.filter(card => {
+                    const categoryMatches = selectedCategory === 'all'
                     || (selectedCategory === 'uncategorized'
                         ? !(card.category_ids || (card.category_id ? [card.category_id] : [])).length
-                        : (card.category_ids || (card.category_id ? [card.category_id] : [])).some(categoryId => String(categoryId) === selectedCategory)));
+                        : (card.category_ids || (card.category_id ? [card.category_id] : [])).some(categoryId => String(categoryId) === selectedCategory));
+                    if (!categoryMatches) return false;
+                    if (!searchTerm) return true;
+                    const searchable = [
+                        card.title, card.import_key, card.main_value, card.main_label, card.year_date,
+                        card.secondary_label, card.secondary_value, card.description,
+                        card.secondary_description, card.info_text, card.current_public_period,
+                        card.latest_imported_period, card.category_name, card.category_names || []
+                    ].flat().filter(Boolean).join(' ').toLocaleLowerCase();
+                    return searchable.includes(searchTerm);
+                });
                 if (!visibleCards.length) {
-                    editorList.innerHTML = '<div class="rounded-xl border border-dashed border-gray-300 px-4 py-6 text-sm text-gray-500 text-center">No summary cards in this category.</div>';
+                    editorList.innerHTML = `<div class="rounded-xl border border-dashed border-gray-300 px-4 py-6 text-sm text-gray-500 text-center">${searchTerm ? 'No summary cards match your search.' : 'No summary cards in this category.'}</div>`;
                     return;
                 }
                 editorList.innerHTML = visibleCards
@@ -709,18 +732,21 @@ require_once __DIR__.'/includes/header.php';
                     .map(card => `
                         <div class="rounded-xl border border-gray-200 bg-gray-50 p-3">
                             <div class="flex items-start gap-3">
-                                <input type="checkbox" class="bulk-delete-summary-checkbox mt-1 cursor-pointer" data-id="${escapeHtml(card.id)}" aria-label="Select for bulk delete" style="width:1rem;height:1rem;">
+                                <input type="checkbox" class="bulk-delete-summary-checkbox mt-1 cursor-pointer" data-id="${escapeHtml(card.id)}" aria-label="Select summary card" style="width:1rem;height:1rem;">
                                 <div class="flex-1">
                                     <div class="flex items-center justify-between gap-3">
                                         <div>
                                             <div class="font-bold text-sm text-slate-900">${escapeHtml(card.title || 'Summary Card')}</div>
+                                            <div class="text-xs text-slate-500">Global Label: ${escapeHtml(card.import_key || '')}</div>
                                             <div class="text-xs text-slate-500">${escapeHtml(card.main_value || '')} · ${escapeHtml(card.main_label || '')}</div>
+                                            <div class="mt-1 text-xs text-slate-500">Public: ${escapeHtml(card.current_public_period || 'None')} · Latest imported: ${escapeHtml(card.latest_imported_period || 'None')} · Periods: ${Number(card.history_count || 0)}</div>
                                             <span class="inline-flex items-center rounded-full bg-emerald-50 text-emerald-800 px-2 py-0.5 mt-1 text-[10px] font-semibold">${escapeHtml(card.category_name || 'Uncategorized')}</span>
                                         </div>
                                         <span class="inline-flex items-center rounded-full px-2 py-1 text-[10px] font-bold uppercase tracking-wide ${card.is_published ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-200 text-slate-700'}">${card.is_published ? 'Published' : 'Draft'}</span>
                                     </div>
                                     <div class="flex gap-2 mt-3">
                                         <button type="button" class="summary-card-editor-edit btn-studio-action" data-id="${escapeHtml(card.id)}">Edit</button>
+                                        <button type="button" class="btn-studio-action" data-summary-history-open data-id="${escapeHtml(card.id)}">History</button>
                                         <button type="button" class="summary-card-editor-toggle btn-studio-action" data-id="${escapeHtml(card.id)}" data-published="${card.is_published ? '1' : '0'}">${card.is_published ? 'Unpublish' : 'Publish'}</button>
                                         <button type="button" class="summary-card-editor-delete archive-delete-button" data-id="${escapeHtml(card.id)}">Delete</button>
                                     </div>
@@ -739,10 +765,26 @@ require_once __DIR__.'/includes/header.php';
                 const updateBulkBtn = () => {
                     const currentBulkBtn = document.getElementById('bulkDeleteSummaryCards');
                     const currentBulkCount = document.getElementById('bulkDeleteSummaryCardsCount');
+                    const currentPublishBtn = document.getElementById('bulkPublishSummaryCards');
+                    const currentPublishCount = document.getElementById('bulkPublishSummaryCardsCount');
+                    const currentUnpublishBtn = document.getElementById('bulkUnpublishSummaryCards');
+                    const currentUnpublishCount = document.getElementById('bulkUnpublishSummaryCardsCount');
                     const allCbs = Array.from(editorList.querySelectorAll('.bulk-delete-summary-checkbox'));
                     const selected = allCbs.filter(cb => cb.checked);
+                    const selectedDrafts = selected.filter(cb => {
+                        const card = cards.find(item => item.id === cb.dataset.id);
+                        return card && !card.is_published;
+                    });
+                    const selectedPublished = selected.filter(cb => {
+                        const card = cards.find(item => item.id === cb.dataset.id);
+                        return card && card.is_published;
+                    });
                     if (currentBulkBtn) currentBulkBtn.style.display = selected.length > 0 ? 'inline-block' : 'none';
                     if (currentBulkCount) currentBulkCount.textContent = selected.length;
+                    if (currentPublishBtn) currentPublishBtn.style.display = selectedDrafts.length > 0 ? 'inline-block' : 'none';
+                    if (currentPublishCount) currentPublishCount.textContent = selectedDrafts.length;
+                    if (currentUnpublishBtn) currentUnpublishBtn.style.display = selectedPublished.length > 0 ? 'inline-block' : 'none';
+                    if (currentUnpublishCount) currentUnpublishCount.textContent = selectedPublished.length;
                     if (selectAllSummary) selectAllSummary.checked = allCbs.length > 0 && selected.length === allCbs.length;
                 };
 
@@ -774,6 +816,62 @@ require_once __DIR__.'/includes/header.php';
                         await refreshSummaryCardEditor();
                     });
                 }
+
+                const publishBtn = document.getElementById('bulkPublishSummaryCards');
+                if (publishBtn) {
+                    const newPublishBtn = publishBtn.cloneNode(true);
+                    publishBtn.parentNode.replaceChild(newPublishBtn, publishBtn);
+                    newPublishBtn.addEventListener('click', async () => {
+                        const selectedIds = new Set(Array.from(editorList.querySelectorAll('.bulk-delete-summary-checkbox:checked')).map(cb => cb.dataset.id));
+                        const selectedDrafts = cards.filter(card => selectedIds.has(card.id) && !card.is_published);
+                        if (!selectedDrafts.length) return;
+                        if (!confirm(`Publish ${selectedDrafts.length} selected Summary Card(s)?`)) return;
+                        newPublishBtn.disabled = true;
+                        const count = newPublishBtn.querySelector('#bulkPublishSummaryCardsCount');
+                        if (count) count.textContent = '…';
+                        let hasError = false;
+                        for (const card of selectedDrafts) {
+                            try {
+                                const response = await fetch(summaryCardApi + '&id=' + encodeURIComponent(card.id), {
+                                    method: 'PUT',
+                                    headers: mutationHeaders(),
+                                    body: JSON.stringify({ is_published: true })
+                                });
+                                if (!response.ok) hasError = true;
+                            } catch (error) { hasError = true; }
+                        }
+                        if (hasError) alert('Some selected summary cards could not be published.');
+                        await refreshSummaryCardEditor();
+                    });
+                }
+
+                const unpublishBtn = document.getElementById('bulkUnpublishSummaryCards');
+                if (unpublishBtn) {
+                    const newUnpublishBtn = unpublishBtn.cloneNode(true);
+                    unpublishBtn.parentNode.replaceChild(newUnpublishBtn, unpublishBtn);
+                    newUnpublishBtn.addEventListener('click', async () => {
+                        const selectedIds = new Set(Array.from(editorList.querySelectorAll('.bulk-delete-summary-checkbox:checked')).map(cb => cb.dataset.id));
+                        const selectedPublished = cards.filter(card => selectedIds.has(card.id) && card.is_published);
+                        if (!selectedPublished.length) return;
+                        if (!confirm(`Unpublish ${selectedPublished.length} selected Summary Card(s)?`)) return;
+                        newUnpublishBtn.disabled = true;
+                        const count = newUnpublishBtn.querySelector('#bulkUnpublishSummaryCardsCount');
+                        if (count) count.textContent = '…';
+                        let hasError = false;
+                        for (const card of selectedPublished) {
+                            try {
+                                const response = await fetch(summaryCardApi + '&id=' + encodeURIComponent(card.id), {
+                                    method: 'PUT',
+                                    headers: mutationHeaders(),
+                                    body: JSON.stringify({ is_published: false })
+                                });
+                                if (!response.ok) hasError = true;
+                            } catch (error) { hasError = true; }
+                        }
+                        if (hasError) alert('Some selected summary cards could not be unpublished.');
+                        await refreshSummaryCardEditor();
+                    });
+                }
                 updateBulkBtn();
 
                 editorList.querySelectorAll('.summary-card-editor-edit').forEach(button => {
@@ -782,6 +880,7 @@ require_once __DIR__.'/includes/header.php';
                         const card = cards.find(item => item.id === id);
                         if (!card) return;
                         document.getElementById('summaryCardEditorId').value = card.id || '';
+                        document.getElementById('summaryCardEditorImportKey').value = card.import_key || card.id || '';
                         document.getElementById('summaryCardEditorTitle').value = card.title || '';
                         document.getElementById('summaryCardEditorMainValue').value = card.main_value || '';
                         document.getElementById('summaryCardEditorMainLabel').value = card.main_label || '';
@@ -842,6 +941,7 @@ require_once __DIR__.'/includes/header.php';
             }
 
             categoryFilter.addEventListener('change', renderCards);
+            cardSearch.addEventListener('input', renderCards);
             document.getElementById('summaryCardEditorAddCategory').addEventListener('click', () => {
                 newCategoryInput.style.display = newCategoryInput.style.display === 'none' ? 'block' : 'none';
                 if (newCategoryInput.style.display === 'block') newCategoryInput.focus();
@@ -850,6 +950,7 @@ require_once __DIR__.'/includes/header.php';
             form.addEventListener('submit', async (event) => {
                 event.preventDefault();
                 const payload = {
+                    import_key: document.getElementById('summaryCardEditorImportKey').value,
                     title: document.getElementById('summaryCardEditorTitle').value.trim(),
                     main_value: document.getElementById('summaryCardEditorMainValue').value.trim(),
                     main_label: document.getElementById('summaryCardEditorMainLabel').value.trim(),
@@ -897,7 +998,7 @@ require_once __DIR__.'/includes/header.php';
                 newCategoryInput.style.display = 'none';
                 newCategoryInput.value = '';
                 document.getElementById('summaryCardEditorPrecision').value = '2';
-                document.getElementById('summaryCardEditorPublished').checked = true;
+                document.getElementById('summaryCardEditorPublished').checked = false;
                 showCardForm(false);
             });
 

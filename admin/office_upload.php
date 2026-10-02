@@ -29,6 +29,7 @@ $templateQuery = db()->prepare('SELECT templates.id, templates.name, templates.o
     ORDER BY templates.name ASC, templates.id DESC');
 $templateQuery->execute();
 $templates = $templateQuery->fetchAll(PDO::FETCH_ASSOC);
+$officeVisibleTemplates = array_values(array_filter($templates, static fn(array $template): bool => $template['upload_purpose'] !== 'summary_cards'));
 $success = flash('success');
 $error = flash('error');
 ?>
@@ -81,6 +82,11 @@ $error = flash('error');
                         <?php endforeach; ?>
                     </select>
                 </div>
+                <div data-summary-profile-control data-api="<?= e(base_url('api/templates.php')) ?>" class="hidden">
+                    <label class="block text-sm font-semibold">Active Summary Card template</label>
+                    <p data-summary-profile-name class="mt-1 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2.5 text-sm text-emerald-900 dark:border-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-200">Loading active profile…</p>
+                    <p data-summary-profile-help class="mt-1 text-xs text-gray-500 dark:text-slate-400"></p>
+                </div>
                 <p data-template-filter-help class="text-xs text-gray-500 dark:text-slate-400">Choose a purpose to see its upload requirements.</p>
                 <label for="officeFile" class="block text-sm font-semibold">Select document</label>
                     <input id="officeFile" name="office_file" type="file" required accept=".xlsx,.csv,.tsv" class="block w-full cursor-pointer rounded-lg border border-gray-300 bg-gray-50 text-sm file:mr-4 file:border-0 file:bg-emerald-700 file:px-4 file:py-3 file:font-semibold file:text-white dark:border-slate-700 dark:bg-slate-800">
@@ -100,13 +106,13 @@ $error = flash('error');
         <section class="lg:col-span-2">
             <div class="mb-3"><h2 class="text-lg font-bold">Active templates</h2><p class="text-sm text-gray-500 dark:text-slate-400">Templates provided by the Super Admin for office use.</p></div>
             <div id="activeTemplatesList" data-api="<?= e(base_url('api/templates.php')) ?>" data-download-base="<?= e(base_url('admin/template_download.php')) ?>" class="divide-y divide-gray-200 overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm dark:divide-slate-800 dark:border-slate-800 dark:bg-slate-900">
-                <?php foreach ($templates as $template): ?>
+                <?php foreach ($officeVisibleTemplates as $template): ?>
                     <div class="flex flex-wrap items-center justify-between gap-3 px-4 py-3">
                         <div><p class="font-semibold"><?= e($template['name']) ?></p><p class="text-xs text-gray-500 dark:text-slate-400"><?= e($template['original_filename']) ?></p></div>
                         <a class="inline-flex items-center gap-2 rounded-lg border border-gray-300 px-3 py-2 text-sm font-semibold hover:bg-gray-100 dark:border-slate-700 dark:hover:bg-slate-800" href="<?= e(base_url('admin/template_download.php?id=' . (int)$template['id'])) ?>"><i class="fa-solid fa-download" aria-hidden="true"></i>Download</a>
                     </div>
                 <?php endforeach; ?>
-                <?php if (!$templates): ?><p class="px-4 py-6 text-sm text-gray-500 dark:text-slate-400">No active templates are available.</p><?php endif; ?>
+                <?php if (!$officeVisibleTemplates): ?><p class="px-4 py-6 text-sm text-gray-500 dark:text-slate-400">No active templates are available.</p><?php endif; ?>
             </div>
         </section>
     </main>

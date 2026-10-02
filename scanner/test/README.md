@@ -1,6 +1,10 @@
 # Scanner Tests
 
-V3.4.5 import changes were not accompanied by automated tests. Manually verify template mapping, one selected live period per Global Label, history archival, stale-preview rejection, and import recovery against the local XAMPP database.
+V3.4.7 adds mapping coverage for the Unified Summary Cards profile. Run the PHP mapping test as well as the JavaScript suite; also manually verify profile selection, diff review, one selected live period per Global Label, history archival, stale-preview rejection, and import recovery against the local XAMPP database.
+
+```powershell
+php scanner/test/templateImportMapping.test.php
+```
 
 Tests use Node's built-in `node:test` runner. No npm install or package manifest is required. From the repository root, run the full suite with:
 

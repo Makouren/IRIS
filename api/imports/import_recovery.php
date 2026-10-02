@@ -1,5 +1,6 @@
 <?php
 require_once __DIR__ . '/../../includes/functions.php';
+require_once __DIR__ . '/../../includes/helpers/SummaryCardCategoryStorage.php';
 requireRole(['super_admin'], true);
 header('Content-Type: application/json; charset=utf-8');
 header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
@@ -11,10 +12,19 @@ function import_recovery_fail(string $message, int $status = 400): never
     exit;
 }
 
-function import_recovery_matches(array $current, array $expected): bool
+function import_recovery_matches(array $current, array $expected, ?array $currentCategoryNames = null): bool
 {
     foreach ($expected as $field => $value) {
         if ($field === 'updated_at') continue;
+        if ($field === 'category_names') {
+            if (!is_array($value) || !is_array($currentCategoryNames)) return false;
+            $expectedNames = array_values($value);
+            $actualNames = array_values($currentCategoryNames);
+            sort($expectedNames, SORT_STRING);
+            sort($actualNames, SORT_STRING);
+            if ($expectedNames !== $actualNames) return false;
+            continue;
+        }
         if (!array_key_exists($field, $current) || (string)$current[$field] !== (string)$value) return false;
     }
     return true;
@@ -84,10 +94,10 @@ try {
             if ($before === null) {
                 $pdo->prepare('DELETE FROM summary_card_snapshots WHERE id = ?')->execute([(int)$current['id']]);
             } else {
-                $pdo->prepare('UPDATE summary_card_snapshots SET main_value = ?, secondary_value = ?, year_date = ?, description = ?, secondary_description = ?, info_text = ?, source_record_id = ?, batch_id = ? WHERE id = ?')->execute([
-                    $before['main_value'], $before['secondary_value'], $before['year_date'], $before['description'] ?? null, $before['secondary_description'] ?? null, $before['info_text'] ?? null,
-                    $before['source_record_id'], $before['batch_id'], (int)$current['id']
-                ]);
+                $fields = ['title', 'period_label', 'period_sort', 'period_precision', 'is_published', 'main_value', 'main_label', 'secondary_label', 'secondary_value', 'year_date', 'description', 'secondary_description', 'info_text', 'source_info', 'source_record_id', 'batch_id', 'last_source_record_id', 'last_batch_id'];
+                $sets = implode(', ', array_map(static fn(string $field): string => '`' . $field . '` = ?', $fields));
+                $values = array_map(static fn(string $field) => $before[$field] ?? null, $fields);
+                $pdo->prepare('UPDATE summary_card_snapshots SET ' . $sets . ' WHERE id = ?')->execute([...$values, (int)$current['id']]);
             }
             continue;
         }
@@ -96,17 +106,21 @@ try {
         $query = $pdo->prepare('SELECT * FROM summary_cards WHERE id = ? FOR UPDATE');
         $query->execute([$cardId]);
         $current = $query->fetch(PDO::FETCH_ASSOC);
-        if (!$current || !import_recovery_matches($current, $after)) {
+        $currentCategoryNames = $current && array_key_exists('category_names', $after)
+            ? SummaryCardCategoryStorage::names($pdo, $cardId)
+            : null;
+        if (!$current || !import_recovery_matches($current, $after, $currentCategoryNames)) {
             throw new RuntimeException('A summary card changed after this batch. Rollback was stopped.');
         }
         if ($before === null) {
             $pdo->prepare('DELETE FROM summary_cards WHERE id = ?')->execute([$cardId]);
             continue;
         }
-        $fields = ['import_key', 'main_value', 'main_label', 'year_date', 'secondary_label', 'secondary_value', 'description', 'secondary_description', 'info_text'];
+        $fields = ['import_key', 'main_value', 'main_label', 'year_date', 'secondary_label', 'secondary_value', 'description', 'secondary_description', 'info_text', 'display_precision'];
         $sets = implode(', ', array_map(static fn(string $field): string => '`' . $field . '` = ?', $fields));
         $values = array_map(static fn(string $field) => $before[$field] ?? null, $fields);
         $pdo->prepare('UPDATE summary_cards SET ' . $sets . ' WHERE id = ?')->execute([...$values, $cardId]);
+        if (array_key_exists('category_names', $before)) SummaryCardCategoryStorage::replace($pdo, $cardId, $before['category_names']);
     }
     $pdo->prepare("UPDATE import_batches SET status = 'reverted', reverted_at = NOW() WHERE id = ?")->execute([$batchId]);
     $pdo->commit();

@@ -1,6 +1,7 @@
 <?php
 require_once __DIR__ . '/../includes/functions.php';
 require_once __DIR__ . '/../includes/SpreadsheetReader.php';
+require_once __DIR__ . '/../includes/helpers/SummaryCardImportProfiles.php';
 $currentRole = (string)($_SESSION['role'] ?? '');
 if ($currentRole === 'super_admin' && !ALLOW_SUPER_ADMIN_UPLOAD) {
 	requireRole(['admin']);
@@ -12,7 +13,7 @@ $uploadPurpose = trim((string)($_POST['upload_purpose'] ?? ''));
 if (!in_array($uploadPurpose, ['analytics', 'ranking_history', 'summary_cards'], true)) {
 	flash_redirect('admin/office_upload.php', 'error', 'Choose an upload purpose.');
 }
-$templateInput = trim((string)($_POST['template_id'] ?? ''));
+$templateInput = $uploadPurpose === 'summary_cards' ? '' : trim((string)($_POST['template_id'] ?? ''));
 $templateId = null;
 if ($templateInput !== '') {
 	$parsedTemplateId = filter_var($templateInput, FILTER_VALIDATE_INT);
@@ -25,6 +26,13 @@ if ($templateId === null && $uploadPurpose !== 'summary_cards') {
 	flash_redirect('admin/office_upload.php', 'error', 'Choose an active template for the selected upload purpose.');
 }
 $pdo = db();
+$importProfileId = null;
+$summaryProfile = null;
+if ($uploadPurpose === 'summary_cards') {
+	$summaryProfile = SummaryCardImportProfiles::active($pdo);
+	$importProfileId = (int)$summaryProfile['id'];
+	$templateId = $summaryProfile['template_id'] === null ? null : (int)$summaryProfile['template_id'];
+}
 $selectedTemplate = null;
 if ($templateId !== null) {
 	$templateQuery = $pdo->prepare('SELECT templates.id, templates.ranking_body_id, profiles.destination
@@ -136,8 +144,8 @@ try {
 	$metadata = json_encode(array_merge($parsed['metadata'], ['stored_file' => $storedName, 'upload_purpose' => $uploadPurpose]), JSON_THROW_ON_ERROR);
 	$insert = $pdo->prepare("INSERT INTO records
 		(id, fileName, fileType, fileSize, scannedAt, status, uploaded_by, office_name, uploaded_at,
-		 template_id, docType, rawText, extractedData, graphDrafts, adminNotes, metadata, updatedAt)
-		VALUES (?, ?, ?, ?, NOW(), 'Pending Review', ?, ?, NOW(), ?, ?, ?, ?, ?, '', ?, NULL)");
+		 template_id, import_profile_id, docType, rawText, extractedData, graphDrafts, adminNotes, metadata, updatedAt)
+		VALUES (?, ?, ?, ?, NOW(), 'Pending Review', ?, ?, NOW(), ?, ?, ?, ?, ?, ?, '', ?, NULL)");
 	$insert->execute([
 		$recordId,
 		function_exists('mb_substr') ? mb_substr($originalName, 0, 255, 'UTF-8') : substr($originalName, 0, 255),
@@ -146,6 +154,7 @@ try {
 		(int)$_SESSION['user_id'],
 		$officeName,
 		$templateId,
+		$importProfileId,
 		'Office Upload',
 		(string)$parsed['rawText'],
 		json_encode($parsed['sheetsData'], JSON_THROW_ON_ERROR),
