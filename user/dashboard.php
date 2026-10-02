@@ -224,9 +224,6 @@ try {
         .ranking-panel { background: var(--iris-surface); border: 1px solid var(--iris-border); box-shadow: 0 12px 32px rgba(30, 96, 49, 0.08); }
         .ranking-table th { color: var(--iris-text-faint); font-size: var(--iris-font-xs); letter-spacing: .08em; text-transform: uppercase; }
         .ranking-table td { color: var(--iris-text); font-size: var(--iris-font-sm); }
-        .rank-change-up { color: #15803d; }
-        .rank-change-down { color: #b91c1c; }
-        .rank-change-same { color: var(--iris-text-faint); }
 
         html.dark {
             --iris-green: #6ee7b7;
@@ -476,14 +473,11 @@ try {
                     <p class="text-xs text-gray-500 dark:text-gray-400">Compare institutional rankings across available years.</p>
                 </div>
                 <div class="flex flex-wrap items-center justify-end gap-2 text-sm font-semibold text-gray-700 dark:text-gray-200" aria-label="Filter Ranking History">
-                    <label class="flex items-center gap-1.5">Level
-                        <select id="rankingLevelFilter" class="rounded-xl border border-gray-300 bg-white px-3 py-2 text-sm dark:border-gray-600 dark:bg-gray-900"><option value="all">All levels</option></select>
+                    <label class="flex items-center gap-1.5">Organization
+                        <select id="rankingOrganizationFilter" class="rounded-xl border border-gray-300 bg-white px-3 py-2 text-sm dark:border-gray-600 dark:bg-gray-900"><option value="all">All organizations</option></select>
                     </label>
-                    <label class="flex items-center gap-1.5">Scope
-                        <select id="rankingScopeFilter" class="rounded-xl border border-gray-300 bg-white px-3 py-2 text-sm dark:border-gray-600 dark:bg-gray-900"><option value="all">All scopes</option></select>
-                    </label>
-                    <label class="flex items-center gap-1.5">Ranking type
-                        <select id="rankingTypeFilter" class="rounded-xl border border-gray-300 bg-white px-3 py-2 text-sm dark:border-gray-600 dark:bg-gray-900"><option value="all">All types</option></select>
+                    <label id="rankingListControl" class="hidden items-center gap-1.5">List
+                        <select id="rankingListFilter" class="rounded-xl border border-gray-300 bg-white px-3 py-2 text-sm dark:border-gray-600 dark:bg-gray-900"><option value="all">All lists</option></select>
                     </label>
                     <button id="rankingAllYears" type="button" class="rounded-lg border border-green-800 bg-green-800 px-3 py-2 text-white dark:border-amber-500 dark:bg-amber-500 dark:text-gray-950" aria-pressed="true">All years</button>
                     <label class="flex items-center gap-1.5">From
@@ -494,19 +488,8 @@ try {
                     </label>
                 </div>
             </div>
-            <div class="grid grid-cols-1 xl:grid-cols-5 gap-6">
-                <div class="ranking-panel rounded-2xl p-5 xl:col-span-2">
-                    <div id="rankingTableStatus" class="text-sm text-gray-500 dark:text-gray-400 py-8 text-center">Loading ranking data...</div>
-                    <div class="overflow-x-auto">
-                        <table id="rankingTable" class="ranking-table hidden min-w-[820px] w-full text-left">
-                            <thead><tr><th class="pb-3 pr-4">Year / Edition</th><th class="pb-3 pr-4">Ranking type</th><th class="pb-3 pr-4">Level</th><th class="pb-3 pr-4">Scope / Category</th><th class="pb-3 pr-4">Rank</th><th class="pb-3">Change</th></tr></thead>
-                            <tbody></tbody>
-                        </table>
-                    </div>
-                </div>
-                <div class="ranking-panel rounded-2xl p-5 xl:col-span-3">
-                    <div id="rankingChart" class="grid min-h-64 w-full grid-cols-1 gap-4 md:grid-cols-2 2xl:grid-cols-3"></div>
-                </div>
+            <div class="ranking-panel w-full rounded-2xl p-5">
+                <div id="rankingChart" class="grid min-h-64 w-full grid-cols-1 gap-4 xl:grid-cols-2"></div>
             </div>
         </section>
 
@@ -603,7 +586,7 @@ try {
             document.documentElement.classList.toggle('dark', nextMode === 'dark');
             localStorage.setItem('color-theme', nextMode);
             localStorage.setItem('iris-theme', nextMode);
-            if (rankingRows.length) renderRankingHistoryFromControls();
+            window.IRISRankingHistory?.themeChanged?.();
             loadPublishedScannerGraphs();
         });
 
@@ -1155,477 +1138,6 @@ try {
             refreshSummaryCardsAdmin().catch(() => {});
         <?php endif; ?>
 
-        const rankingPalette = window.IRISChartConfig?.palettes || { default: ['#0F766E', '#5EEAD4'] };
-        let rankingRows = [];
-        let rankingScopes = [];
-        let rankingTypes = [];
-        let rankingChartInstances = [];
-        let rankingAllYearsActive = true;
-        let activeRankingLevel = 'all';
-        let activeRankingScope = 'all';
-        let activeRankingType = 'all';
-        let rankingChartColorOverrides = {};
-        try {
-            const storedRankingColors = JSON.parse(localStorage.getItem('iris-ranking-series-colors') || '{}');
-            if (storedRankingColors && typeof storedRankingColors === 'object' && !Array.isArray(storedRankingColors)) {
-                rankingChartColorOverrides = storedRankingColors;
-            }
-        } catch (error) {}
-
-        function rankingColor(shortName) {
-            return rankingPalette[shortName] || rankingPalette.default;
-        }
-
-        function rankingSeriesColor(name, body) {
-            const override = rankingChartColorOverrides[name];
-            const legacyColors = document.documentElement.classList.contains('dark')
-                ? ['#34D399', '#E0A70D', '#60A5FA', '#F87171', '#C084FC', '#22D3EE']
-                : rankingColor(body);
-            return window.IRISChartColors.resolveFieldColors([name], {
-                chartColors: [override],
-                fieldColors: window.IRISFieldColors || {},
-                legacyColors: [legacyColors[0]],
-                defaultColors: window.IRISChartColors.DEFAULT_CHART_COLORS
-            })[0];
-        }
-
-        function bindRankingFamilyColor(input, familyName) {
-            input.addEventListener('change', () => {
-                rankingChartColorOverrides[familyName] = input.value.toUpperCase();
-                try { localStorage.setItem('iris-ranking-series-colors', JSON.stringify(rankingChartColorOverrides)); } catch (error) {}
-                renderRankingHistoryFromControls();
-            });
-        }
-
-        function getRankingRowsForLevelAndScope() {
-            return rankingRows.filter(row => {
-                const matchesLevel = activeRankingLevel === 'all'
-                    || (activeRankingLevel === 'unassigned' ? !row.level : row.level === activeRankingLevel);
-                const matchesScope = activeRankingScope === 'all'
-                    || (activeRankingScope === 'unassigned' ? !row.scope_id : String(row.scope_id) === activeRankingScope);
-                return matchesLevel && matchesScope;
-            });
-        }
-
-        function getFilteredRankingRows() {
-            return getRankingRowsForLevelAndScope().filter(row => activeRankingType === 'all'
-                || String(row.ranking_type || row.body_short_name || row.body_name) === activeRankingType);
-        }
-
-        function renderRankingTypeOptions() {
-            const select = document.getElementById('rankingTypeFilter');
-            if (!select) return;
-            const selected = activeRankingType;
-            const availableTypes = [...new Set(rankingTypes.map(type => String(type)))].sort((left, right) => left.localeCompare(right));
-            select.innerHTML = '<option value="all">All types</option>' + availableTypes.map(type => `<option value="${escapeHtmlDashboard(type)}">${escapeHtmlDashboard(type)}</option>`).join('');
-            activeRankingType = [...select.options].some(option => option.value === selected) ? selected : 'all';
-            select.value = activeRankingType;
-        }
-
-        function renderRankingScopeOptions() {
-            const select = document.getElementById('rankingScopeFilter');
-            if (!select) return;
-            const selected = activeRankingScope;
-            select.innerHTML = '<option value="all">All scopes</option>'
-                + '<option value="unassigned">Unassigned</option>'
-                + rankingScopes.map(scope => `<option value="${escapeHtmlDashboard(scope.id)}">${escapeHtmlDashboard(scope.name)}</option>`).join('');
-            activeRankingScope = [...select.options].some(option => option.value === selected) ? selected : 'all';
-            select.value = activeRankingScope;
-        }
-
-        function getRankingFamily(row) {
-            return (row.ranking_type || row.body_short_name || row.body_name) + ' ' + (row.scope_name || 'Unassigned');
-        }
-
-        function rankingChange(row, selectedYear) {
-            if (!Number.isFinite(Number(row.rank_value))) return null;
-            const previous = rankingRows
-                .filter(item => (item.ranking_type || item.body_short_name) === (row.ranking_type || row.body_short_name)
-                    && item.scope_id === row.scope_id && item.category === row.category
-                    && Number(item.year) < Number(selectedYear) && Number.isFinite(Number(item.rank_value)))
-                .sort((a, b) => Number(b.year) - Number(a.year))[0];
-            if (!previous) return null;
-            
-            const diff = Number(row.rank_value) - Number(previous.rank_value);
-            const isDown = diff > 0; // larger number = worse rank = DOWN
-            const isUp = diff < 0; // smaller number = better rank = UP
-            const symbol = isUp ? '▲' : isDown ? '▼' : '–';
-            const className = isUp ? 'rank-change-up' : isDown ? 'rank-change-down' : 'rank-change-same';
-            
-            const isBand = (r) => (r.rank_low && r.rank_high && r.rank_low !== r.rank_high) || String(r.global_rank).includes('+') || String(r.global_rank).includes('-');
-            
-            if (isBand(row) || isBand(previous)) {
-                return { difference: diff, symbol, className, previous, text: diff === 0 ? '–' : `${symbol} from ${previous.global_rank || previous.rank_value}` };
-            }
-            return { difference: diff, symbol, className, previous, text: diff === 0 ? '–' : `${symbol} ${Math.abs(diff)}` };
-        }
-
-        function renderRankingHistoryChart(startYear = 'all', endYear = 'all') {
-            const chartElement = document.getElementById('rankingChart');
-            if (!chartElement) return;
-            const allYears = String(startYear) === 'all' || String(endYear) === 'all';
-            const validRows = getFilteredRankingRows().filter(row => row.rank_value !== null && row.rank_value !== ''
-                && Number.isFinite(Number(row.rank_value))
-                && (allYears || (Number(row.year) >= Number(startYear) && Number(row.year) <= Number(endYear))));
-            
-            // Clean up old instances
-            rankingChartInstances.forEach(c => c && c.dispose());
-            rankingChartInstances = [];
-            chartElement.innerHTML = '';
-            
-            if (!validRows.length) return;
-            
-            // SDG Special View
-            if (activeRankingType === 'THE Impact SDG') {
-                renderSDGChart(validRows, chartElement, startYear, endYear);
-                return;
-            }
-
-            const years = [...new Set(validRows.map(row => String(row.year)))].sort((a, b) => Number(a) - Number(b));
-            const families = new Map();
-            validRows.forEach(row => {
-                const type = String(row.ranking_type || row.body_short_name || row.body_name || 'Ranking');
-                if (type === 'THE Impact SDG') return; // Exclude from default view
-                const body = String(row.body_short_name || row.body_name || type);
-                const scope = String(row.scope_name || 'Unassigned');
-                const family = `${type} ${scope}`;
-                if (!families.has(family)) families.set(family, { type, scope, body, dataByYear: new Map() });
-                
-                // Get latest edition per year (key must be String to match years array)
-                const yData = families.get(family).dataByYear;
-                const yearKey = String(row.year);
-                if (!yData.has(yearKey)) {
-                    yData.set(yearKey, []);
-                }
-                yData.get(yearKey).push(row);
-            });
-
-            const chartTheme = window.IRISChartBuilder.getChartTheme({ dark: document.documentElement.classList.contains('dark') });
-            const textColor = chartTheme.textColor;
-            const splitLineColor = chartTheme.gridColor;
-
-            // Setup responsive grid on parent
-            chartElement.className = 'grid grid-cols-1 md:grid-cols-2 2xl:grid-cols-3 gap-6';
-
-            for (const [family, group] of families.entries()) {
-                const div = document.createElement('div');
-                div.style.minHeight = '300px';
-                div.style.width = '100%';
-                chartElement.appendChild(div);
-                
-                const instance = echarts.init(div);
-                rankingChartInstances.push(instance);
-                
-                const seriesColor = rankingSeriesColor(family, group.body);
-                const data = years.map(y => {
-                    const yStr = String(y);
-                    if (!group.dataByYear.has(yStr)) return null;
-                    const editions = group.dataByYear.get(yStr);
-                    editions.sort((a, b) => String(a.edition || '').localeCompare(String(b.edition || ''))); // sort by edition
-                    const latest = editions[editions.length - 1]; // pick latest
-                    return {
-                        value: Number(latest.rank_value),
-                        allEditions: editions,
-                        latestRank: latest.global_rank || latest.rank_value
-                    };
-                });
-
-                // Calculate bounds so single data point or flat line displays properly
-                const validValues = data.filter(d => d !== null && d.value !== null && Number.isFinite(d.value)).map(d => d.value);
-                let yMin = undefined;
-                let yMax = undefined;
-                if (validValues.length > 0) {
-                    const minVal = Math.min(...validValues);
-                    const maxVal = Math.max(...validValues);
-                    if (minVal === maxVal) {
-                        yMin = Math.max(1, minVal - 5);
-                        yMax = maxVal + 5;
-                    }
-                }
-
-                instance.setOption({
-                    title: { text: family, left: 'center', textStyle: { color: textColor, fontSize: 14 } },
-                    color: [seriesColor],
-                    tooltip: {
-                        trigger: 'item',
-                        backgroundColor: chartTheme.tooltipBackground,
-                        borderColor: chartTheme.tooltipBorder,
-                        textStyle: { color: chartTheme.labelColor, fontSize: 13 },
-                        formatter: params => {
-                            const d = params.data;
-                            if (!d) return '';
-                            let html = `<b>${escapeHtmlDashboard(family)} - ${params.name}</b><br>`;
-                            d.allEditions.forEach(ed => {
-                                html += `${escapeHtmlDashboard(ed.edition || 'Annual')}: <b>${escapeHtmlDashboard(ed.global_rank || ed.rank_value)}</b><br>`;
-                            });
-                            return html;
-                        }
-                    },
-                    grid: { left: '10%', right: '5%', top: '20%', bottom: '15%', containLabel: true },
-                    xAxis: {
-                        type: 'category',
-                        data: years,
-                        axisLabel: { interval: 0, color: textColor, hideOverlap: true },
-                        axisLine: { lineStyle: { color: splitLineColor } },
-                        splitLine: { show: false }
-                    },
-                    yAxis: {
-                        type: 'value',
-                        inverse: true,
-                        min: yMin,
-                        max: yMax,
-                        minInterval: 1,
-                        axisLabel: {
-                            color: textColor,
-                            formatter: value => '#' + Math.round(value)
-                        },
-                        splitLine: { lineStyle: { color: splitLineColor } },
-                        scale: true
-                    },
-                    series: [{
-                        type: 'line',
-                        data: data,
-                        connectNulls: true,
-                        symbol: 'circle',
-                        symbolSize: 10,
-                        showSymbol: true,
-                        lineStyle: { width: 3 },
-                        itemStyle: { color: seriesColor }
-                    }]
-                });
-            }
-        }
-
-        function renderSDGChart(validRows, chartElement, startYear, endYear) {
-            const sdgRows = validRows.filter(r => r.ranking_type === 'THE Impact SDG');
-            if (!sdgRows.length) return;
-            // Get selected year or latest
-            const years = [...new Set(sdgRows.map(r => r.year))].sort((a, b) => b - a);
-            const targetYear = startYear !== 'all' ? startYear : years[0];
-            const rows = sdgRows.filter(r => r.year == targetYear).sort((a, b) => Number(a.rank_value) - Number(b.rank_value));
-            
-            chartElement.className = 'grid grid-cols-1 gap-6'; // single column for SDG
-            
-            const div = document.createElement('div');
-            div.style.minHeight = '400px';
-            div.style.width = '100%';
-            chartElement.appendChild(div);
-            
-            const instance = echarts.init(div);
-            rankingChartInstances.push(instance);
-            
-            const chartTheme = window.IRISChartBuilder.getChartTheme({ dark: document.documentElement.classList.contains('dark') });
-            const textColor = chartTheme.textColor;
-            
-            instance.setOption({
-                title: { text: `THE Impact SDG - ${targetYear}`, left: 'center', textStyle: { color: textColor } },
-                tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' }, backgroundColor: chartTheme.tooltipBackground, borderColor: chartTheme.tooltipBorder, textStyle: { color: chartTheme.labelColor } },
-                grid: { left: '20%', right: '10%', top: '15%', bottom: '10%', containLabel: true },
-                xAxis: { type: 'value', inverse: true, show: false },
-                yAxis: { type: 'category', data: rows.map(r => r.category || 'SDG').reverse(), axisLabel: { color: textColor } },
-                series: [{
-                    type: 'bar',
-                    data: rows.map(r => ({ value: Number(r.rank_value), labelText: r.global_rank })).reverse(),
-                    itemStyle: { color: '#0F766E' },
-                    label: { show: true, position: 'right', formatter: p => p.data.labelText, color: textColor }
-                }]
-            });
-        }
-
-        function renderRankingHistory(startYear = 'all', endYear = 'all') {
-            const table = document.getElementById('rankingTable');
-            const status = document.getElementById('rankingTableStatus');
-            const body = table?.querySelector('tbody');
-            const allYears = String(startYear) === 'all' || String(endYear) === 'all';
-            let rows = getFilteredRankingRows().filter(row => (allYears || (Number(row.year) >= Number(startYear) && Number(row.year) <= Number(endYear)))
-                && row.rank_value !== null && row.rank_value !== '');
-                
-            if (!table || !status || !body) return;
-            body.innerHTML = '';
-            
-            // Clean up any previously created extra tbodys
-            const allTbodys = table.querySelectorAll('tbody');
-            for (let i = 1; i < allTbodys.length; i++) {
-                allTbodys[i].remove();
-            }
-            
-            renderRankingHistoryChart(startYear, endYear);
-            
-            if (!rows.length) {
-                table.classList.add('hidden');
-                status.innerHTML = `<div class="rounded-xl border border-dashed border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-800/60 p-6 text-center"><i class="fa-solid fa-folder-open mb-2 text-2xl text-gray-400"></i><p>No numeric rankings found for the selected filters.</p></div>`;
-                status.classList.remove('hidden');
-                return;
-            }
-            status.classList.add('hidden');
-            table.classList.remove('hidden');
-            
-            // Default sort: newest year first, then Level, then ranking
-            rows.sort((a, b) => {
-                if (a.year !== b.year) return b.year - a.year;
-                if (a.level !== b.level) return String(a.level).localeCompare(String(b.level));
-                return String(a.ranking_type).localeCompare(String(b.ranking_type));
-            });
-
-            // Group THE Impact SDG
-            const groupedRows = [];
-            let sdgGroup = null;
-            
-            rows.forEach(row => {
-                if (row.ranking_type === 'THE Impact SDG') {
-                    if (!sdgGroup) {
-                        sdgGroup = { isGroup: true, rows: [] };
-                        groupedRows.push(sdgGroup);
-                    }
-                    sdgGroup.rows.push(row);
-                } else {
-                    groupedRows.push(row);
-                }
-            });
-
-            groupedRows.forEach(item => {
-                if (item.isGroup) {
-                    const tr = document.createElement('tr');
-                    tr.className = 'border-t border-gray-100 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/50 cursor-pointer';
-                    tr.innerHTML = `<td colspan="6" class="py-3 px-4 font-bold text-gray-700 dark:text-gray-200"><i class="fa-solid fa-chevron-down mr-2 text-xs"></i> THE Impact SDG (${item.rows.length} records)</td>`;
-                    
-                    const tbody = document.createElement('tbody');
-                    tbody.style.display = 'none';
-                    item.rows.forEach(row => {
-                        const change = rankingChange(row, row.year);
-                        const changeText = change ? change.text : 'New';
-                        const changeTooltip = change && change.previous ? ` title="Compared to ${change.previous.year} ${escapeHtmlDashboard(change.previous.edition||'')}"` : '';
-                        const trInner = document.createElement('tr');
-                        trInner.className = 'border-t border-gray-50 dark:border-gray-800 text-sm';
-                        const scopeAndCategory = [row.scope_name, row.category].filter(Boolean).join(' · ') || 'Unassigned';
-                        trInner.innerHTML = `<td class="py-2 pr-4 pl-8">${escapeHtmlDashboard(row.year)}</td><td class="py-2 pr-4 text-gray-500">${escapeHtmlDashboard(row.ranking_type)}</td><td class="py-2 pr-4">${escapeHtmlDashboard(row.level||'')}</td><td class="py-2 pr-4 max-w-[200px] truncate" title="${escapeHtmlDashboard(scopeAndCategory)}">${escapeHtmlDashboard(scopeAndCategory)}</td><td class="py-2 pr-4 font-bold">${escapeHtmlDashboard(row.global_rank || row.rank_value)}</td><td class="py-2"><span class="${change?.className || 'rank-change-same'} font-bold whitespace-nowrap" ${changeTooltip}>${escapeHtmlDashboard(changeText)}</span></td>`;
-                        tbody.appendChild(trInner);
-                    });
-                    
-                    tr.addEventListener('click', () => {
-                        tbody.style.display = tbody.style.display === 'none' ? 'table-row-group' : 'none';
-                        tr.querySelector('i').className = tbody.style.display === 'none' ? 'fa-solid fa-chevron-right mr-2 text-xs' : 'fa-solid fa-chevron-down mr-2 text-xs';
-                    });
-                    
-                    body.appendChild(tr);
-                    table.appendChild(tbody);
-                } else {
-                    const row = item;
-                    const change = rankingChange(row, row.year);
-                    const changeText = change ? change.text : 'New';
-                    const changeTooltip = change && change.previous ? ` title="Compared to ${change.previous.year} ${escapeHtmlDashboard(change.previous.edition||'')}"` : '';
-                    const tr = document.createElement('tr');
-                    tr.className = 'border-t border-gray-100 dark:border-gray-700';
-                    const edition = row.edition && row.edition !== 'Annual' ? ` · ${row.edition}` : '';
-                    const scopeAndCategory = [row.scope_name, row.category].filter(Boolean).join(' · ') || 'Unassigned';
-                    tr.innerHTML = `<td class="py-3 pr-4">${escapeHtmlDashboard(String(row.year) + edition)}</td><td class="py-3 pr-4 font-semibold" style="color: ${rankingSeriesColor(getRankingFamily(row), row.body_short_name||row.body_name)}">${escapeHtmlDashboard(row.ranking_type || row.body_short_name || row.body_name)}</td><td class="py-3 pr-4">${escapeHtmlDashboard(row.level || 'Unclassified')}</td><td class="py-3 pr-4 max-w-[200px] truncate" title="${escapeHtmlDashboard(scopeAndCategory)}">${escapeHtmlDashboard(scopeAndCategory)}</td><td class="py-3 pr-4 font-bold">${escapeHtmlDashboard(row.global_rank || row.rank_value)}</td><td class="py-3"><span class="${change?.className || 'rank-change-same'} font-bold whitespace-nowrap" ${changeTooltip}>${escapeHtmlDashboard(changeText)}</span></td>`;
-                    body.appendChild(tr);
-                }
-            });
-        }
-        function loadRankingHistory() {
-            const fromSelect = document.getElementById('rankingYearFrom');
-            const toSelect = document.getElementById('rankingYearTo');
-            const scopeSelect = document.getElementById('rankingScopeFilter');
-            const levelSelect = document.getElementById('rankingLevelFilter');
-            const typeSelect = document.getElementById('rankingTypeFilter');
-            fetch('<?= e(base_url('api/rankings.php')) ?>', { headers: { Accept: 'application/json' }, cache: 'no-store' })
-                .then(response => { if (!response.ok) throw new Error('Ranking request failed'); return response.json(); })
-                .then(payload => {
-                    rankingRows = Array.isArray(payload.rankings) ? payload.rankings : [];
-                    rankingScopes = Array.isArray(payload.scopes) ? payload.scopes : [];
-                    rankingTypes = Array.isArray(payload.ranking_types) ? payload.ranking_types : [];
-                    const years = Array.isArray(payload.years) ? payload.years : [];
-                    if (!fromSelect || !toSelect || !scopeSelect || !levelSelect || !typeSelect || !years.length) throw new Error('No ranking years available');
-                    const ascendingYears = years.map(Number).sort((left, right) => left - right);
-                    const yearOptions = ascendingYears.map(year => `<option value="${year}">${year}</option>`).join('');
-                    fromSelect.innerHTML = yearOptions;
-                    toSelect.innerHTML = yearOptions;
-                    fromSelect.disabled = false;
-                    toSelect.disabled = false;
-                    levelSelect.innerHTML = '<option value="all">All levels</option><option>Local</option><option>ASEAN</option><option>Asia</option><option>World</option><option value="unassigned">Unassigned</option>';
-                    levelSelect.disabled = false;
-                    activeRankingLevel = 'all';
-                    activeRankingScope = 'all';
-                    activeRankingType = 'all';
-                    renderRankingScopeOptions();
-                    renderRankingTypeOptions();
-                    fromSelect.value = String(ascendingYears[0]);
-                    toSelect.value = String(ascendingYears[ascendingYears.length - 1]);
-                    rankingAllYearsActive = true;
-                    updateRankingAllYearsButton();
-                    renderRankingHistory('all', 'all');
-                })
-                .catch(() => {
-                    if (fromSelect) { fromSelect.innerHTML = '<option>Unavailable</option>'; fromSelect.disabled = true; }
-                    if (toSelect) { toSelect.innerHTML = '<option>Unavailable</option>'; toSelect.disabled = true; }
-                    if (scopeSelect) { scopeSelect.innerHTML = '<option>Unavailable</option>'; scopeSelect.disabled = true; }
-                    if (levelSelect) { levelSelect.innerHTML = '<option>Unavailable</option>'; levelSelect.disabled = true; }
-                    if (typeSelect) { typeSelect.innerHTML = '<option>Unavailable</option>'; typeSelect.disabled = true; }
-                    const status = document.getElementById('rankingTableStatus');
-                    if (status) status.textContent = 'Ranking data could not be loaded.';
-                });
-        }
-
-        function updateRankingAllYearsButton() {
-            const button = document.getElementById('rankingAllYears');
-            if (!button) return;
-            button.setAttribute('aria-pressed', String(rankingAllYearsActive));
-            button.className = `rounded-lg border px-3 py-2 ${rankingAllYearsActive ? 'border-green-800 bg-green-800 text-white dark:border-amber-500 dark:bg-amber-500 dark:text-gray-950' : 'border-green-800/30 bg-white text-green-900 dark:border-gray-600 dark:bg-gray-900 dark:text-gray-200'}`;
-        }
-
-        function renderRankingHistoryFromControls() {
-            if (rankingAllYearsActive) {
-                renderRankingHistory('all', 'all');
-                return;
-            }
-            const startYear = Number(document.getElementById('rankingYearFrom')?.value);
-            const endYear = Number(document.getElementById('rankingYearTo')?.value);
-            if (Number.isFinite(startYear) && Number.isFinite(endYear)) renderRankingHistory(startYear, endYear);
-        }
-
-        document.getElementById('rankingAllYears')?.addEventListener('click', () => {
-            rankingAllYearsActive = true;
-            const fromSelect = document.getElementById('rankingYearFrom');
-            const toSelect = document.getElementById('rankingYearTo');
-            if (fromSelect?.options.length) fromSelect.selectedIndex = 0;
-            if (toSelect?.options.length) toSelect.selectedIndex = toSelect.options.length - 1;
-            updateRankingAllYearsButton();
-            renderRankingHistoryFromControls();
-        });
-        document.getElementById('rankingYearFrom')?.addEventListener('change', event => {
-            rankingAllYearsActive = false;
-            const toSelect = document.getElementById('rankingYearTo');
-            if (Number(event.target.value) > Number(toSelect.value)) toSelect.value = event.target.value;
-            updateRankingAllYearsButton();
-            renderRankingHistoryFromControls();
-        });
-        document.getElementById('rankingYearTo')?.addEventListener('change', event => {
-            rankingAllYearsActive = false;
-            const fromSelect = document.getElementById('rankingYearFrom');
-            if (Number(event.target.value) < Number(fromSelect.value)) fromSelect.value = event.target.value;
-            updateRankingAllYearsButton();
-            renderRankingHistoryFromControls();
-        });
-        document.getElementById('rankingScopeFilter')?.addEventListener('change', event => {
-            activeRankingScope = event.target.value || 'all';
-            activeRankingType = 'all';
-            renderRankingTypeOptions();
-            renderRankingHistoryFromControls();
-        });
-        document.getElementById('rankingLevelFilter')?.addEventListener('change', event => {
-            activeRankingLevel = event.target.value || 'all';
-            activeRankingScope = 'all';
-            activeRankingType = 'all';
-            renderRankingScopeOptions();
-            renderRankingTypeOptions();
-            renderRankingHistoryFromControls();
-        });
-        document.getElementById('rankingTypeFilter')?.addEventListener('change', event => {
-            activeRankingType = event.target.value || 'all';
-            renderRankingHistoryFromControls();
-        });
-
         // --- Published Observatory Graphs ---
         let chartInstances = [];
 
@@ -1733,14 +1245,7 @@ try {
 
         new MutationObserver(() => {
             const theme = window.IRISChartBuilder.getChartTheme({ dark: document.documentElement.classList.contains('dark') });
-            rankingChartInstances.forEach(chart => chart?.setOption({
-                textStyle: { color: theme.textColor },
-                title: { textStyle: { color: theme.labelColor } },
-                tooltip: { backgroundColor: theme.tooltipBackground, borderColor: theme.tooltipBorder, textStyle: { color: theme.labelColor } },
-                xAxis: { axisLabel: { color: theme.textColor }, axisLine: { lineStyle: { color: theme.gridColor } }, splitLine: { lineStyle: { color: theme.gridColor } } },
-                yAxis: { axisLabel: { color: theme.textColor }, axisLine: { lineStyle: { color: theme.gridColor } }, splitLine: { lineStyle: { color: theme.gridColor } } },
-                series: [{ label: { color: theme.labelColor } }]
-            }));
+            window.IRISRankingHistory?.themeChanged();
             document.querySelectorAll('.scanner-published-card').forEach(card => {
                 const element = card.querySelector('[id^="scannerPublishedChart_"]');
                 if (element && card._publishedGraph && card._publishedChart) {
@@ -1754,14 +1259,14 @@ try {
 
         document.addEventListener('DOMContentLoaded', () => {
             loadSummaryCards();
-            loadRankingHistory();
             loadPublishedScannerGraphs();
             window.addEventListener('resize', () => {
                 chartInstances.forEach(chart => chart?.resize?.());
-                rankingChartInstances.forEach(chart => chart?.resize?.());
+                window.IRISRankingHistory?.resize();
             });
         });
     </script>
+<script src="<?= e(base_url('user/js/rankingHistory.js')) ?>?v=<?= (int) filemtime(__DIR__ . '/js/rankingHistory.js') ?>" data-api="<?= e(base_url('api/rankings.php')) ?>" defer></script>
 <?php require __DIR__ . '/../includes/change_refresh_script.php'; ?>
 </body>
 </html>

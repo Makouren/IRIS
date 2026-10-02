@@ -107,16 +107,21 @@ class DatabaseManager {
   /**
    * Get all database records
    */
-  async getAllRecords() {
+  async getAllRecords({ excludeImportRecords = false } = {}) {
     await this.initPromise;
+    const filterRecords = records => excludeImportRecords
+      ? records.filter(record => !['ranking_history', 'summary_cards'].includes(String(record.import_destination || record.metadata?.upload_purpose || '')))
+      : records;
 
     // Always prefer MySQL server — it is the source of truth
     try {
-      const resp = await fetch(this.config.endpoints.records);
+      const endpoint = new URL(this.config.endpoints.records, window.location.href);
+      if (excludeImportRecords) endpoint.searchParams.set('exclude_import_records', '1');
+      const resp = await fetch(endpoint);
       if (resp.ok) {
         const data = await resp.json();
         // Return MySQL data even if empty — MySQL is canonical
-        if (Array.isArray(data)) return data;
+        if (Array.isArray(data)) return filterRecords(data);
       }
     } catch (e) {
       console.warn('Server API unavailable, falling back to local storage:', e);
@@ -128,12 +133,12 @@ class DatabaseManager {
         const tx = this.db.transaction('records', 'readonly');
         const store = tx.objectStore('records');
         const req = store.getAll();
-        req.onsuccess = () => resolve(req.result || []);
-        req.onerror = () => resolve(this.getLocalStorageRecords());
+        req.onsuccess = () => resolve(filterRecords(req.result || []));
+        req.onerror = () => resolve(filterRecords(this.getLocalStorageRecords()));
       });
     }
 
-    return this.getLocalStorageRecords();
+    return filterRecords(this.getLocalStorageRecords());
   }
 
   async getFieldColors() {

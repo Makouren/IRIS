@@ -307,7 +307,7 @@ export function initAdminPortal(ctx) {
   const confirmBulk = async mode => {
     const ids = [...selectedRecordIds];
     if (!ids.length) return;
-    const records = await ctx.dbManager.getAllRecords();
+    const records = await ctx.dbManager.getAllRecords({ excludeImportRecords: true });
     const selected = records.filter(record => ids.includes(String(record.id)));
     const verb = mode;
     const description = mode === 'delete'
@@ -361,7 +361,7 @@ export function initAdminPortal(ctx) {
         globalThis.IRISFieldColors = globalThis.IRISFieldColors || {};
         console.warn('Field colors are temporarily unavailable:', error);
       }
-      const records = await ctx.dbManager.getAllRecords();
+      const records = await ctx.dbManager.getAllRecords({ excludeImportRecords: true });
       if ($('statTotalDb')) $('statTotalDb').textContent = records.length;
       if ($('statPendingDb')) $('statPendingDb').textContent = records.filter(r => r.status === 'Pending Review' || !r.status).length;
       if ($('statVerifiedDb')) $('statVerifiedDb').textContent = records.filter(r => ['Approved', 'Verified & Approved'].includes(r.status)).length;
@@ -443,7 +443,7 @@ export function initAdminPortal(ctx) {
   const refreshArchive = async () => {
     if (document.visibilityState !== 'visible') return;
     try {
-      const records = await ctx.dbManager.getAllRecords();
+      const records = await ctx.dbManager.getAllRecords({ excludeImportRecords: true });
       const term = (($('adminSearchInput')?.value || '')).toLowerCase();
       const status = $('adminStatusFilter')?.value || 'all';
       const office = $('adminOfficeFilter')?.value || 'all';

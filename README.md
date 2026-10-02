@@ -4,9 +4,9 @@
 
 IRIS is a plain-PHP application. Apache serves PHP pages and PDO-backed APIs; browser JavaScript handles interactive workflows, file parsing, and charts. There is no Laravel application, Composer runtime, Node.js web server, or Python service.
 
-## V3.4.7 Highlight
+## V4.5.0 Highlight
 
-V3.4.7 introduces the **Unified Summary Cards** template: a reusable import profile for standardized Summary Card spreadsheets, independent of a specific uploaded office template. Super Admins can select the active profile, map stable Global Labels and reporting periods consistently, and optionally import card categories and display precision. Imports retain the existing diff review, historical-period, and explicit-publication safeguards. See [README_V3.4.7.md](README_V3.4.7.md) for release details and migration steps.
+V4.5.0 expands workbook-based Ranking History imports and administration, adds reusable workbook mapping for ranking and summary-card profiles, and lets office users select **Data and Report Visualization** as the general upload destination. Super Admins can search and manage rankings, set public chart defaults, and review destination-specific imports. The public Ranking History chart runs as a dedicated JavaScript module. See [README_V4.5.0.md](README_V4.5.0.md) for changes, migrations, and verification.
 
 ## What the System Does
 
@@ -55,6 +55,10 @@ Registration creates a `user` role. An administrator must promote accounts expli
 3. The Review Editor can update record fields, extracted data, notes, and chart configuration. Save keeps the record in its selected review status and leaves the active graph unpublished.
 4. Studio Publish sets `records.status` to `Approved` and saves the active chart with `saved_graphs.is_published = 1`. It does not publish every saved graph belonging to that record.
 5. The archive can publish or unpublish selected records in bulk. File-level Unpublish returns the record to `Pending Review` and hides every saved graph linked by `record_id`; it does not delete either the record or its charts.
+
+### Office Upload Destinations
+
+Office users choose **Data and Report Visualization**, **Summary Cards**, or **Ranking History** before uploading a spreadsheet. General visualization uploads require an active analytics template and enter the regular record-review and charting workflow. Summary Card and Ranking History uploads use their active import profiles and remain separated from the general Review Editor dataset.
 
 Parser and viewer modules for PDF, DOCX, and image OCR are present in the codebase, but the current Scanner upload widget accepts spreadsheets only. Smart Upload currently performs rule-based mapping for CSV files.
 
@@ -231,7 +235,8 @@ The suite covers graph/chart mapping, table filtering, document pagination, grap
 ## Related Documentation
 
 - [`README_PHP.md`](README_PHP.md): PHP deployment notes.
-- [`README_V3.4.7.md`](README_V3.4.7.md): V3.4.7 release changes and manual verification checklist.
+- [`README_V4.5.0.md`](README_V4.5.0.md): V4.5.0 release changes and migration steps.
+- [`README_V3.4.7.md`](README_V3.4.7.md): Historical V3.4.7 release details.
 - [`README_V3.4.5.md`](README_V3.4.5.md): Historical V3.4.5 release notes.
 - [`scanner/js/ai/README.md`](scanner/js/ai/README.md): chart suggestions and shared chart utilities.
 - [`scanner/js/database/README.md`](scanner/js/database/README.md): persistence and API routes.

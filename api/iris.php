@@ -714,13 +714,21 @@ try {
 
     if ($resource === 'records') {
         if ($_SERVER['REQUEST_METHOD'] === 'GET') {
+            $excludeImportRecords = ($_GET['exclude_import_records'] ?? '') === '1';
+            $importRecordExclusion = $excludeImportRecords
+                ? " AND COALESCE(
+                        NULLIF(JSON_UNQUOTE(JSON_EXTRACT(records.metadata, '$.upload_purpose')), ''),
+                        (SELECT upload_profiles.destination FROM template_import_profiles upload_profiles WHERE upload_profiles.id = records.import_profile_id LIMIT 1),
+                        ''
+                    ) NOT IN ('ranking_history', 'summary_cards')"
+                : '';
             if ($id !== null) {
                 $pdo->prepare('UPDATE records SET opened_at = COALESCE(opened_at, NOW()) WHERE id = ?')->execute([$id]);
-                $q = $pdo->prepare('SELECT records.*, templates.name AS template_name FROM records LEFT JOIN templates ON templates.id = records.template_id WHERE records.id=?'); $q->execute([$id]);
+                $q = $pdo->prepare('SELECT records.*, templates.name AS template_name FROM records LEFT JOIN templates ON templates.id = records.template_id WHERE records.id=?' . $importRecordExclusion); $q->execute([$id]);
                 $r = $q->fetch(PDO::FETCH_ASSOC); if (!$r) bad('Record not found',404);
                 echo json_encode(output_record($r)); exit;
             }
-            $rows = $pdo->query('SELECT records.*, templates.name AS template_name FROM records LEFT JOIN templates ON templates.id = records.template_id ORDER BY records.scannedAt DESC, records.updatedAt DESC')->fetchAll(PDO::FETCH_ASSOC);
+            $rows = $pdo->query('SELECT records.*, templates.name AS template_name FROM records LEFT JOIN templates ON templates.id = records.template_id WHERE 1=1' . $importRecordExclusion . ' ORDER BY records.scannedAt DESC, records.updatedAt DESC')->fetchAll(PDO::FETCH_ASSOC);
             echo json_encode(array_map('output_record',$rows)); exit;
         }
         if ($_SERVER['REQUEST_METHOD'] === 'POST' && $action === 'stage-restore') {

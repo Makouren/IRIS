@@ -1,6 +1,6 @@
 # Scanner Frontend Modules
 
-V3.4.7 extends `import/importPreviewModal.js` to support the active Unified Summary Cards profile during Super Admin import review, alongside `changeRefresh.js` for role-aware refresh signaling across open IRIS pages.
+V4.5.0 extends `import/importPreviewModal.js` with destination-specific Ranking History and Summary Card imports and keeps those uploads separate from the general Review Editor dataset. `changeRefresh.js` provides role-aware refresh signaling across open IRIS pages.
 
 [`../app.js`](../app.js) initializes the browser application and creates a shared context with scanner, database manager, state, and module APIs. Modules exchange callbacks through `ctx.api`; DOM queries stay with the module that owns the UI.
 

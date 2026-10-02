@@ -90,14 +90,15 @@ if (modal) {
   function syncApplyButton() {
     const isSummary = state?.destination === 'summary_cards';
     const selectedSummaryChange = isSummary && state.rows.some(row => state.selected.has(row.key) && ['new_period', 'updated_period'].includes(row.kind));
-    const selectedRankingRows = state?.destination !== 'summary_cards' && state?.selected.size;
-    if (isSummary) {
-      const actionable = state.rows.filter(row => ['new_period', 'updated_period'].includes(row.kind));
-      const selectedCount = actionable.filter(row => state.selected.has(row.key)).length;
-      selectAllSummary.checked = actionable.length > 0 && selectedCount === actionable.length;
-      selectAllSummary.indeterminate = selectedCount > 0 && selectedCount < actionable.length;
-      selectionCount.textContent = `${selectedCount} of ${actionable.length} available row(s) selected`;
-    }
+    const actionable = state?.rows.filter(row => isSummary
+      ? ['new_period', 'updated_period'].includes(row.kind)
+      : !['blocked', 'unchanged'].includes(row.kind)) || [];
+    const selectedCount = actionable.filter(row => state.selected.has(row.key)).length;
+    selectAllSummary.checked = actionable.length > 0 && selectedCount === actionable.length;
+    selectAllSummary.indeterminate = selectedCount > 0 && selectedCount < actionable.length;
+    selectAllSummary.disabled = actionable.length === 0;
+    selectionCount.textContent = `${selectedCount} of ${actionable.length} available row(s) selected`;
+    const selectedRankingRows = !isSummary && selectedCount > 0;
     applyButton.disabled = !reviewedCheckbox.checked || (isSummary ? !selectedSummaryChange : !selectedRankingRows);
   }
 
@@ -120,16 +121,17 @@ if (modal) {
       const { period_key, period_label, period_sort, period_precision, ...sourceValues } = row.snapshot_after || {};
       return includeCardSettings(sourceValues, row.card_settings_after);
     }
-    return side === 'existing'
-      ? { ...row.existing, id: undefined, seed_managed: undefined }
-      : row.identity;
+    const displayFields = ['organization', 'ranking_type', 'year', 'global_rank', 'rank_value', 'ph_rank', 'source'];
+    const values = side === 'existing' ? row.existing : row.identity;
+    return Object.fromEntries(displayFields.filter(field => values?.[field] !== null && values?.[field] !== undefined && values?.[field] !== '')
+      .map(field => [field, values[field]]));
   }
 
   function renderRows() {
     const rows = state?.rows || [];
     const isSummary = state?.destination === 'summary_cards';
-    summarySelection.classList.toggle('hidden', !isSummary);
-    summarySelection.classList.toggle('flex', isSummary);
+    summarySelection.classList.remove('hidden');
+    summarySelection.classList.add('flex');
     identityHeading.textContent = isSummary ? 'Card description / year' : 'Action / identity';
     existingHeading.hidden = false;
     existingHeading.textContent = isSummary ? 'Existing snapshot / card' : 'Existing values';
@@ -189,9 +191,10 @@ if (modal) {
         addCell(row, `${item.sheet_name} · row ${item.row_number}`);
       }
       const snapshotTime = item.snapshot_before?.updated_at ? ` · Snapshot updated ${item.snapshot_before.updated_at}` : '';
+      const rankingAction = item.new_type ? `NEW TYPE · ${item.kind.toUpperCase()}` : item.kind === 'legacy' ? 'ADOPT LEGACY' : item.kind.toUpperCase();
       addCell(row, isSummary
         ? `${item.preview_status || item.kind} · ${item.snapshot_after?.main_label || item.import_key} · ${item.period_label}${snapshotTime}`
-        : `${item.kind === 'legacy' ? 'ADOPT LEGACY' : item.kind.toUpperCase()} · ${identityLabel(item, state.destination)}${item.error ? `\n${item.error}` : ''}`,
+        : `${rankingAction} · ${identityLabel(item, state.destination)}${item.error ? `\n${item.error}` : ''}`,
       item.kind === 'blocked' ? 'text-red-700' : '');
       const existingCell = document.createElement('td');
       existingCell.className = 'whitespace-pre-wrap p-2 align-top text-xs';
@@ -324,9 +327,12 @@ if (modal) {
   nextButton.addEventListener('click', () => { if (state && (state.page + 1) * pageSize < state.rows.length) { state.page++; renderRows(); } });
   reviewedCheckbox.addEventListener('change', syncApplyButton);
   selectAllSummary.addEventListener('change', () => {
-    if (state?.destination !== 'summary_cards') return;
+    if (!state) return;
     for (const row of state.rows) {
-      if (!['new_period', 'updated_period'].includes(row.kind)) continue;
+      const actionable = state.destination === 'summary_cards'
+        ? ['new_period', 'updated_period'].includes(row.kind)
+        : !['blocked', 'unchanged'].includes(row.kind);
+      if (!actionable) continue;
       if (selectAllSummary.checked) state.selected.add(row.key);
       else state.selected.delete(row.key);
     }

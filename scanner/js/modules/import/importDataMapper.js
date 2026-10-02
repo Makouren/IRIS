@@ -13,7 +13,7 @@ export function displayValues(values) {
 export function identityLabel(row, destination) {
   if (destination === 'summary_cards') return `${row.card_title || row.import_key} · ${row.period_key}`;
   const identity = row.identity || {};
-  return [`Body ${identity.ranking_body_id}`, identity.scope_id ? `Scope ${identity.scope_id}` : 'Unassigned', identity.ranking_type, identity.level || 'Unassigned', identity.year, identity.edition, identity.category]
+  return [identity.organization, identity.ranking_type, identity.year]
     .filter(value => value !== null && value !== undefined && value !== '')
     .join(' · ');
 }

@@ -1,0 +1,8 @@
+<FilesMatch "\.(json|txt|sql|md|py)$">
+    Require all denied
+</FilesMatch>
+
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+    RewriteRule ^migrations(?:/|$) - [F,L]
+</IfModule>

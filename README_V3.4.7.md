@@ -33,4 +33,4 @@ node --test scanner/test/*.test.js
 
 Against local XAMPP/MySQL, verify that a Super Admin can select the Unified Summary Cards profile, preview and apply a spreadsheet with Global Label and Year / Date, and see the imported card periods in history. Also check optional categories and precision, blank-field preservation, explicit clearing, historical backfill, and publication behavior.
 
-See [README.md](README.md) for setup and architecture, [README_PHP.md](README_PHP.md) for deployment details, and [README_V3.4.5.md](README_V3.4.5.md) for the preceding release notes.
+See [README_V4.5.0.md](README_V4.5.0.md) for the current release, [README.md](README.md) for setup and architecture, [README_PHP.md](README_PHP.md) for deployment details, and [README_V3.4.5.md](README_V3.4.5.md) for the preceding release notes.

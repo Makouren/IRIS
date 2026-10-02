@@ -74,6 +74,36 @@ assertSame(1, $resolvedMapped['import_key'], 'mapped Global Label -> import_key 
 assertSame(2, $resolvedMapped['period_key'], 'mapped Year -> period_key should resolve.');
 assertSame(3, $resolvedMapped['main_value'], 'mapped Main Value -> main_value should resolve.');
 
+$rankingProfile = [
+    'mapping_rules' => [
+        'organization' => 'Organization',
+        'ranking_type' => 'Ranking Type',
+        'year' => 'Year',
+        'global_rank' => 'Rank',
+        'ph_rank' => 'Philippine Rank',
+        'source' => 'Source',
+    ],
+    'header_aliases' => [
+        'organization' => ['Organization', 'Institution'],
+        'ranking_type' => ['Ranking Type', 'List'],
+        'year' => ['Year'],
+        'global_rank' => ['Rank', 'Overall Rank'],
+        'ph_rank' => ['Philippine Rank'],
+        'source' => ['Source'],
+    ],
+];
+$rankingIndexes = TemplateImportSupport::resolveFieldIndexes(
+    ['Organization', 'Ranking Type', 'Year', 'Rank', 'Philippine Rank', 'Source'],
+    $rankingProfile,
+    ['organization', 'ranking_type', 'year', 'global_rank', 'ph_rank', 'source']
+);
+assertSame(0, $rankingIndexes['organization'], 'Organization should resolve from the standard Ranking History header.');
+assertSame(1, $rankingIndexes['ranking_type'], 'Ranking Type should resolve from the standard Ranking History header.');
+assertSame(2, $rankingIndexes['year'], 'Year should resolve from the standard Ranking History header.');
+assertSame(3, $rankingIndexes['global_rank'], 'Rank should resolve from the standard Ranking History header.');
+assertSame(4, $rankingIndexes['ph_rank'], 'Philippine Rank should resolve from the standard Ranking History header.');
+assertSame(5, $rankingIndexes['source'], 'Source should resolve from the standard Ranking History header.');
+
 $reflection = new ReflectionMethod(TemplateImportSupport::class, 'builtInSummaryProfile');
 $reflection->setAccessible(true);
 $builtInProfile = $reflection->invoke(null);

@@ -65,16 +65,17 @@ try {
         }
         if ($audit['entity_type'] === 'ranking') {
             $id = (int)$audit['entity_id'];
-            $query = $pdo->prepare('SELECT * FROM rankings WHERE id = ? FOR UPDATE');
+            $fields = ['ranking_body_id', 'ranking_type', 'year', 'global_rank', 'rank_low', 'rank_high', 'rank_value', 'ph_rank', 'ph_rank_value', 'source', 'seed_managed'];
+            $query = $pdo->prepare('SELECT id, ' . implode(', ', array_map(static fn(string $field): string => '`' . $field . '`', $fields)) . ' FROM rankings WHERE id = ? FOR UPDATE');
             $query->execute([$id]);
             $current = $query->fetch(PDO::FETCH_ASSOC);
-            if (!$current || !import_recovery_matches($current, $after)) {
+            $expectedAfter = array_intersect_key($after, array_flip($fields));
+            if (!$current || !import_recovery_matches($current, $expectedAfter)) {
                 throw new RuntimeException('A ranking row changed after this batch. Rollback was stopped.');
             }
             if ($before === null) {
                 $pdo->prepare('DELETE FROM rankings WHERE id = ?')->execute([$id]);
             } else {
-                $fields = ['ranking_body_id', 'scope_id', 'ranking_type', 'level', 'year', 'edition', 'category', 'global_rank', 'rank_low', 'rank_high', 'rank_value', 'ph_rank', 'ph_rank_value', 'note', 'source', 'verification_status', 'seed_managed'];
                 $sets = implode(', ', array_map(static fn(string $field): string => '`' . $field . '` = ?', $fields));
                 $values = array_map(static fn(string $field) => $before[$field] ?? null, $fields);
                 $pdo->prepare('UPDATE rankings SET ' . $sets . ' WHERE id = ?')->execute([...$values, $id]);

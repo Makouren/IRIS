@@ -21,118 +21,61 @@ function ranking_import_csrf(): void
     if ($expected === '' || $provided === '' || !hash_equals($expected, $provided)) ranking_import_fail('Invalid CSRF token.', 419);
 }
 
-function ranking_import_identity(PDO $pdo, array $data, int $bodyId, array $defaults, int $rowNumber): array
+function ranking_import_row(PDO $pdo, array $data, array $defaults, int $rowNumber): array
 {
-    $scopeId = null;
-    $scopeInput = trim((string)($data['scope_id'] ?? '')) ?: trim((string)($defaults['scope_id'] ?? ''));
-    if ($scopeInput !== '') {
-        if (!ctype_digit($scopeInput)) throw new RuntimeException("Row {$rowNumber}: scope_id must be a whole number.");
-        $scopeId = (int)$scopeInput;
-        $scopeCheck = $pdo->prepare('SELECT id FROM ranking_scopes WHERE id = ?');
-        $scopeCheck->execute([$scopeId]);
-        if (!$scopeCheck->fetchColumn()) throw new RuntimeException("Row {$rowNumber}: scope does not exist.");
-    } else {
-        $scopeName = trim((string)($data['scope'] ?? '')) ?: trim((string)($defaults['scope'] ?? ''));
-        if ($scopeName !== '' && strtolower($scopeName) !== 'unassigned') {
-            $scopeCheck = $pdo->prepare('SELECT id FROM ranking_scopes WHERE LOWER(name) = LOWER(?)');
-            $scopeCheck->execute([$scopeName]);
-            $scopeId = $scopeCheck->fetchColumn();
-            if ($scopeId === false) throw new RuntimeException("Row {$rowNumber}: unknown scope '{$scopeName}'. Add it to Ranking Scopes before importing.");
-            $scopeId = (int)$scopeId;
-        }
-    }
+    $organization = trim((string)($data['organization'] ?? ''));
+    if ($organization === '' || strlen($organization) > 100) throw new RuntimeException("Row {$rowNumber}: Organization is required and must not exceed 100 characters.");
+    $bodyQuery = $pdo->prepare('SELECT id, name FROM ranking_bodies WHERE LOWER(name) = LOWER(?) OR LOWER(short_name) = LOWER(?) LIMIT 1');
+    $bodyQuery->execute([$organization, $organization]);
+    $body = $bodyQuery->fetch(PDO::FETCH_ASSOC) ?: null;
 
-    $level = null;
-    $levelId = trim((string)($data['level_id'] ?? '')) ?: trim((string)($defaults['level_id'] ?? ''));
-    $levelName = trim((string)($data['level'] ?? '')) ?: trim((string)($defaults['level'] ?? ''));
-    if ($levelId !== '') {
-        if (!ctype_digit($levelId)) throw new RuntimeException("Row {$rowNumber}: level_id must be a whole number.");
-        $levelQuery = $pdo->prepare('SELECT name FROM ranking_levels WHERE id = ?');
-        $levelQuery->execute([(int)$levelId]);
-        $level = $levelQuery->fetchColumn();
-        if ($level === false) throw new RuntimeException("Row {$rowNumber}: ranking level does not exist.");
-    } elseif ($levelName !== '' && strtolower($levelName) !== 'unassigned') {
-        $levelQuery = $pdo->prepare('SELECT name FROM ranking_levels WHERE LOWER(name) = LOWER(?)');
-        $levelQuery->execute([$levelName]);
-        $level = $levelQuery->fetchColumn();
-        if ($level === false) throw new RuntimeException("Row {$rowNumber}: unknown level '{$levelName}'. Add it to Ranking Levels before importing.");
-    }
-
+    $type = trim((string)($data['ranking_type'] ?? ''));
+    if ($type === '' || strlen($type) > 320) throw new RuntimeException("Row {$rowNumber}: Ranking Type is required and must not exceed 320 characters.");
     $year = filter_var($data['year'] ?? null, FILTER_VALIDATE_INT);
-    if ($year === false || $year < 1900 || $year > 2200) throw new RuntimeException("Row {$rowNumber}: year must be between 1900 and 2200.");
-    $type = trim((string)($data['ranking_type'] ?? $defaults['ranking_type'] ?? ''));
-    if ($type === '') $type = trim((string)($defaults['ranking_type'] ?? ''));
-    if ($type === '') throw new RuntimeException("Row {$rowNumber}: ranking_type is required or must be configured as a template default.");
-    $edition = trim((string)($data['edition'] ?? '')) ?: (trim((string)($defaults['edition'] ?? '')) ?: 'Annual');
-    $category = trim((string)($data['category'] ?? '')) ?: (trim((string)($defaults['category'] ?? '')) ?: 'Overall');
+    if ($year === false || $year < 1900 || $year > 2200) throw new RuntimeException("Row {$rowNumber}: Year must be between 1900 and 2200.");
     $rank = trim((string)($data['global_rank'] ?? ''));
-    if ($rank === '') throw new RuntimeException("Row {$rowNumber}: global_rank is required.");
-    $limits = ['ranking_type' => 100, 'edition' => 80, 'category' => 100, 'global_rank' => 50];
-    foreach (['ranking_type' => $type, 'edition' => $edition, 'category' => $category, 'global_rank' => $rank] as $field => $fieldValue) {
-        if (strlen($fieldValue) > $limits[$field]) throw new RuntimeException("Row {$rowNumber}: {$field} exceeds its storage limit.");
-    }
-    if ($level !== null && strlen($level) > 20) throw new RuntimeException("Row {$rowNumber}: level exceeds the rankings table limit of 20 characters.");
-    try {
-        [$low, $high, $value] = RankBoundsParser::parse($rank);
-    } catch (InvalidArgumentException $exception) {
-        throw new RuntimeException("Row {$rowNumber}: {$exception->getMessage()}");
-    }
-    $status = trim((string)($data['verification_status'] ?? '')) ?: (trim((string)($defaults['verification_status'] ?? '')) ?: 'verified');
-    if (!in_array($status, ['verified', 'inferred', 'conflicting', 'assumed', 'unverified'], true)) {
-        throw new RuntimeException("Row {$rowNumber}: invalid verification_status.");
-    }
-    $optional = static fn(string $field): string => trim((string)($data[$field] ?? '')) ?: trim((string)($defaults[$field] ?? ''));
-    foreach (['ph_rank' => 50, 'note' => 255, 'source' => 500] as $field => $limit) {
-        if (strlen($optional($field)) > $limit) throw new RuntimeException("Row {$rowNumber}: {$field} exceeds its storage limit.");
-    }
+    if ($rank === '' || strlen($rank) > 50) throw new RuntimeException("Row {$rowNumber}: Rank is required and must not exceed 50 characters.");
+    [$low, $high, $value] = RankBoundsParser::parse($rank);
+
+    $optional = static function (string $field, int $limit) use ($data, $defaults, $rowNumber): array {
+        $raw = trim((string)($data[$field] ?? $defaults[$field] ?? ''));
+        if (strlen($raw) > $limit) throw new RuntimeException("Row {$rowNumber}: {$field} exceeds its storage limit.");
+        if ($raw === '') return ['mode' => 'preserve', 'value' => null];
+        if (strtoupper($raw) === '__CLEAR__') return ['mode' => 'clear', 'value' => null];
+        return ['mode' => 'set', 'value' => $raw];
+    };
     return [
-        'ranking_body_id' => $bodyId,
-        'scope_id' => $scopeId,
+        'organization' => $organization,
+        'ranking_body_id' => $body ? (int)$body['id'] : null,
+        'organization_name' => $body['name'] ?? $organization,
         'ranking_type' => $type,
-        'level' => $level,
         'year' => (int)$year,
-        'edition' => $edition,
-        'category' => $category,
         'global_rank' => $rank,
         'rank_low' => $low,
         'rank_high' => $high,
         'rank_value' => $value,
-        'ph_rank' => $optional('ph_rank') ?: null,
-        'ph_rank_value' => parse_rank_to_value($optional('ph_rank')),
-        'note' => $optional('note') ?: null,
-        'source' => $optional('source') ?: null,
-        'verification_status' => $status
+        'ph_rank_input' => $optional('ph_rank', 50),
+        'source_input' => $optional('source', 500)
     ];
 }
 
 function ranking_import_key(array $row): string
 {
     return hash('sha256', json_encode([
-        $row['ranking_body_id'], $row['scope_id'], strtolower((string)$row['ranking_type']),
-        strtolower((string)$row['level']), $row['year'], strtolower((string)$row['edition']), strtolower((string)$row['category'])
+        $row['ranking_body_id'] ?? strtolower((string)$row['organization']),
+        strtolower((string)$row['ranking_type']),
+        (int)$row['year']
     ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES));
 }
 
 function ranking_import_find(PDO $pdo, array $identity, bool $lock): array
 {
-    $sql = 'SELECT * FROM rankings WHERE ranking_body_id = ? AND (scope_id <=> ?)
-        AND LOWER(COALESCE(ranking_type, "")) = LOWER(?) AND LOWER(COALESCE(level, "")) = LOWER(?)
-        AND year = ? AND LOWER(edition) = LOWER(?) AND (category <=> ?) ORDER BY id ASC';
+    $sql = 'SELECT id, ranking_body_id, ranking_type, year, global_rank, rank_low, rank_high, rank_value,
+            ph_rank, ph_rank_value, source, seed_managed
+        FROM rankings WHERE ranking_body_id = ? AND LOWER(ranking_type) = LOWER(?) AND year = ? ORDER BY id ASC';
     if ($lock) $sql .= ' FOR UPDATE';
     $query = $pdo->prepare($sql);
-    $query->execute([$identity['ranking_body_id'], $identity['scope_id'], $identity['ranking_type'], $identity['level'] ?? '', $identity['year'], $identity['edition'], $identity['category']]);
-    return $query->fetchAll(PDO::FETCH_ASSOC);
-}
-
-function ranking_import_legacy(PDO $pdo, array $identity, bool $lock): array
-{
-    $sql = 'SELECT * FROM rankings WHERE ranking_body_id = ? AND year = ? AND (category <=> ?)
-        AND (scope_id IS NULL OR scope_id = ?) AND (ranking_type IS NULL OR LOWER(ranking_type) = LOWER(?))
-        AND (level IS NULL OR LOWER(level) = LOWER(?)) AND LOWER(edition) = LOWER(?)
-        AND (scope_id IS NULL OR ranking_type IS NULL OR level IS NULL)';
-    if ($lock) $sql .= ' FOR UPDATE';
-    $query = $pdo->prepare($sql);
-    $query->execute([$identity['ranking_body_id'], $identity['year'], $identity['category'], $identity['scope_id'], $identity['ranking_type'], $identity['level'] ?? '', $identity['edition']]);
+    $query->execute([$identity['ranking_body_id'], $identity['ranking_type'], $identity['year']]);
     return $query->fetchAll(PDO::FETCH_ASSOC);
 }
 
@@ -141,41 +84,91 @@ function ranking_import_version(array $matches): string
     return hash('sha256', json_encode($matches, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES));
 }
 
-function ranking_import_preview(PDO $pdo, array $parsed, int $bodyId, bool $lock = false): array
+function ranking_import_values_match(array $existing, array $incoming): bool
+{
+    foreach (['global_rank', 'rank_low', 'rank_high', 'rank_value', 'ph_rank', 'ph_rank_value', 'source'] as $field) {
+        $current = $existing[$field] ?? null;
+        $next = $incoming[$field] ?? null;
+        if ($current === null || $next === null || $current === '' || $next === '') {
+            if ((string)($current ?? '') !== (string)($next ?? '')) return false;
+        } elseif (in_array($field, ['rank_low', 'rank_high', 'rank_value', 'ph_rank_value'], true) && is_numeric($current) && is_numeric($next)) {
+            if ((float)$current !== (float)$next) return false;
+        } elseif ((string)$current !== (string)$next) {
+            return false;
+        }
+    }
+    return true;
+}
+
+function ranking_import_preview(PDO $pdo, array $parsed, bool $lock = false, bool $includeRankBounds = false): array
 {
     $rows = [];
     $seen = [];
+    $typeExists = $pdo->prepare('SELECT 1 FROM rankings WHERE LOWER(ranking_type) = LOWER(?) LIMIT 1');
     foreach ($parsed['rows'] as $input) {
         try {
-            $identity = ranking_import_identity($pdo, $input['values'], $bodyId, $parsed['profile']['defaults_json'], $input['row_number']);
+            $incoming = ranking_import_row($pdo, $input['values'], $parsed['profile']['defaults_json'], $input['row_number']);
         } catch (Throwable $exception) {
-            throw new RuntimeException("Sheet {$input['sheet_name']}, row {$input['row_number']}: {$exception->getMessage()}");
-        }
-        $key = ranking_import_key($identity);
-        if (isset($seen[$key])) throw new RuntimeException("Sheet {$input['sheet_name']}, row {$input['row_number']}: duplicate ranking identity in the uploaded file.");
-        $seen[$key] = true;
-        $matches = ranking_import_find($pdo, $identity, $lock);
-        $legacy = [];
-        if (!$matches) $legacy = ranking_import_legacy($pdo, $identity, $lock);
-        if (count($matches) > 1 || count($legacy) > 1) {
-            $rows[] = ['key' => $key, 'kind' => 'blocked', 'error' => 'More than one existing row matches this identity.', 'identity' => $identity, 'sheet_name' => $input['sheet_name'], 'row_number' => $input['row_number'], 'row_version' => ranking_import_version(count($matches) ? $matches : $legacy)];
+            $key = hash('sha256', json_encode([$input['sheet_name'], $input['row_number']], JSON_UNESCAPED_UNICODE));
+            $rows[] = ['key' => $key, 'kind' => 'blocked', 'error' => $exception->getMessage(), 'identity' => $input['values'], 'sheet_name' => $input['sheet_name'], 'row_number' => $input['row_number'], 'row_version' => ranking_import_version([])];
             continue;
         }
-        $existing = $matches[0] ?? ($legacy[0] ?? null);
-        $kind = !$existing ? 'insert' : (isset($legacy[0]) ? 'legacy' : 'update');
-        if ($existing && !isset($legacy[0])) {
-            $same = true;
-            foreach (['global_rank', 'rank_low', 'rank_high', 'rank_value', 'ph_rank', 'note', 'source', 'verification_status'] as $field) {
-                if ((string)($existing[$field] ?? '') !== (string)($identity[$field] ?? '')) $same = false;
-            }
-            if ($same) $kind = 'unchanged';
+        $key = ranking_import_key($incoming);
+        if (isset($seen[$key])) {
+            $previousIndex = $seen[$key];
+            $rows[$previousIndex]['kind'] = 'blocked';
+            $rows[$previousIndex]['error'] = 'Duplicate Organization, Ranking Type, and Year identity in the uploaded file.';
+            $rows[] = ['key' => $key . '-' . $input['row_number'], 'kind' => 'blocked', 'error' => 'Duplicate Organization, Ranking Type, and Year identity in the uploaded file.', 'identity' => $incoming, 'sheet_name' => $input['sheet_name'], 'row_number' => $input['row_number'], 'row_version' => ranking_import_version([])];
+            continue;
+        }
+        $seen[$key] = count($rows);
+        if ($incoming['ranking_body_id'] === null) {
+            $rows[] = ['key' => $key, 'kind' => 'blocked', 'error' => "Unknown Organization '{$incoming['organization']}'. Match an existing Organization name or short name.", 'identity' => $incoming, 'sheet_name' => $input['sheet_name'], 'row_number' => $input['row_number'], 'row_version' => ranking_import_version([])];
+            continue;
+        }
+        $matches = ranking_import_find($pdo, $incoming, $lock);
+        if (count($matches) > 1) {
+            $rows[] = ['key' => $key, 'kind' => 'blocked', 'error' => 'More than one existing row matches this Organization, Ranking Type, and Year identity.', 'identity' => $incoming, 'row_version' => ranking_import_version($matches), 'sheet_name' => $input['sheet_name'], 'row_number' => $input['row_number']];
+            continue;
+        }
+        $existing = $matches[0] ?? null;
+        foreach (['ph_rank', 'source'] as $field) {
+            $inputKey = $field . '_input';
+            $effective = $incoming[$inputKey]['mode'] === 'preserve'
+                ? ($existing[$field] ?? null)
+                : ($incoming[$inputKey]['mode'] === 'clear' ? null : $incoming[$inputKey]['value']);
+            $incoming[$field] = $effective;
+        }
+        $incoming['ph_rank_value'] = $incoming['ph_rank'] === null ? null : parse_rank_to_value((string)$incoming['ph_rank']);
+        $identity = [
+            'ranking_body_id' => $incoming['ranking_body_id'],
+            'organization' => $incoming['organization_name'],
+            'ranking_type' => $incoming['ranking_type'],
+            'year' => $incoming['year'],
+            'global_rank' => $incoming['global_rank'],
+            'rank_low' => $incoming['rank_low'],
+            'rank_high' => $incoming['rank_high'],
+            'rank_value' => $incoming['rank_value'],
+            'ph_rank' => $incoming['ph_rank'],
+            'ph_rank_value' => $incoming['ph_rank_value'],
+            'source' => $incoming['source'],
+            'seed_managed' => 0
+        ];
+        $same = $existing !== null && ranking_import_values_match($existing, $identity);
+        $typeExists->execute([$incoming['ranking_type']]);
+        $displayIdentity = $identity;
+        $displayExisting = $existing;
+        if (!$includeRankBounds) {
+            unset($displayIdentity['rank_low'], $displayIdentity['rank_high']);
+            if ($displayExisting) unset($displayExisting['rank_low'], $displayExisting['rank_high']);
         }
         $rows[] = [
             'key' => $key,
-            'kind' => $kind,
-            'identity' => $identity,
+            'kind' => !$existing ? 'insert' : ($same ? 'unchanged' : 'update'),
+            'new_type' => !$typeExists->fetchColumn(),
+            'identity' => $displayIdentity,
             'existing_id' => $existing ? (int)$existing['id'] : null,
-            'existing' => $existing,
+            'existing' => $displayExisting,
             'row_version' => $existing ? ranking_import_version([$existing]) : ranking_import_version([]),
             'sheet_name' => $input['sheet_name'],
             'row_number' => $input['row_number']
@@ -195,15 +188,11 @@ TemplateImportSupport::response(static function () use ($data): array {
     if ($recordId === '') throw new InvalidArgumentException('Record id is required.');
     $selectedSheet = isset($data['sheet_name']) ? (string)$data['sheet_name'] : null;
     $parsed = TemplateImportSupport::parse($pdo, $recordId, 'ranking_history', $selectedSheet);
-    $bodyQuery = $pdo->prepare('SELECT ranking_body_id FROM templates WHERE id = ?');
-    $bodyQuery->execute([(int)$parsed['record']['template_id']]);
-    $bodyId = (int)$bodyQuery->fetchColumn();
-    if ($bodyId < 1) throw new RuntimeException('The template is not linked to a ranking body.');
 
     if (($data['action'] ?? 'preview') === 'preview') {
         $pdo->beginTransaction();
         try {
-            $rows = ranking_import_preview($pdo, $parsed, $bodyId, true);
+            $rows = ranking_import_preview($pdo, $parsed, true);
             $pdo->commit();
         } catch (Throwable $exception) {
             if ($pdo->inTransaction()) $pdo->rollBack();
@@ -219,14 +208,14 @@ TemplateImportSupport::response(static function () use ($data): array {
 
     $pdo->beginTransaction();
     try {
-        $rows = ranking_import_preview($pdo, $parsed, $bodyId, true);
+        $rows = ranking_import_preview($pdo, $parsed, true, true);
         foreach ($rows as $row) {
             if (!isset($versions[$row['key']]) || !hash_equals((string)$versions[$row['key']], $row['row_version'])) {
                 throw new RuntimeException('The preview is stale because ranking data changed. Preview the upload again.', 409);
             }
         }
         $acceptedSet = array_fill_keys(array_filter($accepted, 'is_string'), true);
-        $work = array_values(array_filter($rows, static fn(array $row): bool => isset($acceptedSet[$row['key']]) && in_array($row['kind'], ['insert', 'update', 'legacy'], true)));
+        $work = array_values(array_filter($rows, static fn(array $row): bool => isset($acceptedSet[$row['key']]) && in_array($row['kind'], ['insert', 'update'], true)));
         if (!$work) {
             $pdo->commit();
             return ['success' => true, 'inserted' => 0, 'updated' => 0, 'message' => 'No changes detected.'];
@@ -234,17 +223,12 @@ TemplateImportSupport::response(static function () use ($data): array {
         $inserted = count(array_filter($work, static fn(array $row): bool => $row['kind'] === 'insert'));
         $updated = count($work) - $inserted;
         $batchId = ImportBatchAudit::create($pdo, $parsed['record'], 'ranking_history', (int)$_SESSION['user_id'], $inserted, $updated);
-        $columns = ['ranking_body_id', 'scope_id', 'ranking_type', 'level', 'year', 'edition', 'category', 'global_rank', 'rank_low', 'rank_high', 'rank_value', 'ph_rank', 'ph_rank_value', 'note', 'source', 'verification_status'];
+        $columns = ['ranking_body_id', 'ranking_type', 'year', 'global_rank', 'rank_low', 'rank_high', 'rank_value', 'ph_rank', 'ph_rank_value', 'source'];
         $insert = $pdo->prepare('INSERT INTO rankings (' . implode(', ', $columns) . ', seed_managed) VALUES (' . implode(', ', array_fill(0, count($columns), '?')) . ', 0)');
-        $set = implode(', ', array_map(static fn(string $column): string => $column . ' = ?', $columns));
+        $set = implode(', ', array_map(static fn(string $column): string => '`' . $column . '` = ?', $columns));
         $update = $pdo->prepare('UPDATE rankings SET ' . $set . ', seed_managed = 0 WHERE id = ?');
         foreach ($work as $row) {
             $identity = $row['identity'];
-            if ($row['existing']) {
-                foreach (['ph_rank', 'ph_rank_value', 'note', 'source'] as $optionalField) {
-                    if (trim((string)($identity[$optionalField] ?? '')) === '') $identity[$optionalField] = $row['existing'][$optionalField] ?? null;
-                }
-            }
             $values = array_map(static fn(string $column) => $identity[$column] ?? null, $columns);
             $before = $row['existing'];
             if ($row['kind'] === 'insert') {
@@ -254,7 +238,7 @@ TemplateImportSupport::response(static function () use ($data): array {
                 $id = (int)$row['existing_id'];
                 $update->execute([...$values, $id]);
             }
-            $savedQuery = $pdo->prepare('SELECT * FROM rankings WHERE id = ?');
+            $savedQuery = $pdo->prepare('SELECT id, ranking_body_id, ranking_type, year, global_rank, rank_low, rank_high, rank_value, ph_rank, ph_rank_value, source, seed_managed FROM rankings WHERE id = ?');
             $savedQuery->execute([$id]);
             $after = $savedQuery->fetch(PDO::FETCH_ASSOC);
             ImportBatchAudit::row($pdo, $batchId, 'ranking', (string)$id, $row['sheet_name'], $row['row_number'], $before, $after);

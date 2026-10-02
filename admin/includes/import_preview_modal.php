@@ -5,6 +5,7 @@
             <button type="button" data-import-close class="rounded-lg px-3 py-1 text-2xl leading-none text-gray-500 hover:bg-gray-100 dark:hover:bg-slate-800" aria-label="Close">&times;</button>
         </header>
         <div data-import-notice class="mb-4 rounded-lg p-3 text-sm" role="status" aria-live="polite">Choose an upload to preview changes.</div>
+        <a class="mb-4 inline-flex items-center gap-2 text-sm font-semibold text-emerald-800 underline dark:text-emerald-300" href="<?= e(base_url('admin/template_download.php?ranking_history=1')) ?>"><i class="fa-solid fa-download" aria-hidden="true"></i> Download IRIS_Ranking_History_Template.xlsx</a>
         <div data-import-source-picker class="mb-4 hidden flex-wrap items-end gap-3">
             <label class="min-w-64 flex-1 text-sm font-semibold">Office upload<select data-import-source class="mt-1 block w-full rounded-lg border border-gray-300 bg-gray-50 p-2.5 dark:border-slate-700 dark:bg-slate-800"><option value="">Choose an upload</option></select></label>
             <div class="flex gap-2">
@@ -35,7 +36,7 @@
         <footer class="mt-5 flex flex-wrap items-center justify-between gap-3">
             <button type="button" data-import-revert class="hidden rounded-md border border-red-300 px-3 py-2 text-sm font-bold text-red-700 hover:bg-red-50 dark:border-red-800 dark:text-red-200">Revert this import</button>
             <label class="flex items-center gap-2 text-sm font-semibold"><input type="checkbox" data-import-reviewed> I reviewed this diff</label>
-            <div class="ml-auto flex gap-2"><button type="button" data-import-close class="rounded-md border border-gray-300 px-3 py-2 text-sm font-bold dark:border-slate-700">Close</button><button type="button" data-import-apply class="rounded-md bg-emerald-700 px-4 py-2 text-sm font-bold text-white disabled:cursor-not-allowed disabled:opacity-50" disabled>Approve</button></div>
+            <div class="ml-auto flex gap-2"><button type="button" data-import-close class="rounded-md border border-gray-300 px-3 py-2 text-sm font-bold dark:border-slate-700">Close</button><button type="button" data-import-apply class="rounded-md bg-emerald-700 px-4 py-2 text-sm font-bold text-white disabled:cursor-not-allowed disabled:opacity-50" disabled>Apply selected rows</button></div>
         </footer>
     </section>
 </div>

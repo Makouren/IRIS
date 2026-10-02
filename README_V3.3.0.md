@@ -1,6 +1,6 @@
 # IRIS V3.3.0 Change History
 
-This is the historical V3.3.0 record. Current release changes are documented in [README_V3.4.7.md](README_V3.4.7.md).
+This is the historical V3.3.0 record. Current release changes are documented in [README_V4.5.0.md](README_V4.5.0.md).
 
 ## Scope
 

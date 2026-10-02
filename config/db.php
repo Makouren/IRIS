@@ -234,7 +234,7 @@ function ensure_scanner_tables(PDO $pdo): void {
         'scope_id' => 'INT UNSIGNED NULL'
     ]);
     ensure_scanner_table_columns($pdo, 'rankings', [
-        'ranking_type' => 'VARCHAR(100) NULL',
+        'ranking_type' => 'VARCHAR(320) NULL',
         'level' => 'VARCHAR(20) NULL',
         'edition' => "VARCHAR(80) NOT NULL DEFAULT 'Annual'",
         'rank_low' => 'INT UNSIGNED NULL',

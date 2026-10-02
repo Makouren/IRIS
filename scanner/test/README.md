@@ -1,6 +1,6 @@
 # Scanner Tests
 
-V3.4.7 adds mapping coverage for the Unified Summary Cards profile. Run the PHP mapping test as well as the JavaScript suite; also manually verify profile selection, diff review, one selected live period per Global Label, history archival, stale-preview rejection, and import recovery against the local XAMPP database.
+V4.5.0 adds workbook-profile mapping and Ranking History import coverage alongside the existing Unified Summary Cards tests. Run the PHP mapping test as well as the JavaScript suite; also manually verify profile selection, diff review, selected-row application, history archival, stale-preview rejection, and import recovery against the local XAMPP database. See [README_V4.5.0.md](../../README_V4.5.0.md) for release verification details.
 
 ```powershell
 php scanner/test/templateImportMapping.test.php

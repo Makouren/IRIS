@@ -10,8 +10,9 @@ final class SpreadsheetReader {
     private const REL_NS = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships';
     private const PACKAGE_REL_NS = 'http://schemas.openxmlformats.org/package/2006/relationships';
 
-    public function parse(string $path, string $extension, string $fileName): array {
+    public function parse(string $path, string $extension, string $fileName, ?string $selectedSheet = null, ?int $headerRow = null): array {
         $extension = strtolower($extension);
+        if ($headerRow !== null && ($headerRow < 1 || $headerRow > 10000)) throw new InvalidArgumentException('Header row must be between 1 and 10,000.');
         if (!is_file($path) || !is_readable($path)) throw new RuntimeException('The uploaded file is not readable.');
         $size = filesize($path);
         if ($size === false || $size < 1 || $size > self::MAX_FILE_BYTES) throw new RuntimeException('The spreadsheet must be between 1 byte and 10 MB.');
@@ -19,14 +20,14 @@ final class SpreadsheetReader {
         if ($extension === 'xlsx') {
             $signature = file_get_contents($path, false, null, 0, 4);
             if ($signature !== "PK\x03\x04") throw new RuntimeException('The file is not a valid XLSX workbook.');
-            return $this->parseXlsx($path, $fileName);
+            return $this->parseXlsx($path, $fileName, $selectedSheet, $headerRow);
         }
-        if ($extension === 'csv' || $extension === 'tsv') return $this->parseDelimited($path, $extension, $fileName);
+        if ($extension === 'csv' || $extension === 'tsv') return $this->parseDelimited($path, $extension, $fileName, $selectedSheet, $headerRow);
         if ($extension === 'xls') throw new RuntimeException('Legacy XLS files are not supported for automatic reading yet. Save this workbook as XLSX and upload it again.');
         throw new RuntimeException('This file type cannot be read automatically yet. Please upload .xlsx, .csv, or .tsv.');
     }
 
-    private function parseXlsx(string $path, string $fileName): array {
+    private function parseXlsx(string $path, string $fileName, ?string $selectedSheet = null, ?int $headerRow = null): array {
         $zip = new ZipArchive();
         if ($zip->open($path) !== true) throw new RuntimeException('The XLSX ZIP package is corrupt or unreadable.');
         try {
@@ -64,13 +65,14 @@ final class SpreadsheetReader {
             if (!$sheetNodes) throw new RuntimeException('The XLSX workbook contains no sheets.');
             foreach ($sheetNodes as $sheetNode) {
                 $name = trim((string)$sheetNode['name']);
+                if ($selectedSheet !== null && $selectedSheet !== '' && $name !== $selectedSheet) continue;
                 $relationshipId = (string)$sheetNode->attributes(self::REL_NS)['id'];
                 $target = $relationshipTargets[$relationshipId] ?? null;
                 if ($name === '' || !$target || $zip->locateName($target) === false) throw new RuntimeException('An XLSX sheet points to a missing worksheet file.');
                 $worksheet = $this->loadXml($zip, $target);
                 $matrix = $this->readWorksheet($worksheet, $sharedStrings, $dateStyles, $date1904);
                 $hidden = in_array(strtolower((string)$sheetNode['state']), ['hidden', 'veryhidden'], true);
-                $sheets[$name] = $this->makeSheet($name, $matrix, $hidden);
+                $sheets[$name] = $this->makeSheet($name, $matrix, $hidden, $headerRow);
             }
             if (!$sheets) throw new RuntimeException('The XLSX workbook contains no readable sheets.');
             return $this->makeWorkbookResult($sheets, $fileName);
@@ -183,7 +185,7 @@ final class SpreadsheetReader {
             }
             if (!$row) continue;
             ksort($row, SORT_NUMERIC);
-            $matrix[] = $row;
+            $matrix[max(1, (int)$rowNode['r'])] = $row;
             $totalRows++;
             if ($totalRows > self::MAX_ROWS) throw new RuntimeException('The spreadsheet exceeds the 50,000 row safety limit.');
         }
@@ -259,7 +261,7 @@ final class SpreadsheetReader {
         return $value === null || (is_string($value) && trim($value) === '');
     }
 
-    private function parseDelimited(string $path, string $extension, string $fileName): array {
+    private function parseDelimited(string $path, string $extension, string $fileName, ?string $selectedSheet = null, ?int $headerRow = null): array {
         $handle = fopen($path, 'rb');
         if ($handle === false) throw new RuntimeException('The delimited file could not be opened.');
         try {
@@ -272,21 +274,24 @@ final class SpreadsheetReader {
             if ($prefix === "\xEF\xBB\xBF") fseek($handle, 3);
 
             $matrix = [];
+            $sourceRow = 0;
             while (($values = fgetcsv($handle, null, $delimiter, '"', '')) !== false) {
+                $sourceRow++;
                 $values = array_map(static fn($value) => trim((string)($value ?? '')), $values);
                 if (!$values || count(array_filter($values, static fn($value) => $value !== '')) === 0) continue;
                 $row = [];
                 foreach ($values as $column => $value) {
                     if ($value !== '') $row[$column] = $this->toNumber($value) ?? $value;
                 }
-                if ($row) $matrix[] = $row;
+                if ($row) $matrix[$sourceRow] = $row;
                 if (count($matrix) > self::MAX_ROWS + 1) throw new RuntimeException('The spreadsheet exceeds the 50,000 row safety limit.');
             }
         } finally {
             fclose($handle);
         }
         $sheetName = pathinfo($fileName, PATHINFO_FILENAME) ?: 'Sheet1';
-        return $this->makeWorkbookResult([$sheetName => $this->makeSheet($sheetName, $matrix, false)], $fileName);
+        if ($selectedSheet !== null && $selectedSheet !== '' && $selectedSheet !== $sheetName) throw new RuntimeException('The configured worksheet was not found in the uploaded file.');
+        return $this->makeWorkbookResult([$sheetName => $this->makeSheet($sheetName, $matrix, false, $headerRow)], $fileName);
     }
 
     private function detectDelimiter(string $sample): string {
@@ -302,22 +307,26 @@ final class SpreadsheetReader {
         return $bestDelimiter;
     }
 
-    private function makeSheet(string $name, array $matrix, bool $hidden): array {
+    private function makeSheet(string $name, array $matrix, bool $hidden, ?int $headerRow = null): array {
         if (!$matrix) return ['name' => $name, 'hidden' => $hidden, 'rowCount' => 0, 'colCount' => 0, 'headers' => [], 'rows' => [], 'numericStats' => []];
-        $firstRow = reset($matrix);
+        $rawRows = $matrix;
+        $headerKey = $headerRow ?? array_key_first($matrix);
+        if ($headerKey === null || !array_key_exists($headerKey, $matrix)) throw new RuntimeException('The selected header row is not present in the worksheet.');
+        $firstRow = $matrix[$headerKey];
         $firstNonEmpty = array_filter($firstRow, fn($value) => !$this->isEmptyCell($value));
-        $headerless = count($firstNonEmpty) > 0 && count(array_filter($firstNonEmpty, static fn($value) => is_int($value) || is_float($value) || (is_string($value) && is_numeric($value)))) === count($firstNonEmpty);
+        $headerless = $headerRow === null && count($firstNonEmpty) > 0 && count(array_filter($firstNonEmpty, static fn($value) => is_int($value) || is_float($value) || (is_string($value) && is_numeric($value)))) === count($firstNonEmpty);
         $columnCount = 0;
         foreach ($matrix as $row) if ($row) $columnCount = max($columnCount, max(array_keys($row)) + 1);
         if ($columnCount > self::MAX_COLUMNS) throw new RuntimeException('The worksheet exceeds the 512 column safety limit.');
         $dataRowCount = max(0, count($matrix) - ($headerless ? 0 : 1));
         if (($dataRowCount + ($headerless ? 0 : 1)) * $columnCount > self::MAX_OUTPUT_CELLS) throw new RuntimeException('The worksheet exceeds the expanded cell safety limit.');
         $headers = [];
-        $dataRows = $matrix;
+        $dataRows = [];
         if ($headerless) {
+            $dataRows = array_values($matrix);
             for ($column = 0; $column < $columnCount; $column++) $headers[] = 'Column ' . $this->columnIndexToLetters($column);
         } else {
-            $dataRows = array_slice($matrix, 1);
+            foreach ($matrix as $number => $values) if ((int)$number > (int)$headerKey) $dataRows[] = $values;
             for ($column = 0; $column < $columnCount; $column++) {
                 $header = $firstRow[$column] ?? '';
                 $headers[] = $this->isEmptyCell($header) ? 'Column ' . $this->columnIndexToLetters($column) : (string)$header;
@@ -340,6 +349,12 @@ final class SpreadsheetReader {
             'colCount' => $columnCount,
             'headers' => $headers,
             'rows' => $rows,
+            'header_row' => $headerless ? null : (int)$headerKey,
+            'rawRows' => array_map(static function (int|string $rowNumber, array $row) use ($columnCount): array {
+                $values = [];
+                for ($column = 0; $column < $columnCount; $column++) $values[] = $row[$column] ?? '';
+                return ['row_number' => (int)$rowNumber, 'values' => $values];
+            }, array_keys($rawRows), array_values($rawRows)),
             'numericStats' => $this->numericStats($headers, $rows),
         ];
     }

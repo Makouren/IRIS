@@ -18,15 +18,16 @@ final class ImportSheetSelectionRequired extends RuntimeException
 
 final class ImportSheetReader
 {
-    public static function read(string $path, string $extension, ?string $sheetSelector = null): array
+    public static function read(string $path, string $extension, ?string $sheetSelector = null, ?int $headerRow = null): array
     {
         $extension = strtolower($extension);
+        if ($headerRow !== null && ($headerRow < 1 || $headerRow > 10000)) throw new InvalidArgumentException('Header row must be between 1 and 10,000.');
         SheetValidationHelper::assertFile($path, $extension);
         if (in_array($extension, ['csv', 'tsv'], true)) {
-            return [self::readDelimited($path, $extension === 'tsv' ? "\t" : ',')];
+            return [self::readDelimited($path, $extension === 'tsv' ? "\t" : ',', $headerRow)];
         }
         if ($extension === 'xlsx') {
-            return self::readXlsx($path);
+            return self::readXlsx($path, $sheetSelector, $headerRow);
         }
         // ponytail: Native PHP handles CSV/TSV/XLSX here; binary XLS needs an installed spreadsheet library.
         throw new RuntimeException('Server-side imports support CSV, TSV, and XLSX files. Convert legacy XLS files to one of these formats.');
@@ -67,13 +68,14 @@ final class ImportSheetReader
         return trim(preg_replace('/[^a-z0-9]+/', ' ', $text) ?? '');
     }
 
-    private static function readDelimited(string $path, string $delimiter): array
+    private static function readDelimited(string $path, string $delimiter, ?int $headerRow = null): array
     {
         $handle = fopen($path, 'rb');
         if ($handle === false) throw new RuntimeException('Unable to read the uploaded spreadsheet.');
         $rows = [];
+        $sourceRow = 0;
         while (($values = fgetcsv($handle, 0, $delimiter, '"', '')) !== false) {
-            $rows[] = $values;
+            $rows[++$sourceRow] = $values;
             if (count($rows) > 10001) {
                 fclose($handle);
                 throw new RuntimeException('The worksheet exceeds the 10,000-row import limit.');
@@ -81,12 +83,16 @@ final class ImportSheetReader
         }
         fclose($handle);
         if (!$rows) throw new RuntimeException('The uploaded worksheet is empty.');
-        $headers = array_map(static fn($value): string => trim((string)$value), array_shift($rows));
+        $selectedHeaderRow = $headerRow ?? array_key_first($rows);
+        if (!isset($rows[$selectedHeaderRow])) throw new InvalidArgumentException('The selected header row is not present in the worksheet.');
+        $headers = array_map(static fn($value): string => trim((string)$value), $rows[$selectedHeaderRow]);
         if (isset($headers[0])) $headers[0] = preg_replace('/^\xEF\xBB\xBF/', '', $headers[0]) ?? $headers[0];
-        return self::sheet(basename($path), $headers, $rows);
+        $dataRows = [];
+        foreach ($rows as $number => $values) if ($number > $selectedHeaderRow) $dataRows[] = ['values' => array_values($values), 'row_number' => $number];
+        return self::sheet(basename($path), $headers, $dataRows, $selectedHeaderRow);
     }
 
-    private static function readXlsx(string $path): array
+    private static function readXlsx(string $path, ?string $sheetSelector = null, ?int $headerRow = null): array
     {
         if (!class_exists(ZipArchive::class)) throw new RuntimeException('The PHP ZIP extension is required to read XLSX files.');
         $zip = new ZipArchive();
@@ -109,6 +115,7 @@ final class ImportSheetReader
             $sheets = [];
             foreach ($workbook->xpath('//*[local-name()="sheets"]/*[local-name()="sheet"]') ?: [] as $sheetNode) {
                 $attributes = $sheetNode->attributes();
+                if ($sheetSelector !== null && $sheetSelector !== '' && (string)$attributes['name'] !== $sheetSelector) continue;
                 $relation = $sheetNode->attributes('http://schemas.openxmlformats.org/officeDocument/2006/relationships');
                 $target = $targets[(string)$relation['id']] ?? '';
                 if ($target === '') continue;
@@ -141,13 +148,18 @@ final class ImportSheetReader
                 }
                 if (!$grid) continue;
                 ksort($grid);
-                $first = array_key_first($grid);
+                $first = $headerRow ?? array_key_first($grid);
+                if (!isset($grid[$first])) continue;
                 $headers = array_map(static fn($value): string => trim((string)$value), $grid[$first]);
-                SheetValidationHelper::assertHeaders($headers, [self::class, 'normalizeHeader']);
-                unset($grid[$first]);
+                try {
+                    SheetValidationHelper::assertHeaders($headers, [self::class, 'normalizeHeader']);
+                } catch (InvalidArgumentException $exception) {
+                    if ($headerRow !== null) continue;
+                    throw $exception;
+                }
                 $rows = [];
-                foreach ($grid as $number => $values) $rows[] = ['values' => $values, 'row_number' => $number];
-                $sheets[] = ['name' => (string)$attributes['name'], 'headers' => $headers, 'rows' => $rows];
+                foreach ($grid as $number => $values) if ($number > $first) $rows[] = ['values' => $values, 'row_number' => $number];
+                $sheets[] = ['name' => (string)$attributes['name'], 'headers' => $headers, 'rows' => $rows, 'header_row' => (int)$first];
             }
             if (!$sheets) throw new RuntimeException('No readable worksheet was found in the XLSX file.');
             return $sheets;
@@ -192,13 +204,14 @@ final class ImportSheetReader
         return $index - 1;
     }
 
-    private static function sheet(string $name, array $headers, array $rows): array
+    private static function sheet(string $name, array $headers, array $rows, int $headerRow = 1): array
     {
         SheetValidationHelper::assertHeaders($headers, [self::class, 'normalizeHeader']);
         $normalized = [];
-        foreach ($rows as $index => $values) {
-            $normalized[] = ['values' => array_values($values), 'row_number' => $index + 2];
+        foreach ($rows as $index => $row) {
+            if (is_array($row) && array_key_exists('values', $row)) $normalized[] = ['values' => array_values($row['values']), 'row_number' => (int)($row['row_number'] ?? ($index + $headerRow + 1))];
+            else $normalized[] = ['values' => array_values($row), 'row_number' => $index + $headerRow + 1];
         }
-        return ['name' => $name, 'headers' => $headers, 'rows' => $normalized];
+        return ['name' => $name, 'headers' => $headers, 'rows' => $normalized, 'header_row' => $headerRow];
     }
 }

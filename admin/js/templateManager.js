@@ -15,17 +15,33 @@
   const activeSummaryProfileLabel = modal.querySelector('[data-active-summary-profile]');
   const summaryProfileActivate = modal.querySelector('[data-summary-profile-activate]');
   const summaryProfileSave = modal.querySelector('[data-summary-profile-save]');
+  const rankingProfileSelect = modal.querySelector('[data-ranking-profile-select]');
+  const rankingProfileName = modal.querySelector('[data-ranking-profile-name]');
+  const rankingProfileEditor = modal.querySelector('[data-ranking-profile-json]');
+  const activeRankingProfileLabel = modal.querySelector('[data-active-ranking-profile]');
+  const rankingProfileActivate = modal.querySelector('[data-ranking-profile-activate]');
+  const rankingProfileSave = modal.querySelector('[data-ranking-profile-save]');
   let templates = [];
   let rankingBodies = [];
   let summaryCards = [];
-  let rankingScopes = [];
-  let rankingLevels = [];
   let summaryImportProfiles = [];
   let activeSummaryProfileId = null;
+  let rankingImportProfiles = [];
+  let activeRankingProfileId = null;
 
   function showNotice(message, isError = false) {
     notice.textContent = message;
     notice.className = `mb-4 rounded-lg p-3 text-sm ${isError ? 'bg-red-50 text-red-800 dark:bg-red-950 dark:text-red-200' : 'bg-emerald-50 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-200'}`;
+  }
+
+  async function requestJson(url, options) {
+    let response;
+    try { response = await fetch(url, options); }
+    catch { throw new Error('Server error. Check the PHP log.'); }
+    let result;
+    try { result = JSON.parse(await response.text()); }
+    catch { throw new Error('Server error. Check the PHP log.'); }
+    return { response, result };
   }
 
   function button(label, action, id, destructive = false) {
@@ -108,13 +124,13 @@
       } : {};
       profileEditor.value = JSON.stringify(profile, null, 2);
       profileEditor.placeholder = template.import_destination === 'ranking_history'
-        ? '{\n  "sheet_selector": "Rankings",\n  "header_aliases": {"year": ["Year"], "global_rank": ["Rank", "Overall Rank"]},\n  "required_columns": ["year", "global_rank"],\n  "mapping_rules": {"year": "Year", "global_rank": "Rank"},\n  "defaults": {"ranking_type": "QS Asia", "scope_id": 1, "level_id": 2, "edition": "Annual", "category": "Overall"}\n}'
+        ? '{\n  "sheet_selector": "Ranking History",\n  "header_aliases": {"organization": ["Organization"], "ranking_type": ["Ranking Type"], "year": ["Year"], "global_rank": ["Rank"]},\n  "identity_fields": ["organization", "ranking_type", "year"],\n  "required_columns": ["organization", "ranking_type", "year", "global_rank"],\n  "mapping_rules": {"organization": "Organization", "ranking_type": "Ranking Type", "year": "Year", "global_rank": "Rank", "ph_rank": "Philippine Rank", "source": "Source"},\n  "defaults": {}\n}'
         : '{\n  "sheet_selector": null,\n  "identity_fields": ["import_key", "source", "metric", "category", "record_type"],\n  "header_aliases": {"import_key": ["Global Label", "Card Key"], "period_key": ["Period"], "main_value": ["Rank"]},\n  "required_columns": ["import_key", "period_key", "main_value"],\n  "mapping_rules": {"import_key": "Global Label", "source": "Source", "metric": "Metric", "category": "Category", "record_type": "Record Type", "period_key": "Period", "main_value": "Rank"},\n  "defaults": {}\n}';
       const keyGuide = document.createElement('p');
       keyGuide.className = 'mt-1 text-xs text-gray-500 dark:text-slate-400';
       keyGuide.textContent = template.import_destination === 'summary_cards'
         ? `Card keys: ${summaryCards.map(card => `${card.import_key || card.id} = ${card.title}`).join(' · ') || 'No cards found'}`
-        : `Map destination fields to exact headers. Scope IDs: ${rankingScopes.map(scope => `${scope.id}=${scope.name}`).join(', ')}. Level IDs: ${rankingLevels.map(level => `${level.id}=${level.name}`).join(', ')}.`;
+        : 'Organization, Ranking Type, Year, and Rank are required. Organization is resolved from each row.';
       const profileSave = button('Save import profile', 'save-import-profile', template.id);
       profileSave.classList.add('mt-2');
       profileSection.append(profileTitle, profileDestination, profileEditor, keyGuide, profileSave);
@@ -124,16 +140,14 @@
   }
 
   async function loadTemplates() {
-    const response = await fetch(api, { headers: { Accept: 'application/json' }, cache: 'no-store' });
-    const result = await response.json();
+    const { response, result } = await requestJson(api, { headers: { Accept: 'application/json' }, cache: 'no-store' });
     if (!response.ok) throw new Error(result.error || 'Unable to load templates.');
     templates = result;
     renderTemplates();
   }
 
   async function loadRankingBodies() {
-    const response = await fetch(`${api}?resource=ranking_bodies`, { headers: { Accept: 'application/json' }, cache: 'no-store' });
-    const result = await response.json();
+    const { response, result } = await requestJson(`${api}?resource=ranking_bodies`, { headers: { Accept: 'application/json' }, cache: 'no-store' });
     if (!response.ok) throw new Error(result.error || 'Unable to load ranking bodies.');
     rankingBodies = result;
     rankingBodySelect.replaceChildren(new Option('Not linked', ''));
@@ -142,16 +156,14 @@
 
   async function loadSummaryCards() {
     const endpoint = api.replace(/templates\.php(?:\?.*)?$/, 'iris.php?resource=summary_cards');
-    const response = await fetch(endpoint, { headers: { Accept: 'application/json' }, cache: 'no-store' });
-    const result = await response.json();
+    const { response, result } = await requestJson(endpoint, { headers: { Accept: 'application/json' }, cache: 'no-store' });
     if (!response.ok) throw new Error(result.error || 'Unable to load summary-card keys.');
     summaryCards = result;
   }
 
   async function loadSummaryProfileDetails(profileId) {
     if (!profileId) return;
-    const response = await fetch(`${api}?resource=summary_card_profile&profile_id=${encodeURIComponent(profileId)}`, { headers: { Accept: 'application/json' }, cache: 'no-store' });
-    const profile = await response.json();
+    const { response, result: profile } = await requestJson(`${api}?resource=summary_card_profile&profile_id=${encodeURIComponent(profileId)}`, { headers: { Accept: 'application/json' }, cache: 'no-store' });
     if (!response.ok) throw new Error(profile.error || 'Unable to load the Summary Card profile.');
     summaryProfileName.value = profile.profile_name || '';
     summaryProfileEditor.value = JSON.stringify({
@@ -160,14 +172,24 @@
       header_aliases: profile.header_aliases,
       required_columns: profile.required_columns,
       mapping_rules: profile.mapping_rules,
-      defaults: profile.defaults
+      defaults: profile.defaults,
+      workbook_header_row: profile.workbook_header_row,
+      workbook_headers: profile.workbook_headers
     }, null, 2);
   }
 
   async function loadSummaryProfiles(selectActive = true) {
-    const response = await fetch(`${api}?resource=summary_card_profiles`, { headers: { Accept: 'application/json' }, cache: 'no-store' });
-    const result = await response.json();
-    if (!response.ok || !Array.isArray(result.profiles)) throw new Error(result.error || 'Unable to load Summary Card profiles.');
+    let result;
+    try {
+      const request = await requestJson(`${api}?resource=summary_card_profiles`, { headers: { Accept: 'application/json' }, cache: 'no-store' });
+      if (!request.response.ok || !Array.isArray(request.result.profiles)) throw new Error(request.result.error || 'Unable to load Summary Card profiles.');
+      result = request.result;
+    } catch (error) {
+      summaryProfileSelect.replaceChildren(new Option('Profiles unavailable. Reopen Manage Templates to retry.', ''));
+      summaryProfileSelect.disabled = false;
+      showNotice(error.message, true);
+      return;
+    }
     summaryImportProfiles = result.profiles;
     activeSummaryProfileId = result.active_profile_id ? String(result.active_profile_id) : '';
     summaryProfileSelect.replaceChildren();
@@ -176,8 +198,8 @@
       summaryProfileSelect.add(option);
     }
     if (!summaryImportProfiles.length) {
-      summaryProfileSelect.add(new Option('No Summary Card profiles available', ''));
-      activeSummaryProfileLabel.textContent = 'No Summary Card import profile is configured.';
+      summaryProfileSelect.add(new Option('No profiles available. Run the pending migrations.', ''));
+      activeSummaryProfileLabel.textContent = 'No Summary Card import profile is configured. Run the pending migrations.';
       return;
     }
     if (selectActive && activeSummaryProfileId) summaryProfileSelect.value = activeSummaryProfileId;
@@ -186,7 +208,58 @@
     activeSummaryProfileLabel.textContent = active
       ? `Currently active: ${active.profile_name}${active.original_filename ? ` · ${active.original_filename}` : ''}`
       : 'No active Summary Card profile is configured.';
-    await loadSummaryProfileDetails(summaryProfileSelect.value);
+    try { await loadSummaryProfileDetails(summaryProfileSelect.value); }
+    catch (error) { showNotice(error.message, true); }
+  }
+
+  async function loadRankingProfileDetails(profileId) {
+    if (!profileId) return;
+    const { response, result: profile } = await requestJson(`${api}?resource=import_profile&destination=ranking_history&profile_id=${encodeURIComponent(profileId)}`, { headers: { Accept: 'application/json' }, cache: 'no-store' });
+    if (!response.ok) throw new Error(profile.error || 'Unable to load the Ranking History profile.');
+    rankingProfileName.value = profile.profile_name || '';
+    rankingProfileEditor.value = JSON.stringify({
+      sheet_selector: profile.sheet_selector,
+      identity_fields: profile.identity_fields,
+      header_aliases: profile.header_aliases,
+      required_columns: profile.required_columns,
+      mapping_rules: profile.mapping_rules,
+      defaults: profile.defaults,
+      workbook_header_row: profile.workbook_header_row,
+      workbook_headers: profile.workbook_headers
+    }, null, 2);
+  }
+
+  async function loadRankingProfiles(selectActive = true) {
+    let result;
+    try {
+      const request = await requestJson(`${api}?resource=import_profiles&destination=ranking_history`, { headers: { Accept: 'application/json' }, cache: 'no-store' });
+      if (!request.response.ok || !Array.isArray(request.result.profiles)) throw new Error(request.result.error || 'Unable to load Ranking History profiles.');
+      result = request.result;
+    } catch (error) {
+      rankingProfileSelect.replaceChildren(new Option('Profiles unavailable. Reopen Manage Templates to retry.', ''));
+      rankingProfileSelect.disabled = false;
+      showNotice(error.message, true);
+      return;
+    }
+    rankingImportProfiles = result.profiles;
+    activeRankingProfileId = result.active_profile_id ? String(result.active_profile_id) : '';
+    rankingProfileSelect.replaceChildren();
+    for (const profile of rankingImportProfiles) {
+      rankingProfileSelect.add(new Option(`${profile.profile_name}${profile.is_active ? ' · Active' : ''}${profile.original_filename ? ` · ${profile.original_filename}` : ''}`, String(profile.id)));
+    }
+    if (!rankingImportProfiles.length) {
+      rankingProfileSelect.add(new Option('No profiles available. Run the pending migrations.', ''));
+      activeRankingProfileLabel.textContent = 'No Ranking History import profile is configured. Run the pending migrations.';
+      return;
+    }
+    if (selectActive && activeRankingProfileId) rankingProfileSelect.value = activeRankingProfileId;
+    else if (!rankingProfileSelect.value) rankingProfileSelect.value = String(rankingImportProfiles[0].id);
+    const active = rankingImportProfiles.find(profile => String(profile.id) === activeRankingProfileId);
+    activeRankingProfileLabel.textContent = active
+      ? `Currently active: ${active.profile_name}${active.original_filename ? ` · ${active.original_filename}` : ''}`
+      : 'No active Ranking History profile is configured.';
+    try { await loadRankingProfileDetails(rankingProfileSelect.value); }
+    catch (error) { showNotice(error.message, true); }
   }
 
   async function postSummaryProfileAction(action, values) {
@@ -194,28 +267,30 @@
     data.set('action', action);
     data.set('_csrf', token);
     for (const [key, value] of Object.entries(values)) data.set(key, value);
-    const response = await fetch(api, { method: 'POST', headers: { 'X-CSRF-Token': token, Accept: 'application/json' }, body: data });
-    const result = await response.json();
+    const { response, result } = await requestJson(api, { method: 'POST', headers: { 'X-CSRF-Token': token, Accept: 'application/json' }, body: data });
     if (!response.ok) throw new Error(result.error || 'Unable to update the Summary Card profile.');
     return result;
   }
 
-  async function loadRankingTaxonomies() {
-    const endpoint = api.replace(/templates\.php(?:\?.*)?$/, 'admin_rankings.php');
-    const [scopeResponse, levelResponse] = await Promise.all([
-      fetch(`${endpoint}?resource=scopes`, { headers: { Accept: 'application/json' }, cache: 'no-store' }),
-      fetch(`${endpoint}?resource=levels`, { headers: { Accept: 'application/json' }, cache: 'no-store' })
-    ]);
-    if (!scopeResponse.ok || !levelResponse.ok) throw new Error('Unable to load ranking scope and level keys.');
-    rankingScopes = await scopeResponse.json();
-    rankingLevels = await levelResponse.json();
+  async function postProfileSettingsAction(action, values) {
+    const data = new FormData();
+    data.set('action', action);
+    data.set('_csrf', token);
+    for (const [key, value] of Object.entries(values)) data.set(key, value);
+    const { response, result } = await requestJson(api, { method: 'POST', headers: { 'X-CSRF-Token': token, Accept: 'application/json' }, body: data });
+    if (!response.ok) throw new Error(result.error || 'Unable to update the import profile.');
+    return result;
   }
 
   function openModal() {
     modal.classList.remove('hidden');
     modal.classList.add('flex');
     modal.setAttribute('aria-hidden', 'false');
-    Promise.all([loadTemplates(), loadRankingBodies(), loadSummaryCards(), loadRankingTaxonomies(), loadSummaryProfiles()]).then(renderTemplates).catch(error => showNotice(error.message, true));
+    window.IRISProfileWorkbookMapper?.refresh();
+    Promise.all([loadTemplates(), loadRankingBodies(), loadSummaryCards(), loadSummaryProfiles(), loadRankingProfiles()]).then(() => {
+      renderTemplates();
+      window.IRISProfileWorkbookMapper?.refresh();
+    }).catch(error => showNotice(error.message, true));
   }
 
   function closeModal() {
@@ -233,7 +308,16 @@
   });
   modal.querySelectorAll('[data-template-manager-close]').forEach(element => element.addEventListener('click', closeModal));
   modal.addEventListener('click', event => { if (event.target === modal) closeModal(); });
-  summaryProfileSelect.addEventListener('change', () => loadSummaryProfileDetails(summaryProfileSelect.value).catch(error => showNotice(error.message, true)));
+  summaryProfileSelect.addEventListener('change', () => {
+    window.IRISProfileWorkbookMapper?.clear('summary_cards');
+    window.IRISProfileWorkbookMapper?.refresh();
+    loadSummaryProfileDetails(summaryProfileSelect.value).catch(error => showNotice(error.message, true));
+  });
+  rankingProfileSelect.addEventListener('change', () => {
+    window.IRISProfileWorkbookMapper?.clear('ranking_history');
+    window.IRISProfileWorkbookMapper?.refresh();
+    loadRankingProfileDetails(rankingProfileSelect.value).catch(error => showNotice(error.message, true));
+  });
   summaryProfileActivate.addEventListener('click', async () => {
     if (!summaryProfileSelect.value) return;
     summaryProfileActivate.disabled = true;
@@ -253,15 +337,64 @@
     } catch (error) { showNotice(`Invalid Summary Card profile JSON: ${error.message}`, true); return; }
     summaryProfileSave.disabled = true;
     try {
-      const result = await postSummaryProfileAction('save-summary-card-profile', {
+      const workbookToken = window.IRISProfileWorkbookMapper?.workbookToken('summary_cards', summaryProfileSelect.value) || '';
+      const values = {
+        destination: 'summary_cards',
         profile_id: summaryProfileSelect.value,
         profile_name: summaryProfileName.value,
         profile: JSON.stringify(profile)
-      });
+      };
+      if (workbookToken) {
+        values.workbook_token = workbookToken;
+        values.workbook_header_row = window.IRISProfileWorkbookMapper?.workbookHeaderRow('summary_cards') || '';
+      }
+      const result = await postProfileSettingsAction('save-import-profile-settings', values);
+      if (workbookToken) window.IRISProfileWorkbookMapper?.clear('summary_cards');
       await loadSummaryProfiles(false);
+      window.IRISProfileWorkbookMapper?.refresh();
       showNotice(`Saved Summary Card profile: ${result.profile_name}`);
     } catch (error) { showNotice(error.message, true); }
     finally { summaryProfileSave.disabled = false; }
+  });
+  rankingProfileActivate.addEventListener('click', async () => {
+    if (!rankingProfileSelect.value) return;
+    rankingProfileActivate.disabled = true;
+    try {
+      const result = await postProfileSettingsAction('activate-import-profile', { destination: 'ranking_history', profile_id: rankingProfileSelect.value });
+      await loadRankingProfiles();
+      showNotice(`Active Ranking History profile: ${result.profile_name}`);
+    } catch (error) { showNotice(error.message, true); }
+    finally { rankingProfileActivate.disabled = false; }
+  });
+  rankingProfileSave.addEventListener('click', async () => {
+    if (!rankingProfileSelect.value) return;
+    let profile;
+    try {
+      profile = JSON.parse(rankingProfileEditor.value || '{}');
+      if (!profile || typeof profile !== 'object' || Array.isArray(profile)) throw new Error('Profile must be a JSON object.');
+    } catch (error) { showNotice(`Invalid Ranking History profile JSON: ${error.message}`, true); return; }
+    rankingProfileSave.disabled = true;
+    try {
+      const workbookToken = window.IRISProfileWorkbookMapper?.workbookToken('ranking_history', rankingProfileSelect.value) || '';
+      const values = {
+        destination: 'ranking_history',
+        profile_id: rankingProfileSelect.value,
+        profile_name: rankingProfileName.value,
+        profile: JSON.stringify(profile)
+      };
+      if (workbookToken) {
+        values.workbook_token = workbookToken;
+        values.workbook_header_row = window.IRISProfileWorkbookMapper?.workbookHeaderRow('ranking_history') || '';
+      }
+      const result = await postProfileSettingsAction('save-import-profile-settings', {
+        ...values
+      });
+      if (workbookToken) window.IRISProfileWorkbookMapper?.clear('ranking_history');
+      await loadRankingProfiles(false);
+      window.IRISProfileWorkbookMapper?.refresh();
+      showNotice(`Saved Ranking History profile: ${result.profile_name}`);
+    } catch (error) { showNotice(error.message, true); }
+    finally { rankingProfileSave.disabled = false; }
   });
 
   form.addEventListener('submit', async event => {
@@ -270,8 +403,7 @@
     data.set('action', 'upload');
     data.set('_csrf', token);
     try {
-      const response = await fetch(api, { method: 'POST', headers: { 'X-CSRF-Token': token, Accept: 'application/json' }, body: data });
-      const result = await response.json();
+      const { response, result } = await requestJson(api, { method: 'POST', headers: { 'X-CSRF-Token': token, Accept: 'application/json' }, body: data });
       if (!response.ok) throw new Error(result.error || 'Unable to upload template.');
       form.reset();
       showNotice('Template uploaded and activated.');
@@ -306,8 +438,7 @@
     }
     target.disabled = true;
     try {
-      const response = await fetch(api, { method: 'POST', headers: { 'X-CSRF-Token': token, Accept: 'application/json' }, body: data });
-      const result = await response.json();
+      const { response, result } = await requestJson(api, { method: 'POST', headers: { 'X-CSRF-Token': token, Accept: 'application/json' }, body: data });
       if (!response.ok) throw new Error(result.error || 'Unable to update template.');
       showNotice(target.dataset.action === 'delete' ? 'Template deleted.' : target.dataset.action === 'set-ranking-body' ? 'Ranking body link saved.' : target.dataset.action === 'save-import-profile' ? 'Import profile saved.' : `Template ${target.dataset.action === 'activate' ? 'reactivated' : 'deactivated'}.`);
       await loadTemplates();

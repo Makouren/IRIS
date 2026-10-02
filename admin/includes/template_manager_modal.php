@@ -14,7 +14,51 @@
                     <label class="block text-sm font-semibold">Profile name<input data-summary-profile-name type="text" maxlength="150" class="mt-1 block w-full rounded-lg border border-gray-300 bg-white p-2.5 text-sm dark:border-slate-700 dark:bg-slate-800"></label>
                     <button type="button" data-summary-profile-save class="rounded-md bg-emerald-700 px-3 py-2 text-sm font-bold text-white hover:bg-emerald-800">Save profile settings</button>
                 </div>
-                <label class="block text-sm font-semibold">Field mappings and identity<textarea data-summary-profile-json rows="12" spellcheck="false" class="mt-1 block w-full rounded-lg border border-gray-300 bg-white p-2.5 font-mono text-xs dark:border-slate-700 dark:bg-slate-800"></textarea></label>
+                <div>
+                    <label class="block text-sm font-semibold">Field mappings and identity<textarea data-summary-profile-json rows="12" spellcheck="false" class="mt-1 block w-full rounded-lg border border-gray-300 bg-white p-2.5 font-mono text-xs dark:border-slate-700 dark:bg-slate-800"></textarea></label>
+                    <div data-profile-mapper="summary_cards" class="mt-3 rounded-lg border border-emerald-200 p-3 dark:border-emerald-900">
+                        <p data-mapper-status class="mb-2 text-xs text-gray-600 dark:text-slate-300" role="status"></p>
+                        <label data-mapper-upload-label class="inline-flex cursor-pointer items-center gap-2 rounded-md border border-emerald-700 px-3 py-2 text-sm font-bold text-emerald-900 hover:bg-emerald-100 dark:text-emerald-200 dark:hover:bg-emerald-950"><i class="fa-solid fa-file-arrow-up" aria-hidden="true"></i> Upload Excel to map columns<input data-mapper-file type="file" accept=".xlsx,.xls,.csv" disabled class="sr-only"></label>
+                        <div data-mapper-controls class="mt-3 hidden flex-wrap items-end gap-2">
+                            <label class="min-w-48 flex-1 text-xs font-semibold">Worksheet<select data-mapper-sheet class="mt-1 block w-full rounded-md border border-gray-300 bg-white p-2 text-sm dark:border-slate-700 dark:bg-slate-800"></select></label>
+                            <label class="text-xs font-semibold">Header row<input data-mapper-header-row type="number" min="1" max="10000" step="1" class="mt-1 block w-28 rounded-md border border-gray-300 bg-white p-2 text-sm dark:border-slate-700 dark:bg-slate-800"></label>
+                            <button type="button" data-mapper-preview class="rounded-md bg-emerald-700 px-3 py-2 text-sm font-bold text-white">Preview mappings</button>
+                        </div>
+                        <div data-mapper-preview-panel class="mt-3 hidden">
+                            <div data-mapper-columns-status class="mb-2 text-xs text-gray-600 dark:text-slate-300"></div>
+                            <div class="overflow-x-auto rounded-md border border-gray-200 dark:border-slate-700"><table class="min-w-[700px] w-full text-left text-xs"><thead class="bg-gray-100 dark:bg-slate-800"><tr><th class="p-2">Target field</th><th class="p-2">Excel column</th><th class="p-2">Match</th><th class="p-2">First 3 values</th></tr></thead><tbody data-mapper-rows class="divide-y divide-gray-200 dark:divide-slate-700"></tbody></table></div>
+                            <button type="button" data-mapper-confirm class="mt-3 rounded-md bg-emerald-700 px-3 py-2 text-sm font-bold text-white disabled:cursor-not-allowed disabled:opacity-50" disabled>Confirm mappings</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+        <section class="mb-5 rounded-lg border border-sky-200 bg-sky-50/60 p-4 dark:border-sky-900 dark:bg-sky-950/20" aria-labelledby="rankingHistoryProfileHeading">
+            <div class="mb-3"><h3 id="rankingHistoryProfileHeading" class="text-sm font-bold">Ranking History import profile</h3><p data-active-ranking-profile class="mt-1 text-xs text-gray-600 dark:text-slate-300">Loading active profile…</p></div>
+            <div class="grid gap-3 lg:grid-cols-[minmax(220px,0.7fr)_minmax(0,1fr)]">
+                <div class="space-y-3">
+                    <label class="block text-sm font-semibold">Available Ranking History profiles<select data-ranking-profile-select class="mt-1 block w-full rounded-lg border border-gray-300 bg-white p-2.5 text-sm dark:border-slate-700 dark:bg-slate-800"><option value="">Loading profiles…</option></select></label>
+                    <button type="button" data-ranking-profile-activate class="rounded-md border border-sky-700 px-3 py-2 text-sm font-bold text-sky-900 hover:bg-sky-100 dark:text-sky-200 dark:hover:bg-sky-950">Set as active profile</button>
+                    <label class="block text-sm font-semibold">Profile name<input data-ranking-profile-name type="text" maxlength="150" class="mt-1 block w-full rounded-lg border border-gray-300 bg-white p-2.5 text-sm dark:border-slate-700 dark:bg-slate-800"></label>
+                    <button type="button" data-ranking-profile-save class="rounded-md bg-sky-700 px-3 py-2 text-sm font-bold text-white hover:bg-sky-800">Save profile settings</button>
+                </div>
+                <div>
+                    <label class="block text-sm font-semibold">Field mappings<textarea data-ranking-profile-json rows="12" spellcheck="false" class="mt-1 block w-full rounded-lg border border-gray-300 bg-white p-2.5 font-mono text-xs dark:border-slate-700 dark:bg-slate-800"></textarea></label>
+                    <div data-profile-mapper="ranking_history" class="mt-3 rounded-lg border border-sky-200 p-3 dark:border-sky-900">
+                        <p data-mapper-status class="mb-2 text-xs text-gray-600 dark:text-slate-300" role="status"></p>
+                        <label data-mapper-upload-label class="inline-flex cursor-pointer items-center gap-2 rounded-md border border-sky-700 px-3 py-2 text-sm font-bold text-sky-900 hover:bg-sky-100 dark:text-sky-200 dark:hover:bg-sky-950"><i class="fa-solid fa-file-arrow-up" aria-hidden="true"></i> Upload Excel to map columns<input data-mapper-file type="file" accept=".xlsx,.xls,.csv" disabled class="sr-only"></label>
+                        <div data-mapper-controls class="mt-3 hidden flex-wrap items-end gap-2">
+                            <label class="min-w-48 flex-1 text-xs font-semibold">Worksheet<select data-mapper-sheet class="mt-1 block w-full rounded-md border border-gray-300 bg-white p-2 text-sm dark:border-slate-700 dark:bg-slate-800"></select></label>
+                            <label class="text-xs font-semibold">Header row<input data-mapper-header-row type="number" min="1" max="10000" step="1" class="mt-1 block w-28 rounded-md border border-gray-300 bg-white p-2 text-sm dark:border-slate-700 dark:bg-slate-800"></label>
+                            <button type="button" data-mapper-preview class="rounded-md bg-sky-700 px-3 py-2 text-sm font-bold text-white">Preview mappings</button>
+                        </div>
+                        <div data-mapper-preview-panel class="mt-3 hidden">
+                            <div data-mapper-columns-status class="mb-2 text-xs text-gray-600 dark:text-slate-300"></div>
+                            <div class="overflow-x-auto rounded-md border border-gray-200 dark:border-slate-700"><table class="min-w-[700px] w-full text-left text-xs"><thead class="bg-gray-100 dark:bg-slate-800"><tr><th class="p-2">Target field</th><th class="p-2">Excel column</th><th class="p-2">Match</th><th class="p-2">First 3 values</th></tr></thead><tbody data-mapper-rows class="divide-y divide-gray-200 dark:divide-slate-700"></tbody></table></div>
+                            <button type="button" data-mapper-confirm class="mt-3 rounded-md bg-sky-700 px-3 py-2 text-sm font-bold text-white disabled:cursor-not-allowed disabled:opacity-50" disabled>Confirm mappings</button>
+                        </div>
+                    </div>
+                </div>
             </div>
         </section>
         <div class="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(280px,0.8fr)]">

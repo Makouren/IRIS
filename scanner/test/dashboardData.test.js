@@ -14,6 +14,7 @@ const publicDashboardSource = fs.readFileSync(path.join(__dirname, '..', '..', '
 const graphApiSource = fs.readFileSync(path.join(__dirname, '..', '..', 'api', 'iris.php'), 'utf8');
 const publicGraphApiSource = fs.readFileSync(path.join(__dirname, '..', '..', 'api', 'dashboard_graphs.php'), 'utf8');
 const reviewEditorSource = fs.readFileSync(path.join(__dirname, '..', '..', 'admin', 'review_editor.php'), 'utf8');
+const rankingHistoryControllerSource = fs.readFileSync(path.join(__dirname, '..', '..', 'user', 'js', 'rankingHistory.js'), 'utf8');
 
 test('saved chart options use readable colors in dark mode', () => {
   let option;
@@ -545,4 +546,13 @@ test('axis controls are structural and no longer user-facing', () => {
   assert.match(app, /ChartMapping\.inferColumns/);
   assert.match(app, /xAxis: isCircular \? undefined : \{ type: 'category', name: 'Rows'/);
   assert.match(app, /yAxis: isCircular \? undefined : \{ type: 'value', name: headerName/);
+});
+
+test('public Ranking History uses Organization and List chart filters without the old table', () => {
+  assert.match(publicDashboardSource, /id="rankingOrganizationFilter"/);
+  assert.match(publicDashboardSource, /id="rankingListFilter"/);
+  assert.doesNotMatch(publicDashboardSource, /id="rankingTable"|id="rankingTableStatus"|id="rankingLevelFilter"|id="rankingScopeFilter"|id="rankingTypeFilter"/);
+  assert.match(rankingHistoryControllerSource, /inverse: true/);
+  assert.match(rankingHistoryControllerSource, /Improved \(up\)/);
+  assert.match(rankingHistoryControllerSource, /Declined \(down\)/);
 });

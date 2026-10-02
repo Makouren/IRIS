@@ -1,6 +1,6 @@
 # Browser Parsers and Viewers
 
-V3.4.7 office template imports, including the Unified Summary Cards profile, remain a separate server-side flow: PHP reads supported office-upload files for preview and approval. The browser parsers documented here continue to power Scanner ingestion and viewing.
+V4.5.0 office uploads separate general Data and Report Visualization from Ranking History and Summary Card imports. The latter use server-side PHP profile parsing for preview and approval; browser parsers documented here continue to power Scanner ingestion and viewing.
 
 Parser modules convert browser-selected files into scan data used by the Scanner UI and PHP-backed record persistence. Libraries are loaded by the scanner page; this directory does not contain a separate parser service.
 

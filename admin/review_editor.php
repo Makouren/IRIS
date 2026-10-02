@@ -165,14 +165,15 @@ require_once __DIR__.'/includes/header.php';
                         <label class="form-label" style="margin:0; display:inline-flex; align-items:center; gap:0.25rem;">Year
                             <select id="rankingHistoryAdminYearFilter" class="form-input" style="display:inline-block; width:auto; min-width:110px; margin-left:0.25rem;"><option value="all">All years</option></select>
                         </label>
-                        <label class="form-label" style="margin:0; display:inline-flex; align-items:center; gap:0.25rem;">Scope
-                            <select id="rankingHistoryAdminScopeFilter" class="form-input" style="display:inline-block; width:auto; min-width:130px; margin-left:0.25rem;"><option value="all">All scopes</option><option value="unassigned">Unassigned</option></select>
-                            <button type="button" id="openManageScopesModal" class="btn-studio-action" style="padding:0.25rem 0.55rem; font-size:0.75rem;" title="Manage Scopes"><i class="fa-solid fa-gear" aria-hidden="true"></i> Scopes</button>
+                        <input id="rankingHistoryAdminSearch" type="search" class="form-input" placeholder="Search rankings..." aria-label="Search ranking organization, type, year, rank, or information" style="width:min(260px, 100%);">
+                        <label class="form-label" style="margin:0; display:inline-flex; align-items:center; gap:0.25rem;">Public organization
+                            <select id="rankingHistoryChartDefaultOrganization" class="form-input" style="display:inline-block; width:auto; min-width:150px; margin-left:0.25rem;"><option value="">All organizations</option></select>
                         </label>
-                        <label class="form-label" style="margin:0; display:inline-flex; align-items:center; gap:0.25rem;">Level
-                            <select id="rankingHistoryAdminLevelFilter" class="form-input" style="display:inline-block; width:auto; min-width:120px; margin-left:0.25rem;"><option value="all">All levels</option><option value="unassigned">Unassigned</option></select>
-                            <button type="button" id="openManageLevelsModal" class="btn-studio-action" style="padding:0.25rem 0.55rem; font-size:0.75rem;" title="Manage Levels"><i class="fa-solid fa-gear" aria-hidden="true"></i> Levels</button>
+                        <label class="form-label" style="margin:0; display:inline-flex; align-items:center; gap:0.25rem;">Default list
+                            <select id="rankingHistoryChartDefaultList" class="form-input" style="display:inline-block; width:auto; min-width:150px; margin-left:0.25rem;" disabled><option value="">All lists</option></select>
                         </label>
+                        <button id="saveRankingHistoryChartDefaults" type="button" class="export-cancel-button">Save chart defaults</button>
+                        <span id="rankingHistoryChartDefaultsStatus" class="text-xs" role="status" aria-live="polite"></span>
                     </div>
                     <div style="display:flex; gap:0.5rem; align-items:center;">
                         <label id="selectAllRankingLabel" style="display:inline-flex; align-items:center; gap:0.4rem; font-size:0.8rem; font-weight:700; cursor:pointer; color:var(--text-muted);">
@@ -190,79 +191,17 @@ require_once __DIR__.'/includes/header.php';
                 <input type="hidden" id="rankingHistoryAdminId">
                 <div style="display:grid; grid-template-columns:repeat(auto-fit,minmax(190px,1fr)); gap:1rem;">
                     <label class="form-label">Organization<input type="text" id="rankingHistoryAdminBody" list="rankingBodySuggestions" class="form-input bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 border-gray-300 dark:border-gray-600 rounded-lg" placeholder="Select or type organization..." required><datalist id="rankingBodySuggestions"></datalist></label>
-                    <label class="form-label">Scope<input type="text" id="rankingHistoryAdminScope" list="rankingScopeSuggestions" class="form-input bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 border-gray-300 dark:border-gray-600 rounded-lg" placeholder="Select or type scope (Unassigned)"><datalist id="rankingScopeSuggestions"></datalist></label>
-                    <label class="form-label">Level<input type="text" id="rankingHistoryAdminLevel" list="rankingLevelSuggestions" class="form-input bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 border-gray-300 dark:border-gray-600 rounded-lg" placeholder="Select or type level (Unassigned)"><datalist id="rankingLevelSuggestions"></datalist></label>
-                    <label class="form-label">Ranking type<input type="text" id="rankingHistoryAdminType" list="rankingTypeSuggestions" class="form-input bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 border-gray-300 dark:border-gray-600 rounded-lg" maxlength="100" placeholder="QS Asia"><datalist id="rankingTypeSuggestions"></datalist></label>
+                    <label class="form-label">Ranking type<input type="text" id="rankingHistoryAdminType" list="rankingTypeSuggestions" class="form-input bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 border-gray-300 dark:border-gray-600 rounded-lg" maxlength="320" placeholder="QS Asia"><datalist id="rankingTypeSuggestions"></datalist></label>
                     <label class="form-label">Year<input type="number" id="rankingHistoryAdminYear" class="form-input" min="1900" max="2200" step="1" required></label>
-                    <label class="form-label">Edition<input type="text" id="rankingHistoryAdminEdition" class="form-input" maxlength="80" placeholder="Annual, July, March"></label>
-                    <label class="form-label">Category<input type="text" id="rankingHistoryAdminCategory" class="form-input" maxlength="100" placeholder="Overall"></label>
-                    <label class="form-label">Rank display<input type="text" id="rankingHistoryAdminGlobalRank" class="form-input" maxlength="50" placeholder="161, 601-650, or 601+"><span id="rankTextNote" class="text-xs text-amber-600 dark:text-amber-400 mt-1 block font-medium" style="display:none;">Saved as text; not plotted on charts.</span></label>
-                    <label class="form-label">Rank lower bound<input type="number" id="rankingHistoryAdminRankLow" class="form-input" min="0" step="1"></label>
-                    <label class="form-label">Rank upper bound<input type="number" id="rankingHistoryAdminRankHigh" class="form-input" min="0" step="1" placeholder="Leave blank for 601+"></label>
-                    <label class="form-label">Philippine Rank<input type="text" id="rankingHistoryAdminPhRank" class="form-input" maxlength="50"></label>
-                    <label class="form-label" style="grid-column:1/-1;">Note<input type="text" id="rankingHistoryAdminNote" class="form-input" maxlength="255"></label>
-                    <label class="form-label" style="grid-column:1/-1;">Source<input type="text" id="rankingHistoryAdminSource" class="form-input" maxlength="500" placeholder="Source name or URL"></label>
-                    <label class="form-label">Verification status<select id="rankingHistoryAdminStatus" class="form-input"><option value="unverified">Unverified</option><option value="verified">Verified</option><option value="inferred">Inferred</option><option value="conflicting">Conflicting</option><option value="assumed">Assumed</option></select></label>
+                    <label class="form-label">Rank display<input type="text" id="rankingHistoryAdminGlobalRank" class="form-input" maxlength="50" placeholder="161, 601-650, or 601+" required></label>
+                    <label class="form-label" style="grid-column:1/-1;">Information<textarea id="rankingHistoryAdminInfoText" class="form-input" rows="3" maxlength="65535" placeholder="Additional context shown from the information icon"></textarea></label>
                 </div>
-                <p class="text-xs" style="color:var(--text-muted); margin-top:0.5rem;">Numeric chart values are derived from the rank text. The Change column updates automatically from the previous year.</p>
                 <div id="formDuplicateError" class="p-3 bg-amber-50 dark:bg-amber-900/30 border border-amber-200 dark:border-amber-700 rounded-lg text-sm text-amber-800 dark:text-amber-200 font-medium mt-3" style="display:none;">This ranking already exists. <button type="button" id="editDuplicateLink" class="underline font-bold hover:text-amber-900 dark:hover:text-amber-100">Edit it instead?</button></div>
                 <div style="display:flex; justify-content:flex-end; gap:0.75rem; margin-top:1rem;">
                     <button type="button" id="cancelRankingHistoryAdminForm" class="export-cancel-button">Cancel</button>
                     <button type="submit" class="btn-save-modal"><i class="fa-solid fa-floppy-disk" aria-hidden="true"></i> Save ranking</button>
                 </div>
             </form>
-        </div>
-    </div>
-
-    <div id="manageScopesModalPanel" class="modal-overlay" aria-hidden="true" style="z-index: 1050;">
-        <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="manageScopesModalHeading" style="max-width: 600px; width: 100%;">
-            <div class="modal-header" style="display:flex; justify-content:space-between; align-items:center; padding-bottom:0.75rem; border-bottom:1px solid var(--border-light);">
-                <h3 id="manageScopesModalHeading" class="modal-title" style="font-size:1.1rem; font-weight:800; color:var(--text-main); margin:0;">Manage Ranking Scopes</h3>
-                <button type="button" id="closeManageScopesModal" class="export-cancel-button" aria-label="Close">&times;</button>
-            </div>
-            <div style="padding-top: 1rem;">
-                <div style="display:flex; justify-content:space-between; align-items:center; gap:0.75rem; margin-bottom:0.75rem; flex-wrap:wrap;">
-                    <div style="display:flex; align-items:center; gap:0.5rem;">
-                        <label id="selectAllScopesLabel" style="display:inline-flex; align-items:center; gap:0.4rem; font-size:0.8rem; font-weight:700; cursor:pointer; color:var(--text-muted);">
-                            <input type="checkbox" id="selectAllScopes" style="width:1rem;height:1rem; cursor:pointer;"> Select all
-                        </label>
-                        <button id="bulkDeleteScopes" type="button" class="export-cancel-button" style="display:none; align-items:center; gap:0.35rem; color:#B91C1C; border-color:#FECACA; background-color:#FEF2F2; font-weight:700; padding:0.3rem 0.65rem; border-radius:0.5rem;">
-                            <i class="fa-solid fa-trash" aria-hidden="true"></i> Delete Selected (<span id="bulkDeleteScopesCount">0</span>)
-                        </button>
-                    </div>
-                </div>
-                <div id="rankingScopeAdminList" style="display:grid; gap:0.5rem; max-height:350px; overflow-y:auto; padding-right:0.25rem;"></div>
-                <div style="display:flex; gap:0.5rem; margin-top:1rem; padding-top:0.75rem; border-top:1px solid var(--border-light);">
-                    <input type="text" id="rankingScopeNewName" class="form-input" maxlength="80" placeholder="New scope name (e.g. SDG 3, Regional)">
-                    <button type="button" id="addRankingScope" class="btn-studio-action" style="white-space:nowrap;"><i class="fa-solid fa-plus" aria-hidden="true"></i> Add scope</button>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <div id="manageLevelsModalPanel" class="modal-overlay" aria-hidden="true" style="z-index: 1050;">
-        <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="manageLevelsModalHeading" style="max-width: 600px; width: 100%;">
-            <div class="modal-header" style="display:flex; justify-content:space-between; align-items:center; padding-bottom:0.75rem; border-bottom:1px solid var(--border-light);">
-                <h3 id="manageLevelsModalHeading" class="modal-title" style="font-size:1.1rem; font-weight:800; color:var(--text-main); margin:0;">Manage Ranking Levels</h3>
-                <button type="button" id="closeManageLevelsModal" class="export-cancel-button" aria-label="Close">&times;</button>
-            </div>
-            <div style="padding-top: 1rem;">
-                <div style="display:flex; justify-content:space-between; align-items:center; gap:0.75rem; margin-bottom:0.75rem; flex-wrap:wrap;">
-                    <div style="display:flex; align-items:center; gap:0.5rem;">
-                        <label id="selectAllLevelsLabel" style="display:inline-flex; align-items:center; gap:0.4rem; font-size:0.8rem; font-weight:700; cursor:pointer; color:var(--text-muted);">
-                            <input type="checkbox" id="selectAllLevels" style="width:1rem;height:1rem; cursor:pointer;"> Select all
-                        </label>
-                        <button id="bulkDeleteLevels" type="button" class="export-cancel-button" style="display:none; align-items:center; gap:0.35rem; color:#B91C1C; border-color:#FECACA; background-color:#FEF2F2; font-weight:700; padding:0.3rem 0.65rem; border-radius:0.5rem;">
-                            <i class="fa-solid fa-trash" aria-hidden="true"></i> Delete Selected (<span id="bulkDeleteLevelsCount">0</span>)
-                        </button>
-                    </div>
-                </div>
-                <div id="rankingLevelAdminList" style="display:grid; gap:0.5rem; max-height:350px; overflow-y:auto; padding-right:0.25rem;"></div>
-                <div style="display:flex; gap:0.5rem; margin-top:1rem; padding-top:0.75rem; border-top:1px solid var(--border-light);">
-                    <input type="text" id="rankingLevelNewName" class="form-input" maxlength="80" placeholder="New level name (e.g. Local, ASEAN, Asia, World)">
-                    <button type="button" id="addRankingLevel" class="btn-studio-action" style="white-space:nowrap;"><i class="fa-solid fa-plus" aria-hidden="true"></i> Add level</button>
-                </div>
-            </div>
         </div>
     </div>
 
@@ -1350,6 +1289,7 @@ require_once __DIR__.'/includes/header.php';
     </script>
     <script>
         (function () {
+            if (false) {
             const apiUrl = '<?= e(base_url('api/admin_rankings.php')) ?>';
             const csrfToken = <?= json_encode(csrf_token()) ?>;
             const panel = document.getElementById('rankingHistoryEditorPanel');
@@ -1620,28 +1560,11 @@ require_once __DIR__.'/includes/header.php';
             function loadRankingIntoForm(row) {
                 document.getElementById('rankingHistoryAdminId').value = row.id;
                 bodySelect.value = row.body_name || row.body_short_name || '';
-                scopeSelect.value = row.scope_name || '';
-                document.getElementById('rankingHistoryAdminLevel').value = row.level || '';
                 document.getElementById('rankingHistoryAdminType').value = row.ranking_type || '';
                 document.getElementById('rankingHistoryAdminYear').value = row.year;
-                document.getElementById('rankingHistoryAdminEdition').value = row.edition || 'Annual';
-                document.getElementById('rankingHistoryAdminCategory').value = row.category || 'Overall';
                 rankDisplayInput.value = row.global_rank || '';
-                rankLowInput.value = row.rank_low ?? '';
-                rankHighInput.value = row.rank_high ?? '';
                 document.getElementById('rankingHistoryAdminPhRank').value = row.ph_rank || '';
-                document.getElementById('rankingHistoryAdminNote').value = row.note || '';
                 document.getElementById('rankingHistoryAdminSource').value = row.source || '';
-                document.getElementById('rankingHistoryAdminStatus').value = row.verification_status || 'unverified';
-                
-                const val = (row.global_rank || '').trim();
-                if (val) {
-                    const res = parseRankDisplayJS(val);
-                    if (!res.matched && rankTextNote) rankTextNote.classList.remove('hidden');
-                    else if (rankTextNote) rankTextNote.classList.add('hidden');
-                } else {
-                    if (rankTextNote) rankTextNote.classList.add('hidden');
-                }
                 const dupContainer = document.getElementById('formDuplicateError');
                 if (dupContainer) dupContainer.classList.add('hidden');
                 showForm(true);
@@ -1699,45 +1622,6 @@ require_once __DIR__.'/includes/header.php';
             }
 
             const rankDisplayInput = document.getElementById('rankingHistoryAdminGlobalRank');
-            const rankLowInput = document.getElementById('rankingHistoryAdminRankLow');
-            const rankHighInput = document.getElementById('rankingHistoryAdminRankHigh');
-            const rankTextNote = document.getElementById('rankTextNote');
-
-            function parseRankDisplayJS(value) {
-                const raw = String(value || '').trim();
-                if (!raw) return { matched: true, low: null, high: null };
-                let m = raw.match(/^Top\s+(\d+)$/i);
-                if (m) return { matched: true, low: 1, high: parseInt(m[1], 10) };
-                m = raw.match(/^=?\s*(\d+)\s*\+$/);
-                if (m) return { matched: true, low: parseInt(m[1], 10), high: null };
-                m = raw.match(/^=?\s*(\d+)\s*[-–—]\s*(\d+)$/);
-                if (m) return { matched: true, low: parseInt(m[1], 10), high: parseInt(m[2], 10) };
-                m = raw.match(/^=?\s*(\d+)$/);
-                if (m) return { matched: true, low: parseInt(m[1], 10), high: parseInt(m[1], 10) };
-                return { matched: false, low: null, high: null };
-            }
-
-            function updateRankBoundsNote() {
-                const val = rankDisplayInput.value.trim();
-                if (!val) {
-                    if (rankTextNote) rankTextNote.classList.add('hidden');
-                    return;
-                }
-                const res = parseRankDisplayJS(val);
-                if (res.matched) {
-                    if (res.low !== null) rankLowInput.value = res.low;
-                    else rankLowInput.value = '';
-                    if (res.high !== null) rankHighInput.value = res.high;
-                    else rankHighInput.value = '';
-                    if (rankTextNote) rankTextNote.classList.add('hidden');
-                } else {
-                    rankLowInput.value = '';
-                    rankHighInput.value = '';
-                    if (rankTextNote) rankTextNote.classList.remove('hidden');
-                }
-            }
-
-            rankDisplayInput?.addEventListener('input', updateRankBoundsNote);
 
             document.getElementById('toggleRankingHistoryEditor').addEventListener('click', () => {
                 showList(); panel.classList.add('active'); panel.setAttribute('aria-hidden', 'false');
@@ -1747,67 +1631,21 @@ require_once __DIR__.'/includes/header.php';
                 form.reset();
                 document.getElementById('rankingHistoryAdminId').value = '';
                 document.getElementById('rankingHistoryAdminYear').value = new Date().getFullYear();
-                document.getElementById('rankingHistoryAdminCategory').value = 'Overall';
-                document.getElementById('rankingHistoryAdminEdition').value = 'Annual';
-                document.getElementById('rankingHistoryAdminStatus').value = 'verified';
-                if (rankTextNote) rankTextNote.classList.add('hidden');
                 const dupContainer = document.getElementById('formDuplicateError');
                 if (dupContainer) dupContainer.classList.add('hidden');
                 showForm(false);
             });
             yearFilter.addEventListener('change', render);
-            scopeFilter.addEventListener('change', render);
-            levelFilter.addEventListener('change', render);
-            document.getElementById('addRankingScope').addEventListener('click', async () => {
-                const input = document.getElementById('rankingScopeNewName');
-                const name = input.value.trim();
-                if (!name) { input.focus(); return; }
-                const response = await fetch(scopeApiUrl, {
-                    method: 'POST', headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken, Accept: 'application/json' },
-                    body: JSON.stringify({ name })
-                });
-                if (!response.ok) { const error = await response.json().catch(() => ({})); alert(error.error || 'Unable to add scope.'); return; }
-                input.value = '';
-                await refresh();
-            });
-            document.getElementById('addRankingLevel')?.addEventListener('click', async () => {
-                const input = document.getElementById('rankingLevelNewName');
-                const name = input.value.trim();
-                if (!name) { input.focus(); return; }
-                const response = await fetch(levelApiUrl, {
-                    method: 'POST', headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken, Accept: 'application/json' },
-                    body: JSON.stringify({ name })
-                });
-                if (!response.ok) { const error = await response.json().catch(() => ({})); alert(error.error || 'Unable to add level.'); return; }
-                input.value = '';
-                await refresh();
-            });
             form.addEventListener('submit', async event => {
                 event.preventDefault();
                 const id = document.getElementById('rankingHistoryAdminId').value;
-                const lowVal = rankLowInput.value === '' ? null : Number(rankLowInput.value);
-                const highVal = rankHighInput.value === '' ? null : Number(rankHighInput.value);
-
-                if (lowVal !== null && highVal !== null && lowVal > highVal) {
-                    alert('Lower bound must be less than or equal to upper bound.');
-                    return;
-                }
-
                 const payload = {
                     organization: bodySelect.value.trim(),
-                    scope: scopeSelect.value.trim(),
-                    level: document.getElementById('rankingHistoryAdminLevel').value.trim(),
                     ranking_type: document.getElementById('rankingHistoryAdminType').value.trim(),
                     year: Number(document.getElementById('rankingHistoryAdminYear').value),
-                    edition: document.getElementById('rankingHistoryAdminEdition').value.trim(),
-                    category: document.getElementById('rankingHistoryAdminCategory').value.trim(),
                     global_rank: rankDisplayInput.value.trim(),
-                    rank_low: lowVal,
-                    rank_high: highVal,
                     ph_rank: document.getElementById('rankingHistoryAdminPhRank').value.trim(),
-                    note: document.getElementById('rankingHistoryAdminNote').value.trim(),
-                    source: document.getElementById('rankingHistoryAdminSource').value.trim(),
-                    verification_status: document.getElementById('rankingHistoryAdminStatus').value
+                    source: document.getElementById('rankingHistoryAdminSource').value.trim()
                 };
 
                 const dupContainer = document.getElementById('formDuplicateError');
@@ -1847,6 +1685,8 @@ require_once __DIR__.'/includes/header.php';
             panel.addEventListener('click', event => { if (event.target === panel) close(); });
             document.addEventListener('keydown', event => { if (event.key === 'Escape' && panel.classList.contains('active')) close(); });
             refresh();
+            }
         })();
     </script>
+    <script src="<?= e(base_url('admin/js/rankingHistoryAdmin.js')) ?>?v=<?= (int) filemtime(__DIR__ . '/js/rankingHistoryAdmin.js') ?>" data-api="<?= e(base_url('api/admin_rankings.php')) ?>" data-csrf="<?= e(csrf_token()) ?>" defer></script>
 <?php require_once __DIR__.'/includes/footer.php'; ?>

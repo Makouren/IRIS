@@ -105,6 +105,7 @@
     <?php if (($_SESSION['role'] ?? '') === 'super_admin'): ?>
         <script src="<?= e(base_url('admin/js/accountManager.js')) ?>?v=<?= (int) filemtime(__DIR__.'/../js/accountManager.js') ?>" defer></script>
         <script src="<?= e(base_url('admin/js/templateManager.js')) ?>?v=<?= (int) filemtime(__DIR__.'/../js/templateManager.js') ?>" defer></script>
+        <script src="<?= e(base_url('admin/js/profileWorkbookMapper.js')) ?>?v=<?= (int) filemtime(__DIR__.'/../js/profileWorkbookMapper.js') ?>" defer></script>
         <script src="<?= e(base_url('admin/js/rankingBodyManager.js')) ?>?v=<?= (int) filemtime(__DIR__.'/../js/rankingBodyManager.js') ?>" defer></script>
         <script src="<?= e(base_url('admin/js/rankingReview.js')) ?>?v=<?= (int) filemtime(__DIR__.'/../js/rankingReview.js') ?>" defer></script>
         <script type="module" src="<?= e(base_url('scanner/js/modules/import/importPreviewModal.js')) ?>?v=<?= (int) filemtime(__DIR__.'/../../scanner/js/modules/import/importPreviewModal.js') ?>"></script>

@@ -1,7 +1,11 @@
 <?php
+ini_set('display_errors', '0');
+ini_set('html_errors', '0');
+try {
 require_once __DIR__ . '/../includes/functions.php';
 require_once __DIR__ . '/../includes/SpreadsheetReader.php';
 require_once __DIR__ . '/../includes/helpers/SummaryCardImportProfiles.php';
+require_once __DIR__ . '/../includes/helpers/ProfileWorkbookService.php';
 $currentRole = (string)($_SESSION['role'] ?? '');
 if ($currentRole === 'super_admin' && !ALLOW_SUPER_ADMIN_UPLOAD) {
 	requireRole(['admin']);
@@ -13,7 +17,7 @@ $uploadPurpose = trim((string)($_POST['upload_purpose'] ?? ''));
 if (!in_array($uploadPurpose, ['analytics', 'ranking_history', 'summary_cards'], true)) {
 	flash_redirect('admin/office_upload.php', 'error', 'Choose an upload purpose.');
 }
-$templateInput = $uploadPurpose === 'summary_cards' ? '' : trim((string)($_POST['template_id'] ?? ''));
+$templateInput = trim((string)($_POST['template_id'] ?? ''));
 $templateId = null;
 if ($templateInput !== '') {
 	$parsedTemplateId = filter_var($templateInput, FILTER_VALIDATE_INT);
@@ -22,20 +26,15 @@ if ($templateInput !== '') {
 	}
 	$templateId = (int)$parsedTemplateId;
 }
-if ($templateId === null && $uploadPurpose !== 'summary_cards') {
+if ($templateId === null && $uploadPurpose === 'analytics') {
 	flash_redirect('admin/office_upload.php', 'error', 'Choose an active template for the selected upload purpose.');
 }
 $pdo = db();
 $importProfileId = null;
-$summaryProfile = null;
-if ($uploadPurpose === 'summary_cards') {
-	$summaryProfile = SummaryCardImportProfiles::active($pdo);
-	$importProfileId = (int)$summaryProfile['id'];
-	$templateId = $summaryProfile['template_id'] === null ? null : (int)$summaryProfile['template_id'];
-}
 $selectedTemplate = null;
+$profileConfig = null;
 if ($templateId !== null) {
-	$templateQuery = $pdo->prepare('SELECT templates.id, templates.ranking_body_id, profiles.destination
+	$templateQuery = $pdo->prepare('SELECT templates.id, profiles.id AS import_profile_id, profiles.destination
 		FROM templates
 		LEFT JOIN template_import_profiles profiles ON profiles.template_id = templates.id
 		WHERE templates.id = ? AND templates.is_active = 1 LIMIT 1');
@@ -44,13 +43,22 @@ if ($templateId !== null) {
 	if (!$selectedTemplate) {
 		flash_redirect('admin/office_upload.php', 'error', 'The selected template is no longer active. Choose another option.');
 	}
-	$templatePurpose = $selectedTemplate['destination'] ?: ($selectedTemplate['ranking_body_id'] ? 'ranking_history' : 'analytics');
+	$templatePurpose = $selectedTemplate['destination'] ?: 'analytics';
 	if ($templatePurpose !== $uploadPurpose) {
 		flash_redirect('admin/office_upload.php', 'error', 'The selected template does not match the upload purpose. Choose a matching template.');
 	}
+	$importProfileId = $selectedTemplate['import_profile_id'] === null ? null : (int)$selectedTemplate['import_profile_id'];
+	if ($importProfileId !== null) $profileConfig = SummaryCardImportProfiles::get($pdo, $importProfileId, true, $uploadPurpose);
 }
-if ($uploadPurpose === 'ranking_history' && (!$selectedTemplate || empty($selectedTemplate['ranking_body_id']))) {
-	flash_redirect('admin/office_upload.php', 'error', 'The Ranking History upload needs an active template linked to a ranking body.');
+if ($templateId === null && in_array($uploadPurpose, ['summary_cards', 'ranking_history'], true)) {
+	try {
+		$activeProfile = SummaryCardImportProfiles::active($pdo, $uploadPurpose);
+		$importProfileId = (int)$activeProfile['id'];
+		$templateId = $activeProfile['template_id'] === null ? null : (int)$activeProfile['template_id'];
+		$profileConfig = $activeProfile;
+	} catch (Throwable $exception) {
+		flash_redirect('admin/office_upload.php', 'error', 'No active import profile is configured for this destination. Ask the Super Admin to choose one.');
+	}
 }
 
 $file = $_FILES['office_file'] ?? null;
@@ -105,13 +113,32 @@ if (!$validMime) {
 }
 
 try {
-	$parsed = (new SpreadsheetReader())->parse($file['tmp_name'], $extension, (string)$file['name']);
+	$headerRow = $profileConfig['workbook_header_row'] ?? null;
+	$headerRow = filter_var($headerRow, FILTER_VALIDATE_INT);
+	$headerRow = $headerRow === false || $headerRow === null || $headerRow < 1 ? null : (int)$headerRow;
+	$selectedSheet = in_array($extension, ['csv', 'tsv'], true) ? null : (trim((string)($profileConfig['sheet_selector'] ?? '')) ?: null);
+	$parsed = (new SpreadsheetReader())->parse($file['tmp_name'], $extension, (string)$file['name'], $selectedSheet, $headerRow);
 } catch (Throwable $exception) {
 	error_log('IRIS spreadsheet parse failure for ' . basename((string)$file['name']) . ': ' . $exception->getMessage());
-	$errorMessage = $extension === 'xlsx'
+	$errorMessage = $profileConfig !== null
+		? $exception->getMessage()
+		: ($extension === 'xlsx'
 		? "We couldn't read this Excel file. Make sure it's a valid .xlsx and try again."
-		: "We couldn't read this CSV/TSV file. Check its delimiter and contents, then try again.";
+		: "We couldn't read this CSV/TSV file. Check its delimiter and contents, then try again.");
 	flash_redirect('admin/office_upload.php', 'error', $errorMessage);
+}
+
+if ($profileConfig !== null && in_array($uploadPurpose, ['summary_cards', 'ranking_history'], true)) {
+	$parsedSheets = array_values($parsed['sheetsData'] ?? []);
+	$sheetData = $parsedSheets[0] ?? null;
+	if (!$sheetData) flash_redirect('admin/office_upload.php', 'error', 'The selected workbook has no readable worksheet.');
+	$expectedHeaders = is_array($profileConfig['workbook_headers'] ?? null) ? $profileConfig['workbook_headers'] : [];
+	if (!$expectedHeaders) $expectedHeaders = ProfileWorkbookService::expectedHeaders($profileConfig, $uploadPurpose);
+	try {
+		ProfileWorkbookService::assertHeadersMatch($sheetData['headers'] ?? [], $expectedHeaders, $uploadPurpose);
+	} catch (InvalidArgumentException $exception) {
+		flash_redirect('admin/office_upload.php', 'error', $exception->getMessage());
+	}
 }
 
 $storagePath = getenv('IRIS_UPLOAD_DIR') ?: dirname(__DIR__, 4) . DIRECTORY_SEPARATOR . 'iris-private-uploads';
@@ -167,3 +194,11 @@ try {
 }
 
 flash_redirect('admin/office_upload.php', 'success', 'File uploaded and added to the Super Admin review queue.');
+} catch (Throwable $exception) {
+	error_log('IRIS office upload failure: ' . $exception);
+	if (!headers_sent()) {
+		http_response_code(500);
+		header('Content-Type: text/plain; charset=utf-8');
+	}
+	exit('Upload processing failed. Please try again or contact the administrator.');
+}
