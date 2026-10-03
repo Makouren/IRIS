@@ -542,9 +542,6 @@ try {
                         <option value="side-by-side">Side by side</option>
                         <option value="one-per-row">One per row</option>
                     </select>
-                    <span id="publishedGraphCount" class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-emerald-100 text-emerald-800 dark:bg-emerald-900/60 dark:text-emerald-300">
-                        <i class="fa-solid fa-circle-check mr-1"></i> Loading published graphs
-                    </span>
                 </div>
             </div>
             <div id="scannerPublishedGraphsGrid" class="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -1004,8 +1001,7 @@ try {
         function renderPublishedScannerGraphs(graphs) {
             const grid = document.getElementById('scannerPublishedGraphsGrid');
             const empty = document.getElementById('scannerPublishedGraphsEmpty');
-            const count = document.getElementById('publishedGraphCount');
-            if (!grid || !count) return;
+            if (!grid) return;
 
             const replacedCharts = new Set();
             grid.querySelectorAll('.scanner-published-card').forEach(el => {
@@ -1018,11 +1014,9 @@ try {
             chartInstances = chartInstances.filter(chart => !replacedCharts.has(chart));
             if (!Array.isArray(graphs) || graphs.length === 0) {
                 if (empty) empty.style.display = '';
-                count.innerHTML = '<i class="fa-solid fa-circle-info mr-1"></i> 0 published graphs';
                 return;
             }
             if (empty) empty.style.display = 'none';
-            count.innerHTML = `<i class="fa-solid fa-circle-check mr-1"></i> ${graphs.length} published graph${graphs.length === 1 ? '' : 's'}`;
 
             const scopes = new Map();
             graphs.forEach(graph => {
@@ -1114,9 +1108,7 @@ try {
                     renderPublishedScannerGraphs(data.graphs || []);
                 })
                 .catch(() => {
-                    const count = document.getElementById('publishedGraphCount');
                     const empty = document.getElementById('scannerPublishedGraphsEmpty');
-                    if (count) count.innerHTML = '<i class="fa-solid fa-triangle-exclamation mr-1"></i> Unable to load published graphs';
                     if (empty) empty.innerHTML = '<i class="fa-solid fa-triangle-exclamation text-amber-500 text-lg mr-1"></i> Published scanner graphs could not be loaded.';
                 });
         }

@@ -814,6 +814,7 @@ test('published graph layout can switch between full-width and side-by-side', ()
   assert.match(publicDashboardSource, /id="publishedGraphLayout"/);
   assert.match(publicDashboardSource, /<option value="side-by-side">Side by side<\/option>/);
   assert.match(publicDashboardSource, /<option value="one-per-row">One per row<\/option>/);
+  assert.doesNotMatch(publicDashboardSource, /publishedGraphCount|Loading published graphs|\d+ published graphs/);
   assert.match(publicDashboardSource, /scopeGrid\.classList\.toggle\('lg:grid-cols-2', publishedGraphLayout === 'side-by-side'\)/);
   assert.match(publicDashboardSource, /chartInstances\.forEach\(chart => chart\?\.resize\?\.\(\)\)/);
   assert.match(publicDashboardSource, /\$\{publishedGraphLayout === 'side-by-side' \? 'lg:grid-cols-2' : ''\}/);

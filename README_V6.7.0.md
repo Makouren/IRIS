@@ -16,6 +16,7 @@ V6.7.0 improves office workbook management, Ranking History imports, and the pub
 - Shows only the latest non-empty Ranking Context in the collapsible “What this ranking means” section.
 - Keeps the ⓘ Information popup separate from Ranking Context and excludes it from the popup's content checks.
 - Retains chart filtering and matrix popouts while avoiding duplicate matrix-style context panels.
+- Removes the published-graph count badge from the Observatory graph header.
 
 ## Database and Deployment
 
