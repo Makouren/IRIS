@@ -1,5 +1,7 @@
 # IRIS V5.3.0 Release Notes
 
+> Current release: [V6.7.0](README_V6.7.0.md). The V5.3.0 notes below are historical.
+
 V5.3.0 builds on the normalized PHP/MySQL application with a destination-aware File Archives workspace, shared CLSU visual styling, richer Ranking History defaults, and grouped published visualizations.
 
 ## Office Uploads and File Archives

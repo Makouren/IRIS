@@ -2,7 +2,7 @@
 
 This repository is the framework-free PHP application. Pages and APIs are served by Apache/PHP and use PDO to access the shared MySQL database. Tailwind CSS, Flowbite, Font Awesome, Apache ECharts, and browser parsing libraries are loaded by the frontend pages.
 
-For the current V5.7.0 release changes and required schema migrations, see [`README_V5.7.0.md`](README_V5.7.0.md).
+For the current V6.7.0 release changes and required schema migrations, see [`README_V6.7.0.md`](README_V6.7.0.md).
 
 ## Local XAMPP
 

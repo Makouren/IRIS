@@ -9,6 +9,11 @@
   const downloadBase = modal.dataset.downloadBase;
   const notice = document.getElementById('templateManagerNotice');
   const rankingBodySelect = document.getElementById('templateRankingBodySelect');
+  const destinationLabels = {
+    analytics: 'Data & Report Visualization',
+    summary_cards: 'Summary Cards',
+    ranking_history: 'Ranking History'
+  };
   const summaryProfileSelect = modal.querySelector('[data-summary-profile-select]');
   const summaryProfileName = modal.querySelector('[data-summary-profile-name]');
   const summaryProfileEditor = modal.querySelector('[data-summary-profile-json]');
@@ -29,10 +34,40 @@
   let rankingImportProfiles = [];
   let activeRankingProfileId = null;
   const profileActionsPending = { summaryActivate: false, summarySave: false, rankingActivate: false, rankingSave: false };
+  const profileFieldLabels = {
+    import_key: 'Import key', card_title: 'Card title', period_key: 'Period', main_value: 'Main value', main_label: 'Main label',
+    year_date: 'Year / date', secondary_label: 'Secondary label', secondary_value: 'Secondary value', description: 'Description',
+    secondary_description: 'Secondary description', info_text: 'Information', source_info: 'Source information',
+    category_names: 'Categories', display_precision: 'Display precision', organization: 'Organization', ranking_type: 'Ranking type',
+    year: 'Year', global_rank: 'Rank', ph_rank: 'Philippine Rank'
+  };
 
   function showNotice(message, isError = false) {
     notice.textContent = message;
     notice.className = `mb-4 rounded-lg p-3 text-sm ${isError ? 'bg-red-50 text-red-800 dark:bg-red-950 dark:text-red-200' : 'bg-emerald-50 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-200'}`;
+  }
+
+  function showUploadConfirmation(name) {
+    const toast = document.createElement('div');
+    toast.className = 'fixed inset-x-4 bottom-4 z-[1600] mx-auto flex max-w-sm items-center justify-between gap-3 rounded-lg border border-emerald-300 bg-emerald-50 p-4 text-sm font-semibold text-emerald-900 shadow-xl dark:border-emerald-800 dark:bg-emerald-950 dark:text-emerald-100';
+    toast.setAttribute('role', 'status');
+    toast.setAttribute('aria-live', 'polite');
+    const message = document.createElement('span');
+    message.textContent = `${name} uploaded successfully.`;
+    const dismiss = document.createElement('button');
+    dismiss.type = 'button';
+    dismiss.className = 'rounded px-2 py-1 text-lg leading-none hover:bg-emerald-100 dark:hover:bg-emerald-900';
+    dismiss.setAttribute('aria-label', 'Dismiss upload confirmation');
+    dismiss.textContent = '×';
+    let timeout;
+    const removeToast = () => {
+      window.clearTimeout(timeout);
+      toast.remove();
+    };
+    dismiss.addEventListener('click', removeToast);
+    toast.append(message, dismiss);
+    document.body.append(toast);
+    timeout = window.setTimeout(removeToast, 5000);
   }
 
   function updateProfileActionAvailability() {
@@ -40,6 +75,154 @@
     summaryProfileSave.disabled = profileActionsPending.summarySave || !summaryProfileSelect.value;
     rankingProfileActivate.disabled = profileActionsPending.rankingActivate || !rankingProfileSelect.value;
     rankingProfileSave.disabled = profileActionsPending.rankingSave || !rankingProfileSelect.value;
+  }
+
+  function renderWorkbookPreview(preview) {
+    const section = document.createElement('section');
+    section.className = 'mb-3 overflow-hidden rounded-lg border border-gray-300 dark:border-slate-700';
+    const toolbar = document.createElement('div');
+    toolbar.className = 'flex flex-wrap items-center justify-between gap-2 bg-gray-800 px-3 py-2 text-xs text-white';
+    const title = document.createElement('span');
+    title.className = 'font-semibold';
+    title.textContent = `${preview.filename} · ${preview.sheet}`;
+    const rowInfo = document.createElement('span');
+    rowInfo.textContent = `Header row ${preview.header_row}`;
+    toolbar.append(title, rowInfo);
+    section.append(toolbar);
+
+    const viewport = document.createElement('div');
+    viewport.className = 'max-h-72 overflow-auto bg-white dark:bg-slate-900';
+    const table = document.createElement('table');
+    table.className = 'min-w-max border-collapse text-left text-xs';
+    const head = document.createElement('thead');
+    head.className = 'sticky top-0 z-10 bg-gray-100 dark:bg-slate-800';
+    const columnHeader = document.createElement('tr');
+    const corner = document.createElement('th');
+    corner.className = 'sticky left-0 z-20 border border-gray-300 bg-gray-200 px-2 py-1 dark:border-slate-700 dark:bg-slate-700';
+    corner.textContent = '#';
+    columnHeader.append(corner);
+    for (const [index, label] of preview.headers.entries()) {
+      let column = index + 1;
+      let letters = '';
+      while (column > 0) {
+        column--;
+        letters = String.fromCharCode(65 + (column % 26)) + letters;
+        column = Math.floor(column / 26);
+      }
+      const cell = document.createElement('th');
+      cell.className = 'min-w-36 border border-gray-300 px-2 py-1 dark:border-slate-700';
+      const letter = document.createElement('span');
+      letter.className = 'block text-[10px] font-normal text-gray-500 dark:text-slate-400';
+      letter.textContent = letters;
+      const header = document.createElement('span');
+      header.textContent = String(label ?? '');
+      cell.append(letter, header);
+      columnHeader.append(cell);
+    }
+    head.append(columnHeader);
+    table.append(head);
+
+    const body = document.createElement('tbody');
+    body.className = 'divide-y divide-gray-200 dark:divide-slate-700';
+    for (const row of preview.rows || []) {
+      const tr = document.createElement('tr');
+      const number = document.createElement('th');
+      number.className = 'sticky left-0 border border-gray-300 bg-gray-50 px-2 py-1 text-right font-normal text-gray-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-400';
+      number.textContent = String(row.row_number);
+      tr.append(number);
+      for (let index = 0; index < preview.headers.length; index++) {
+        const cell = document.createElement('td');
+        cell.className = 'max-w-64 border border-gray-200 px-2 py-1 dark:border-slate-700';
+        cell.textContent = String(row.values?.[index] ?? '');
+        tr.append(cell);
+      }
+      body.append(tr);
+    }
+    table.append(body);
+    viewport.append(table);
+    section.append(viewport);
+    if (preview.truncated_columns) {
+      const note = document.createElement('p');
+      note.className = 'bg-gray-50 px-3 py-2 text-xs text-gray-600 dark:bg-slate-800 dark:text-slate-300';
+      note.textContent = `Showing the first ${preview.headers.length} of ${preview.total_columns} columns.`;
+      section.append(note);
+    }
+    return section;
+  }
+
+  function renderProfileContext(destination, profile) {
+    const details = modal.querySelector(`[data-profile-context="${destination}"]`);
+    const content = details?.querySelector('[data-profile-context-content]');
+    if (!content) return;
+    content.replaceChildren();
+    const closePreview = document.createElement('button');
+    closePreview.type = 'button';
+    closePreview.className = 'mb-2 rounded-md border border-gray-400 px-3 py-1.5 text-xs font-semibold hover:bg-gray-100 dark:border-slate-600 dark:hover:bg-slate-800';
+    closePreview.textContent = 'Close preview';
+    closePreview.addEventListener('click', () => { details.open = false; });
+    content.append(closePreview);
+    if (profile.workbook_preview) content.append(renderWorkbookPreview(profile.workbook_preview));
+    else {
+      const emptyPreview = document.createElement('p');
+      emptyPreview.className = 'mb-3 rounded-md bg-gray-50 p-3 text-xs text-gray-600 dark:bg-slate-800 dark:text-slate-300';
+      emptyPreview.textContent = profile.workbook_original_filename
+        ? 'A spreadsheet preview is unavailable for this saved workbook.'
+        : 'No workbook is attached yet. Upload a spreadsheet below to map its columns.';
+      content.append(emptyPreview);
+    }
+    const mappings = profile.mapping_rules && typeof profile.mapping_rules === 'object' ? profile.mapping_rules : {};
+    const aliases = profile.header_aliases && typeof profile.header_aliases === 'object' ? profile.header_aliases : {};
+    const customFields = profile.custom_fields && typeof profile.custom_fields === 'object' ? profile.custom_fields : {};
+    const required = new Set(Array.isArray(profile.required_columns) ? profile.required_columns : []);
+    const rows = new Map(Object.entries(mappings));
+    for (const key of Object.keys(customFields)) rows.set(`custom_fields.${key}`, mappings[`custom_fields.${key}`] || '');
+    if (!rows.size) {
+      const empty = document.createElement('p');
+      empty.className = 'text-xs text-gray-500 dark:text-slate-400';
+      empty.textContent = 'No mappings are configured yet.';
+      content.append(empty);
+      return;
+    }
+    const table = document.createElement('table');
+    table.className = 'w-full text-left text-xs';
+    const head = document.createElement('thead');
+    head.className = 'bg-gray-100 dark:bg-slate-800';
+    const heading = document.createElement('tr');
+    for (const label of ['Target field', 'Mapped column', 'Accepted aliases', 'Requirement']) {
+      const cell = document.createElement('th');
+      cell.className = 'p-2';
+      cell.textContent = label;
+      heading.append(cell);
+    }
+    head.append(heading);
+    table.append(head);
+    const body = document.createElement('tbody');
+    body.className = 'divide-y divide-gray-200 dark:divide-slate-700';
+    for (const [field, header] of rows) {
+      const row = document.createElement('tr');
+      const label = field.startsWith('custom_fields.')
+        ? customFields[field.slice('custom_fields.'.length)] || field.slice('custom_fields.'.length)
+        : profileFieldLabels[field] || field.replaceAll('_', ' ');
+      const fieldCell = document.createElement('td');
+      fieldCell.className = 'p-2 font-semibold';
+      fieldCell.textContent = label;
+      const headerCell = document.createElement('td');
+      headerCell.className = 'p-2';
+      headerCell.textContent = typeof header === 'string' && header ? header : 'Not mapped';
+      const aliasesCell = document.createElement('td');
+      aliasesCell.className = 'p-2';
+      aliasesCell.textContent = Array.isArray(aliases[field]) ? aliases[field].join(' · ') : '';
+      const requiredCell = document.createElement('td');
+      requiredCell.className = 'p-2';
+      requiredCell.textContent = required.has(field) ? 'Required' : 'Optional';
+      row.append(fieldCell, headerCell, aliasesCell, requiredCell);
+      body.append(row);
+    }
+    table.append(body);
+    const wrapper = document.createElement('div');
+    wrapper.className = 'overflow-x-auto rounded-md border border-gray-200 dark:border-slate-700';
+    wrapper.append(table);
+    content.append(wrapper);
   }
 
   async function requestJson(url, options) {
@@ -79,7 +262,7 @@
       title.textContent = template.name;
       const detail = document.createElement('p');
       detail.className = 'text-xs text-gray-500 dark:text-slate-400';
-      detail.textContent = `${template.original_filename} · ${template.created_at} · ${Number(template.is_active) ? 'Active' : 'Inactive'} · ${template.ranking_body_name || 'Unlinked'}`;
+      detail.textContent = `${destinationLabels[template.import_destination] || destinationLabels.analytics} · ${template.original_filename} · ${template.created_at} · ${Number(template.is_active) ? 'Active' : 'Inactive'} · ${template.ranking_body_name || 'Unlinked'}`;
       const actions = document.createElement('div');
       actions.className = 'mt-3 flex flex-wrap gap-2';
       const download = document.createElement('a');
@@ -133,7 +316,7 @@
       } : {};
       profileEditor.value = JSON.stringify(profile, null, 2);
       profileEditor.placeholder = template.import_destination === 'ranking_history'
-        ? '{\n  "sheet_selector": "Ranking History",\n  "header_aliases": {"organization": ["Organization"], "ranking_type": ["Ranking Type"], "year": ["Year"], "global_rank": ["Rank"]},\n  "identity_fields": ["organization", "ranking_type", "year"],\n  "required_columns": ["organization", "ranking_type", "year", "global_rank"],\n  "mapping_rules": {"organization": "Organization", "ranking_type": "Ranking Type", "year": "Year", "global_rank": "Rank", "ph_rank": "Philippine Rank", "source": "Source"},\n  "defaults": {}\n}'
+        ? '{\n  "sheet_selector": "Ranking History",\n  "header_aliases": {"organization": ["Organization"], "ranking_type": ["Ranking Type"], "year": ["Year"], "global_rank": ["Rank"], "info_text": ["Information"]},\n  "identity_fields": ["organization", "ranking_type", "year"],\n  "required_columns": ["organization", "ranking_type", "year", "global_rank"],\n  "mapping_rules": {"organization": "Organization", "ranking_type": "Ranking Type", "year": "Year", "global_rank": "Rank", "ph_rank": "Philippine Rank", "info_text": "Information"},\n  "defaults": {}\n}'
         : '{\n  "sheet_selector": null,\n  "identity_fields": ["import_key", "source", "metric", "category", "record_type"],\n  "header_aliases": {"import_key": ["Global Label", "Card Key"], "period_key": ["Period"], "main_value": ["Rank"]},\n  "required_columns": ["import_key", "period_key", "main_value"],\n  "mapping_rules": {"import_key": "Global Label", "source": "Source", "metric": "Metric", "category": "Category", "record_type": "Record Type", "period_key": "Period", "main_value": "Rank"},\n  "defaults": {}\n}';
       const keyGuide = document.createElement('p');
       keyGuide.className = 'mt-1 text-xs text-gray-500 dark:text-slate-400';
@@ -186,6 +369,7 @@
       workbook_header_row: profile.workbook_header_row,
       workbook_headers: profile.workbook_headers
     }, null, 2);
+    renderProfileContext('summary_cards', profile);
   }
 
   async function loadSummaryProfiles(selectActive = true) {
@@ -241,6 +425,7 @@
       workbook_header_row: profile.workbook_header_row,
       workbook_headers: profile.workbook_headers
     }, null, 2);
+    renderProfileContext('ranking_history', profile);
   }
 
   async function loadRankingProfiles(selectActive = true) {
@@ -389,10 +574,15 @@
         values.workbook_header_row = window.IRISProfileWorkbookMapper?.workbookHeaderRow('summary_cards') || '';
       }
       const result = await postProfileSettingsAction('save-import-profile-settings', values);
-      if (workbookToken) window.IRISProfileWorkbookMapper?.clear('summary_cards');
+      if (workbookToken) {
+        await postProfileSettingsAction('activate-import-profile', { destination: 'summary_cards', profile_id: summaryProfileSelect.value });
+        window.IRISProfileWorkbookMapper?.clear('summary_cards');
+      }
       await loadSummaryProfiles(false);
       window.IRISProfileWorkbookMapper?.refresh();
-      showNotice(`Saved Summary Card profile: ${result.profile_name}`);
+      showNotice(workbookToken
+        ? `Saved and activated Summary Card profile for Office uploads: ${result.profile_name}`
+        : `Saved Summary Card profile: ${result.profile_name}`);
     } catch (error) { showNotice(error.message, true); }
     finally { profileActionsPending.summarySave = false; updateProfileActionAvailability(); }
   });
@@ -434,13 +624,16 @@
         values.workbook_token = workbookToken;
         values.workbook_header_row = window.IRISProfileWorkbookMapper?.workbookHeaderRow('ranking_history') || '';
       }
-      const result = await postProfileSettingsAction('save-import-profile-settings', {
-        ...values
-      });
-      if (workbookToken) window.IRISProfileWorkbookMapper?.clear('ranking_history');
+      const result = await postProfileSettingsAction('save-import-profile-settings', values);
+      if (workbookToken) {
+        await postProfileSettingsAction('activate-import-profile', { destination: 'ranking_history', profile_id: rankingProfileSelect.value });
+        window.IRISProfileWorkbookMapper?.clear('ranking_history');
+      }
       await loadRankingProfiles(false);
       window.IRISProfileWorkbookMapper?.refresh();
-      showNotice(`Saved Ranking History profile: ${result.profile_name}`);
+      showNotice(workbookToken
+        ? `Saved and activated Ranking History profile for Office uploads: ${result.profile_name}`
+        : `Saved Ranking History profile: ${result.profile_name}`);
     } catch (error) { showNotice(error.message, true); }
     finally { profileActionsPending.rankingSave = false; updateProfileActionAvailability(); }
   });
@@ -457,8 +650,9 @@
     try {
       const { response, result } = await requestJson(api, { method: 'POST', headers: { 'X-CSRF-Token': token, Accept: 'application/json' }, body: data });
       if (!response.ok) throw new Error(result.error || 'Unable to upload template.');
+      const uploadedName = String(data.get('name') || '').trim();
       form.reset();
-      showNotice('Template uploaded and activated.');
+      showUploadConfirmation(uploadedName);
       await loadTemplates();
       renderTemplates();
     } catch (error) { showNotice(error.message, true); }

@@ -69,6 +69,13 @@ $customValues = CustomImportFields::merge(
 assertSame('12', $customValues['campus_rank']['value'], 'blank custom values should preserve prior imported values.');
 $customValues = CustomImportFields::merge($customValues, ['campus_rank' => ['label' => 'Campus Rank', 'value' => '__CLEAR__']]);
 assertSame([], $customValues, 'the clear marker should remove a stored custom value.');
+$longContext = str_repeat('Ranking context ', 5000);
+$longCustomValue = CustomImportFields::merge([], ['ranking_context' => ['label' => 'Ranking Context', 'value' => $longContext]]);
+assertSame(strlen(trim($longContext)), strlen($longCustomValue['ranking_context']['value']), 'long Ranking Context custom values should not be capped at 65,535 bytes.');
+$hasImportValue = new ReflectionMethod(TemplateImportSupport::class, 'hasImportValue');
+$hasImportValue->setAccessible(true);
+assertSame(false, $hasImportValue->invoke(null, ['organization' => '', 'custom_fields' => ['ranking_context' => ['label' => 'Ranking Context', 'value' => '']]]), 'rows containing only empty mapped cells and empty custom fields should be ignored.');
+assertSame(true, $hasImportValue->invoke(null, ['custom_fields' => ['ranking_context' => ['label' => 'Ranking Context', 'value' => 'WURI measures innovation impact.']]]), 'rows containing Ranking Context text should not be treated as empty.');
 $customRejected = false;
 try {
     CustomImportFields::definitions(['Unsafe-Key' => 'Invalid']);
@@ -138,7 +145,7 @@ $rankingProfile = [
         'year' => 'Year',
         'global_rank' => 'Rank',
         'ph_rank' => 'Philippine Rank',
-        'source' => 'Source',
+        'info_text' => 'Information',
     ],
     'header_aliases' => [
         'organization' => ['Organization', 'Institution'],
@@ -146,20 +153,29 @@ $rankingProfile = [
         'year' => ['Year'],
         'global_rank' => ['Rank', 'Overall Rank'],
         'ph_rank' => ['Philippine Rank'],
-        'source' => ['Source'],
+        'info_text' => ['Information'],
     ],
 ];
 $rankingIndexes = TemplateImportSupport::resolveFieldIndexes(
-    ['Organization', 'Ranking Type', 'Year', 'Rank', 'Philippine Rank', 'Source'],
+    ['Organization', 'Ranking Type', 'Year', 'Rank', 'Philippine Rank', 'Information'],
     $rankingProfile,
-    ['organization', 'ranking_type', 'year', 'global_rank', 'ph_rank', 'source']
+    ['organization', 'ranking_type', 'year', 'global_rank', 'ph_rank', 'info_text']
 );
 assertSame(0, $rankingIndexes['organization'], 'Organization should resolve from the standard Ranking History header.');
 assertSame(1, $rankingIndexes['ranking_type'], 'Ranking Type should resolve from the standard Ranking History header.');
 assertSame(2, $rankingIndexes['year'], 'Year should resolve from the standard Ranking History header.');
 assertSame(3, $rankingIndexes['global_rank'], 'Rank should resolve from the standard Ranking History header.');
 assertSame(4, $rankingIndexes['ph_rank'], 'Philippine Rank should resolve from the standard Ranking History header.');
-assertSame(5, $rankingIndexes['source'], 'Source should resolve from the standard Ranking History header.');
+assertSame(5, $rankingIndexes['info_text'], 'Information should resolve to the Ranking History information field.');
+
+$legacyRankingProfile = TemplateImportSupport::normalizeRankingProfile([
+    'mapping_rules' => ['source' => 'Source'],
+    'header_aliases' => ['source' => ['Source', 'Reference']],
+    'required_columns' => ['organization', 'ranking_type', 'year', 'global_rank', 'source']
+]);
+assertSame('Source', $legacyRankingProfile['mapping_rules']['info_text'], 'Legacy Source mappings should migrate to the information field.');
+assertSame(['organization', 'ranking_type', 'year', 'global_rank', 'info_text'], $legacyRankingProfile['required_columns'], 'Legacy Source requirements should migrate to the information field.');
+assertTrue(!isset($legacyRankingProfile['mapping_rules']['source']), 'Legacy Source must not remain a separate Ranking History target.');
 
 $reflection = new ReflectionMethod(TemplateImportSupport::class, 'builtInSummaryProfile');
 $reflection->setAccessible(true);

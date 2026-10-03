@@ -1,5 +1,7 @@
 # IRIS V3.4.7 Release Notes
 
+> Current release: [V6.7.0](README_V6.7.0.md). The V3.4.7 notes below are historical.
+
 V3.4.7 highlights the **Unified Summary Cards** template, a reusable import profile that standardizes how office spreadsheets populate Observatory snapshot cards.
 
 ## Unified Summary Cards
@@ -33,4 +35,4 @@ node --test scanner/test/*.test.js
 
 Against local XAMPP/MySQL, verify that a Super Admin can select the Unified Summary Cards profile, preview and apply a spreadsheet with Global Label and Year / Date, and see the imported card periods in history. Also check optional categories and precision, blank-field preservation, explicit clearing, historical backfill, and publication behavior.
 
-See [README_V4.5.0.md](README_V4.5.0.md) for the current release, [README.md](README.md) for setup and architecture, [README_PHP.md](README_PHP.md) for deployment details, and [README_V3.4.5.md](README_V3.4.5.md) for the preceding release notes.
+See [README_V6.7.0.md](README_V6.7.0.md) for the current release, [README.md](README.md) for setup and architecture, [README_PHP.md](README_PHP.md) for deployment details, and [README_V3.4.5.md](README_V3.4.5.md) for the preceding release notes.

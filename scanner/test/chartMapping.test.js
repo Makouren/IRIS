@@ -1,6 +1,6 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { inferColumns, isRankField, parseNumericValue, parseRankValue, detectYearColumn, buildRankedBarRows } = require('../js/chartMapping');
+const { inferColumns, isRankField, parseNumericValue, parseRankValue, detectYearColumn, getYearOptions } = require('../js/chartMapping');
 
 test('rank detection requires an explicit rank field name', () => {
   assert.equal(isRankField('Overall Rank'), true);
@@ -47,7 +47,7 @@ test('rank ranges use their representative midpoint', () => {
   assert.equal(parseRankValue('200'), 200);
 });
 
-test('ranked bar charts detect the year column and use the newest year by default', () => {
+test('year controls detect the year column and return available years in descending order', () => {
   const headers = ['Year', 'Institution', 'Overall Rank'];
   const rows = [
     [2022, 'Institution A', 5],
@@ -56,58 +56,16 @@ test('ranked bar charts detect the year column and use the newest year by defaul
     [2024, 'Institution D', 4]
   ];
   const yearColumn = detectYearColumn(headers, rows);
-  const { options, rows: rankedRows } = buildRankedBarRows(rows, { yearColumn, selectedYear: 2023, limit: 10, labelColumn: 1, valueColumn: 2, rankMode: true });
+  const options = getYearOptions(rows, yearColumn);
   assert.equal(yearColumn, 0);
-  assert.equal(options.availableYears.includes(2024), true);
-  assert.equal(rankedRows[0].label, 'Institution C');
-  assert.equal(rankedRows[0].value, 1);
-  assert.equal(rankedRows[0].visualValue, 2);
+  assert.deepEqual(options.availableYears, [2024, 2023, 2022]);
+  assert.equal(options.selectedYear, 2024);
 });
 
-test('ranked bar charts reverse only display order without changing rank values', () => {
-  const rows = [
-    [2024, 'Institution A', 12],
-    [2024, 'Institution B', 34],
-    [2024, 'Institution C', 45],
-    [2024, 'Institution D', 89],
-    [2024, 'Institution E', 125]
-  ];
-  const { rows: rankedRows, options } = buildRankedBarRows(rows, {
-    yearColumn: 0,
-    selectedYear: 2024,
-    labelColumn: 1,
-    valueColumn: 2,
-    limit: 10,
-    reverseOrder: true
-  });
-  assert.equal(options.reverseOrder, true);
-  assert.deepEqual(rankedRows.map(row => row.label), ['Institution E', 'Institution D', 'Institution C', 'Institution B', 'Institution A']);
-  assert.deepEqual(rankedRows.map(row => row.value), [125, 89, 45, 34, 12]);
-});
-
-test('ranked bar charts can include all years without filtering the ranking values', () => {
-  const rows = [
-    [2022, 'Institution A', 85],
-    [2023, 'Institution B', 12],
-    [2024, 'Institution C', 45],
-    [2024, 'Institution D', 80],
-    [2023, 'Institution E', 70]
-  ];
-  const { rows: rankedRows } = buildRankedBarRows(rows, {
-    yearColumn: 0,
-    selectedYear: 'all',
-    labelColumn: 1,
-    valueColumn: 2,
-    limit: 10
-  });
-  assert.deepEqual(rankedRows.map(row => row.value), [12, 45, 70, 80, 85]);
-  assert.deepEqual(rankedRows.map(row => row.label), ['Institution B', 'Institution C', 'Institution E', 'Institution D', 'Institution A']);
-});
-
-test('chart renderer initializes Apache ECharts with normalized category data', () => {
+test('chart renderer uses ECharts option replacement and no retired chart-type renderer', () => {
   const source = require('node:fs').readFileSync(require('node:path').join(__dirname, '..', 'js', 'modules', 'chartEngine.js'), 'utf8');
-  assert.match(source, /const chart = window\.echarts\.init\(ctx\)/);
-  assert.match(source, /chart\.setOption\(option\)/);
-  assert.match(source, /option\.xAxis = \{ type: 'category', data: labels/);
-  assert.match(source, /rankedBar/);
+  assert.match(source, /const chart = window\.echarts\.init\(/);
+  assert.match(source, /studioChartInstance\.setOption\(option, true\)/);
+  assert.match(source, /type: 'category'/);
+  assert.doesNotMatch(source, new RegExp(['ranked', 'Bar'].join('')));
 });

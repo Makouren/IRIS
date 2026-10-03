@@ -34,7 +34,7 @@ $importProfileId = null;
 $selectedTemplate = null;
 $profileConfig = null;
 if ($templateId !== null) {
-	$templateQuery = $pdo->prepare('SELECT templates.template_id AS id, profiles.import_profile_id, profiles.destination
+	$templateQuery = $pdo->prepare('SELECT templates.template_id AS id, profiles.import_profile_id, COALESCE(profiles.destination, templates.destination, \'analytics\') AS destination
 		FROM templates
 		LEFT JOIN template_import_profiles profiles ON profiles.template_id = templates.template_id
 		WHERE templates.template_id = ? AND templates.is_active = 1 LIMIT 1');

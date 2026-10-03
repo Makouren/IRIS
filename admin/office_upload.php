@@ -7,7 +7,7 @@ $accountQuery = db()->prepare('SELECT offices.office_name
 $accountQuery->execute([(int)$_SESSION['user_id']]);
 $officeName = (string)($accountQuery->fetchColumn() ?: '');
 $uploadsQuery = db()->prepare('SELECT records.file_name AS fileName, records.file_type AS fileType, records.file_size AS fileSize, records.scanned_at AS scannedAt, records.uploaded_at, records.status, records.metadata,
-    COALESCE(upload_profiles.destination, profiles.destination, JSON_UNQUOTE(JSON_EXTRACT(records.metadata, "$.upload_purpose")), "analytics") AS profile_purpose
+    COALESCE(upload_profiles.destination, profiles.destination, templates.destination, JSON_UNQUOTE(JSON_EXTRACT(records.metadata, "$.upload_purpose")), "analytics") AS profile_purpose
     FROM records
     LEFT JOIN templates ON templates.template_id = records.template_id
     LEFT JOIN template_import_profiles upload_profiles ON upload_profiles.import_profile_id = records.import_profile_id
@@ -23,7 +23,7 @@ foreach ($uploads as &$upload) {
 }
 unset($upload);
 $templateQuery = db()->prepare('SELECT templates.template_id AS id, templates.name, templates.original_filename,
-    COALESCE(profiles.destination, "analytics") AS upload_purpose
+    COALESCE(profiles.destination, templates.destination, "analytics") AS upload_purpose
     FROM templates
     LEFT JOIN template_import_profiles profiles ON profiles.template_id = templates.template_id
     WHERE templates.is_active = 1
@@ -82,7 +82,7 @@ $error = flash('error');
                 <label for="officeUploadPurpose" class="block text-sm font-semibold">Upload purpose</label>
                 <select id="officeUploadPurpose" name="upload_purpose" required class="form-input">
                     <option value="">Choose a destination</option>
-                    <option value="analytics">Data and Report Visualization</option>
+                    <option value="analytics">Data &amp; Report Visualization</option>
                     <option value="summary_cards">Summary Cards</option>
                     <option value="ranking_history">Ranking History</option>
                 </select>

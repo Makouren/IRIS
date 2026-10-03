@@ -4,9 +4,10 @@
 
   const interval = script.dataset.role === 'super_admin' ? 1000 : 5000;
   const isSuperAdmin = script.dataset.role === 'super_admin';
+  const isPublicView = script.dataset.view === 'public';
   const baseline = new WeakMap();
   const touched = new Set();
-  const channel = isSuperAdmin && 'BroadcastChannel' in window ? new BroadcastChannel('iris-data-change') : null;
+  const channel = (isSuperAdmin || isPublicView) && 'BroadcastChannel' in window ? new BroadcastChannel('iris-data-change') : null;
   let version = null;
   let pending = false;
   let submittedForm = null;
@@ -57,6 +58,14 @@
     if (version === nextVersion) return;
     version = nextVersion;
     if (announce) channel?.postMessage({ version });
+    if (isPublicView) {
+      if (isDirty()) showPendingRefresh();
+      else window.location.reload();
+      return;
+    }
+    if (isSuperAdmin) {
+      return;
+    }
     if (isDirty()) showPendingRefresh();
     else window.location.reload();
   }
@@ -88,7 +97,9 @@
   document.addEventListener('submit', event => { submittedForm = event.target; }, true);
   document.addEventListener('reset', event => window.setTimeout(() => rememberFields(event.target), 0));
   document.addEventListener('visibilitychange', poll);
-  channel?.addEventListener('message', event => acceptVersion(event.data?.version));
+  channel?.addEventListener('message', event => {
+    if (event.data?.version !== undefined) acceptVersion(event.data.version);
+  });
   const originalFetch = window.fetch.bind(window);
   window.fetch = async (input, init = {}) => {
     const method = String(init.method || input?.method || 'GET').toUpperCase();

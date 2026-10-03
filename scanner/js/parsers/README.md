@@ -1,5 +1,7 @@
 # Browser Parsers and Viewers
 
+> Current application release: [V6.7.0](../../../README_V6.7.0.md).
+
 V5.7.0 retains separate office-upload destinations for Data and Report Visualization, Ranking History, and Summary Cards. Destination profiles can map extra workbook columns to configured custom fields; the browser parsers documented here continue to power Scanner ingestion and viewing.
 
 Parser modules convert browser-selected files into scan data used by the Scanner UI and PHP-backed record persistence. Libraries are loaded by the scanner page; this directory does not contain a separate parser service.

@@ -80,7 +80,7 @@ export function initStudioColorCustomizer(ctx) {
       window.IRIS_STUDIO_DIRTY = true;
       return;
     }
-    const perCategory = isPie() || currentType === 'bar' || currentType === 'rankedBar';
+    const perCategory = isPie() || currentType === 'bar';
     const chart = ctx.state.studioChartInstance;
     const currentSeries = chart?.getOption?.()?.series || [];
     const series = currentSeries.map((current, seriesIndex) => {

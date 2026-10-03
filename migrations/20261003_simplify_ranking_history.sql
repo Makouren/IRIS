@@ -94,7 +94,7 @@ SELECT NULL, 'Unified Ranking History', 'ranking_history', NULL,
         'year', JSON_ARRAY('Year', 'Edition Year'),
         'global_rank', JSON_ARRAY('Rank', 'Global Rank', 'Overall Rank', 'World Rank'),
         'ph_rank', JSON_ARRAY('Philippine Rank', 'PH Rank', 'National Rank'),
-        'source', JSON_ARRAY('Source', 'Source Information', 'Reference', 'URL')
+        'info_text', JSON_ARRAY('Information', 'Information Text', 'Info', 'Source', 'Source Information', 'Reference', 'URL')
     ),
     JSON_ARRAY('organization', 'ranking_type', 'year', 'global_rank'),
     JSON_ARRAY('organization', 'ranking_type', 'year'),
@@ -104,7 +104,7 @@ SELECT NULL, 'Unified Ranking History', 'ranking_history', NULL,
         'year', 'Year',
         'global_rank', 'Rank',
         'ph_rank', 'Philippine Rank',
-        'source', 'Source'
+        'info_text', 'Information'
     ),
     JSON_OBJECT()
 WHERE NOT EXISTS (

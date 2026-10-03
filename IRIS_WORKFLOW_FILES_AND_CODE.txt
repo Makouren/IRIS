@@ -95,11 +95,11 @@ ROLE: Review Editor page markup. Defines chart controls, category/value mapping,
 Relevant chart selector and canvas:
 
     <select id="studioChartTypeSelect">
-        <option value="bar">Bar Chart</option>
         <option value="line">Line Chart</option>
+        <option value="stackedArea">Stacked Area Chart</option>
+        <option value="bar">Bar Chart</option>
         <option value="pie">Pie Chart</option>
         <option value="doughnut">Doughnut Chart</option>
-        <option value="rankedBar">Ranked Bar Chart</option>
         <option value="nestedPie">Nested Pie</option>
     </select>
 

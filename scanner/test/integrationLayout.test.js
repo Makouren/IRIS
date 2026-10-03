@@ -7,6 +7,10 @@ const html = fs.readFileSync(path.join(__dirname, '..', 'index.php'), 'utf8');
 const styles = fs.readFileSync(path.join(__dirname, '..', 'css', 'styles.css'), 'utf8');
 const adminEditor = fs.readFileSync(path.join(__dirname, '..', '..', 'admin', 'review_editor.php'), 'utf8');
 const adminHeader = fs.readFileSync(path.join(__dirname, '..', '..', 'admin', 'includes', 'header.php'), 'utf8');
+const rankingHistoryAdmin = fs.readFileSync(path.join(__dirname, '..', '..', 'admin', 'js', 'rankingHistoryAdmin.js'), 'utf8');
+const adminRankingsApi = fs.readFileSync(path.join(__dirname, '..', '..', 'api', 'admin_rankings.php'), 'utf8');
+const rankingHistoryImportApi = fs.readFileSync(path.join(__dirname, '..', '..', 'api', 'imports', 'ranking_history_import.php'), 'utf8');
+const publicRankingsApi = fs.readFileSync(path.join(__dirname, '..', '..', 'api', 'rankings.php'), 'utf8');
 const adminArchives = fs.readFileSync(path.join(__dirname, '..', '..', 'admin', 'file_archives.php'), 'utf8');
 const adminPortal = fs.readFileSync(path.join(__dirname, '..', 'js', 'modules', 'adminPortal.js'), 'utf8');
 const savedGraphsTab = fs.readFileSync(path.join(__dirname, '..', 'js', 'modules', 'savedGraphsTab.js'), 'utf8');
@@ -18,6 +22,37 @@ const publicDashboardApi = fs.readFileSync(path.join(__dirname, '..', '..', 'api
 const publicDashboard = fs.readFileSync(path.join(__dirname, '..', '..', 'user', 'dashboard.php'), 'utf8');
 const colorCustomizer = fs.readFileSync(path.join(__dirname, '..', 'js', 'modules', 'studioColorCustomizer.js'), 'utf8');
 const importPreviewModal = fs.readFileSync(path.join(__dirname, '..', 'js', 'modules', 'import', 'importPreviewModal.js'), 'utf8');
+const templateManager = fs.readFileSync(path.join(__dirname, '..', '..', 'admin', 'js', 'templateManager.js'), 'utf8');
+const templateManagerModal = fs.readFileSync(path.join(__dirname, '..', '..', 'admin', 'includes', 'template_manager_modal.php'), 'utf8');
+const profileWorkbookMapper = fs.readFileSync(path.join(__dirname, '..', '..', 'admin', 'js', 'profileWorkbookMapper.js'), 'utf8');
+const profileWorkbookService = fs.readFileSync(path.join(__dirname, '..', '..', 'includes', 'helpers', 'ProfileWorkbookService.php'), 'utf8');
+const templateApi = fs.readFileSync(path.join(__dirname, '..', '..', 'api', 'templates.php'), 'utf8');
+const officeUpload = fs.readFileSync(path.join(__dirname, '..', '..', 'admin', 'office_upload.php'), 'utf8');
+const officeUploadProcess = fs.readFileSync(path.join(__dirname, '..', '..', 'admin', 'upload_process.php'), 'utf8');
+const officeTemplates = fs.readFileSync(path.join(__dirname, '..', '..', 'admin', 'js', 'officeTemplates.js'), 'utf8');
+const changeRefresh = fs.readFileSync(path.join(__dirname, '..', 'js', 'changeRefresh.js'), 'utf8');
+const graphDrafts = fs.readFileSync(path.join(__dirname, '..', 'js', 'modules', 'graphsTab.js'), 'utf8');
+
+test('Studio and draft chart selectors expose exactly the six supported types in order', () => {
+  const expected = [
+    ['line', 'Line Chart'],
+    ['stackedArea', 'Stacked Area Chart'],
+    ['bar', 'Bar Chart'],
+    ['pie', 'Pie Chart'],
+    ['doughnut', 'Doughnut Chart'],
+    ['nestedPie', 'Nested Pie']
+  ];
+  const readOptions = markup => [...markup.matchAll(/<option value="([^"]+)"[^>]*>([^<]+)<\/option>/g)]
+    .map(match => [match[1], match[2].trim()]);
+  for (const source of [html, adminEditor]) {
+    const selector = source.match(/<select id="studioChartTypeSelect"[\s\S]*?<\/select>/)?.[0];
+    assert.ok(selector);
+    assert.deepEqual(readOptions(selector), expected);
+  }
+  const draftSelector = graphDrafts.match(/<select class="form-input chart-type-select"[\s\S]*?<\/select>/)?.[0];
+  assert.ok(draftSelector);
+  assert.deepEqual(readOptions(draftSelector), expected);
+});
 
 test('review flow removes the admin destination and fake auth affordances', () => {
   assert.equal(html.includes('id="navAdminBtn"'), false, 'Admin navigation destination should be retired');
@@ -62,6 +97,14 @@ test('Super Admin menu opens File Archives in the active admin interface', () =>
   assert.doesNotMatch(adminEditor, /Scanned Records Archive &amp;? Ingestion Logs|adminRecordsTableBody|adminSearchInput/);
 });
 
+test('Manage account and template dropdown buttons have link-matched hover feedback', () => {
+  const dashboardMenuStyles = publicDashboard.slice(publicDashboard.indexOf('<style>'), publicDashboard.indexOf('</style>'));
+  for (const menuStyles of [adminHeader, dashboardMenuStyles]) {
+    assert.match(menuStyles, /\.admin-dropdown li > button:hover[\s\S]*?background/);
+    assert.match(menuStyles, /\.admin-dropdown li > button:not\(:disabled\):hover[\s\S]*?translateY\(-1px\)/);
+  }
+});
+
 test('record merge requires a chosen direction, resolves server conflicts, and retains source by default', () => {
   assert.match(studioAppend, /const superAdmin = mergeButton\?\.dataset\.role === 'super_admin'/);
   assert.match(studioAppend, /String\(candidate\.template_id \?\? ''\) !== String\(record\.template_id\)/);
@@ -93,9 +136,12 @@ test('record merge requires a chosen direction, resolves server conflicts, and r
 test('File Archives exposes merge history view, comparison, download, and append-only restore', () => {
   assert.match(adminPortal, /data-id="\$\{escape\(record\.id\)\}"[^>]*>.*?File History/);
   assert.match(adminPortal, /getRecordFileHistory\(record\.id\)/);
-  assert.match(adminPortal, /Compare selected/);
+  assert.match(adminPortal, /file-history-table/);
+  assert.match(adminPortal, /data-selection-count/);
+  assert.match(adminPortal, /data-compare disabled>Compare/);
   assert.match(adminPortal, /getFileHistoryVersion/);
   assert.match(adminPortal, /restoreFileHistoryVersion/);
+  assert.match(fs.readFileSync(path.join(__dirname, '..', 'css', 'styles.css'), 'utf8'), /\.file-history-actions[\s\S]*?display: flex/);
   assert.match(dbManager, /fileHistoryDownload/);
   assert.match(irisApi, /'restore-result'/);
   assert.match(irisApi, /'pre-restore'/);
@@ -129,6 +175,121 @@ test('review and dashboard layouts have mobile overflow protections', () => {
   assert.match(styles, /@media \(max-width: 640px\)[\s\S]*?\.review-editor-stats\s*\{[\s\S]*?repeat\(2, minmax\(0, 1fr\)\)/);
   assert.match(styles, /\.table-container\s*\{[\s\S]*overflow-x: auto/);
   assert.match(styles, /\.modal-card\s*\{[\s\S]*max-height: calc\(100vh - 2rem\)/);
+});
+
+test('saved graph charts stay inside their cards without a published-scope editor', () => {
+  assert.doesNotMatch(savedGraphsTab, /Published scope|scopeEditor|Save scope/);
+  assert.match(styles, /\.graph-canvas-container\s*\{[\s\S]*?overflow: hidden/);
+  assert.match(styles, /\.graph-canvas-container > div\s*\{[\s\S]*?position: absolute;[\s\S]*?inset: 0/);
+});
+
+test('template uploads assign and retain one of the three office destinations', () => {
+  for (const [value, label] of [
+    ['analytics', 'Data &amp; Report Visualization'],
+    ['summary_cards', 'Summary Cards'],
+    ['ranking_history', 'Ranking History']
+  ]) {
+    assert.match(templateManagerModal, new RegExp(`<option value="${value}">${label}</option>`));
+  }
+  assert.match(templateApi, /templates\.destination, templates\.is_active/);
+  assert.match(templateApi, /INSERT INTO templates \(name, file_path, original_filename, destination, ranking_body_id, uploaded_by\)/);
+  assert.match(templateApi, /Apply migrations\/20261003_template_destination\.sql/);
+  assert.match(officeTemplates, /name\.className = 'office-active-template-title break-words'/);
+  assert.match(officeTemplates, /originalName\.className = 'office-active-template-filename break-all'/);
+  assert.match(styles, /\.office-active-template-title\s*\{[^}]*color: #1F2A24 !important;[^}]*font-size: 1rem/);
+  assert.match(styles, /\.office-active-template-filename\s*\{[^}]*color: #1F2A24 !important;[^}]*font-size: 1rem;[^}]*font-weight: 600/);
+  assert.match(styles, /html\.dark \.office-active-template-filename \{ color: #F1F5F9 !important; \}/);
+  assert.match(templateManager, /function showUploadConfirmation\(name\)/);
+  assert.match(templateManager, /name\} uploaded successfully\./);
+  assert.match(templateManager, /window\.setTimeout\(removeToast, 5000\)/);
+  const uploadHandler = templateManager.slice(templateManager.indexOf("form.addEventListener('submit'"), templateManager.indexOf("list.addEventListener('click'"));
+  assert.match(uploadHandler, /showUploadConfirmation\(uploadedName\)/);
+  assert.doesNotMatch(uploadHandler, /location\.reload/);
+  assert.match(templateApi, /CustomImportFields::columnExists\(\$pdo, 'template_import_profiles'\)[\s\S]*?NULL AS custom_fields/);
+  assert.match(fs.readFileSync(path.join(__dirname, '..', '..', 'migrations', '20261003_template_destination.sql'), 'utf8'), /TABLE_SCHEMA = DATABASE\(\)/);
+  assert.match(templateManager, /destinationLabels\[template\.import_destination\]/);
+  assert.match(officeUpload, /COALESCE\(profiles\.destination, templates\.destination, "analytics"\) AS upload_purpose/);
+  assert.match(officeUploadProcess, /COALESCE\(profiles\.destination, templates\.destination, \\'analytics\\'\) AS destination/);
+  assert.match(officeUpload, /<option value="analytics">Data &amp; Report Visualization<\/option>/);
+  assert.match(styles, /\.office-upload-layout \.text-gray-700,[\s\S]*?color: #475569 !important/);
+});
+
+test('Super Admin has no manual refresh control; public views update from change signals', () => {
+  assert.doesNotMatch(adminHeader, /data-iris-manual-refresh|data-iris-refresh-status|Refresh public view/);
+  assert.doesNotMatch(changeRefresh, /manualRefresh|refreshStatus|publicRefreshStorageKey|refresh_public|localStorage/);
+  assert.match(fs.readFileSync(path.join(__dirname, '..', '..', 'user', 'dashboard.php'), 'utf8'), /\$irisChangeRefreshView = 'public'; require __DIR__ \. '\/\.\.\/includes\/change_refresh_script\.php'/);
+  assert.match(fs.readFileSync(path.join(__dirname, '..', '..', 'includes', 'change_refresh_script.php'), 'utf8'), /data-view="<\?= e\(\$irisChangeRefreshView \?\? ''\) \?>"/);
+  assert.match(changeRefresh, /if \(isPublicView\) \{\s*if \(isDirty\(\)\) showPendingRefresh\(\);[\s\S]*?else window\.location\.reload\(\);\s*return;\s*\}\s*if \(isSuperAdmin\) \{\s*return;\s*\}/);
+});
+
+test('Ranking History rows can be published and unpublished from their current state', () => {
+  assert.match(rankingHistoryAdmin, /const isPublished = Number\(row\.is_published \?\? 1\) !== 0/);
+  assert.match(rankingHistoryAdmin, /data-toggle-ranking="\$\{Number\(row\.id\)\}" data-published="\$\{isPublished \? '1' : '0'\}">\$\{isPublished \? 'Unpublish' : 'Publish'\}/);
+  assert.match(rankingHistoryAdmin, /method: 'PATCH'[\s\S]*?body: JSON\.stringify\(\{ action: 'toggle-published' \}\)[\s\S]*?await refresh\(\)/);
+  assert.match(adminRankingsApi, /if \(\$method === 'PATCH' && \(\$data\['action'\] \?\? ''\) === 'toggle-published'\)/);
+  assert.match(adminRankingsApi, /UPDATE rankings SET is_published = CASE WHEN COALESCE\(is_published, 1\) = 1 THEN 0 ELSE 1 END WHERE ranking_id = \?/);
+  assert.match(adminRankingsApi, /custom_field_definitions[\s\S]*?admin_rankings_custom_field_definitions\(\$pdo\)/);
+  assert.match(adminRankingsApi, /admin_rankings_custom_field_values\(\$pdo, \$data, \$currentId\)/);
+  assert.match(rankingHistoryAdmin, /renderCustomFields\(row\.custom_fields \|\| \{\}\)/);
+  assert.match(rankingHistoryAdmin, /await refresh\(\);[\s\S]*?renderCustomFields\(\)/);
+  assert.match(rankingHistoryAdmin, /custom_fields: Object\.fromEntries/);
+  assert.match(adminEditor, /id="rankingHistoryCustomFields"/);
+  assert.match(publicRankingsApi, /WHERE rb\.short_name <> 'DEMO' AND \{\$publishedColumn\} = 1/);
+  assert.match(publicRankingsApi, /TABLE_NAME = \? AND COLUMN_NAME = \?/);
+  assert.match(fs.readFileSync(path.join(__dirname, '..', '..', 'migrations', '20261003_ranking_history_published_flag.sql'), 'utf8'), /ADD COLUMN is_published TINYINT\(1\) NOT NULL DEFAULT 1/);
+});
+
+test('Summary Card and Ranking History profiles preview mappings and activate newly mapped workbooks for Office', () => {
+  const importProfiles = fs.readFileSync(path.join(__dirname, '..', '..', 'includes', 'helpers', 'SummaryCardImportProfiles.php'), 'utf8');
+  assert.match(templateManagerModal, /data-profile-context="summary_cards"/);
+  assert.match(templateManagerModal, /data-profile-context="ranking_history"/);
+  assert.match(templateManager, /function renderProfileContext\(destination, profile\)/);
+  assert.match(templateManagerModal, /Advanced profile settings \(JSON\)/);
+  assert.match(templateManagerModal, /data-summary-profile-json/);
+  assert.match(templateManagerModal, /data-ranking-profile-json/);
+  assert.match(templateManager, /function renderWorkbookPreview\(preview\)/);
+  assert.match(templateManager, /max-h-72 overflow-auto/);
+  assert.match(templateManager, /preview\.filename.*preview\.sheet/);
+  assert.match(templateManager, /details\.open = false/);
+  assert.match(templateManagerModal, /data-mapper-close-preview/);
+  assert.match(profileWorkbookMapper, /data-mapper-close-preview/);
+  assert.match(profileWorkbookService, /public static function savedWorkbookPreview/);
+  assert.match(profileWorkbookService, /'rows' => \$rows/);
+  assert.match(profileWorkbookService, /array_slice\(\$row\['values'\], 0, 30\)/);
+  assert.match(templateApi, /'workbook_preview' => ProfileWorkbookService::savedWorkbookPreview\(\$pdo, \(int\)\$profileId, \$destination\)/);
+  assert.match(templateApi, /'workbook_preview' => ProfileWorkbookService::savedWorkbookPreview\(\$pdo, \(int\)\$profileId, 'summary_cards'\)/);
+  assert.match(templateManager, /data-profile-context-content/);
+  assert.match(templateManager, /if \(workbookToken\) \{\s*await postProfileSettingsAction\('activate-import-profile', \{ destination: 'summary_cards'/);
+  assert.match(templateManager, /if \(workbookToken\) \{\s*await postProfileSettingsAction\('activate-import-profile', \{ destination: 'ranking_history'/);
+  assert.match(importProfiles, /SELECT state_data FROM app_change_state WHERE id = 1 FOR UPDATE/);
+  assert.match(importProfiles, /\$state\['summary_card_import_profiles'\]\[\$destination\] = \['active_profile_id' => \$profileId\]/);
+  assert.match(importProfiles, /ON DUPLICATE KEY UPDATE state_data = VALUES\(state_data\)/);
+  assert.match(templateApi, /empty\(\$profile\['is_active'\]\) \|\| empty\(\$profile\['workbook_original_filename'\]\)/);
+  assert.match(officeTemplates, /fetch\(`\$\{api\}\?resource=office_import_profiles`/);
+});
+
+test('Ranking History accepts long organization names and explanatory context', () => {
+  const rankingContextMigration = fs.readFileSync(path.join(__dirname, '..', '..', 'migrations', '20261006_expand_ranking_context_text.sql'), 'utf8');
+  assert.doesNotMatch(adminEditor, /id="rankingHistoryAdminBody"[^>]*maxlength=/i);
+  assert.doesNotMatch(adminEditor, /id="rankingHistoryAdminInfoText"[^>]*maxlength=/i);
+  assert.doesNotMatch(fs.readFileSync(path.join(__dirname, '..', '..', 'admin', 'includes', 'ranking_body_manager_modal.php'), 'utf8'), /name="body_name"[^>]*maxlength=/i);
+  assert.match(adminRankingsApi, /\$organizationLength > 512/);
+  assert.match(rankingHistoryImportApi, /\$organizationLength > 512/);
+  assert.match(adminRankingsApi, /\$infoText\) > 16777215/);
+  assert.match(rankingHistoryImportApi, /'info_text', 16777215/);
+  assert.match(rankingContextMigration, /USE iris_db_3nf/);
+  assert.match(rankingContextMigration, /ranking_bodies\s+MODIFY COLUMN name VARCHAR\(512\)/);
+  assert.match(rankingContextMigration, /rankings\s+MODIFY COLUMN info_text MEDIUMTEXT/);
+  assert.doesNotMatch(rankingContextMigration, /ranking_history_display_settings/);
+});
+
+test('Ranking History blocked imports identify the invalid field and mapped source column', () => {
+  assert.match(rankingHistoryImportApi, /Organization is blank/);
+  assert.match(rankingHistoryImportApi, /Source column:.*Column/);
+  assert.match(rankingHistoryImportApi, /'blocked_field' =>/);
+  assert.match(rankingHistoryImportApi, /'blocked_column' => \$organizationColumn/);
+  assert.match(importPreviewModal, /Blocked field: \$\{item\.blocked_field\}/);
+  assert.match(importPreviewModal, /source column \$\{item\.blocked_column\.header\} \(Column \$\{item\.blocked_column\.letter\}\)/);
 });
 
 test('manual dataset creation persists a distinct empty record and selects it by ID', () => {
@@ -266,4 +427,13 @@ test('Summary Card Edit resolves API IDs consistently and opens the populated ed
   assert.match(adminEditor, /summaryCardEditorTitle'\)\.value = card\.title \|\| ''/);
   assert.match(adminEditor, /showCardForm\(true\);[\s\S]*?openEditor\(\);/);
   assert.match(adminEditor, /This summary card could not be found\. Refresh the list and try again\./);
+});
+
+test('Summary Card categories are selectable independently with checkboxes', () => {
+  assert.match(adminEditor, /id="summaryCardEditorCategory" role="group"/);
+  assert.match(adminEditor, /type="checkbox" value="\$\{escapeHtml\(category\.id\)\}"/);
+  assert.match(adminEditor, /function selectedSummaryCategoryIds\(\)/);
+  assert.match(adminEditor, /function setSelectedSummaryCategoryIds\(ids\)/);
+  assert.match(adminEditor, /payload\.category_ids = selectedSummaryCategoryIds\(\)\.map\(Number\)/);
+  assert.match(adminEditor, /setSelectedSummaryCategoryIds\(selectedIds\)/);
 });

@@ -4,9 +4,9 @@
 
 IRIS is a plain-PHP application. Apache serves PHP pages and PDO-backed APIs; browser JavaScript handles interactive workflows, file parsing, and charts. There is no Laravel application, Composer runtime, Node.js web server, or Python service.
 
-## V5.7.0 Highlight
+## V6.7.0 Highlight
 
-V5.7.0 adds Super Admin record merge with explicit source/target selection and append-only File History, including archived source files and restore support. It expands destination-specific workbook mapping, saved graph editing and color management, Ranking History defaults, and Summary Card category/default controls. See [README_V5.7.0.md](README_V5.7.0.md) for changes, required migrations, and verification.
+V6.7.0 improves template-driven office uploads and Ranking History: Super Admins can preview saved workbooks, custom ranking context is preserved, empty import rows are skipped, and blocked mappings identify the source column. The Observatory separates explanatory ranking context from information details. See [README_V6.7.0.md](README_V6.7.0.md) for changes, required migrations, and verification.
 
 ## What the System Does
 
@@ -211,7 +211,7 @@ Graph publish/unpublish requests send JSON such as `{ "published": true }` or `{
 1. Place or clone the repository under `C:/xampp/htdocs/iris` (or another Apache document-root subdirectory).
 2. Start Apache and MySQL from the XAMPP Control Panel.
 3. Provision the supplied normalized schema and any required transformed data into `iris_db_3nf` before starting the application. Do not import [`database.sql`](database.sql) or run historical migrations that select `iris_db`; those describe the retired denormalized schema.
-4. Apply only reviewed migrations documented for `iris_db_3nf`. V5.7.0 requires [`20261003_create_record_file_history.sql`](migrations/20261003_create_record_file_history.sql) for merge/history/restore and [`20261005_custom_import_fields.sql`](migrations/20261005_custom_import_fields.sql) for custom workbook mappings. Back up the database and verify the target schema before applying either. The application bootstrap does not create or alter tables.
+4. Apply only reviewed migrations documented for `iris_db_3nf`. V6.7.0 schema changes are provided in [`20261003_create_record_file_history.sql`](migrations/20261003_create_record_file_history.sql), [`20261003_ranking_history_published_flag.sql`](migrations/20261003_ranking_history_published_flag.sql), [`20261003_template_destination.sql`](migrations/20261003_template_destination.sql), [`20261003_template_profile_workbooks.sql`](migrations/20261003_template_profile_workbooks.sql), [`20261005_custom_import_fields.sql`](migrations/20261005_custom_import_fields.sql), and [`20261006_expand_ranking_context_text.sql`](migrations/20261006_expand_ranking_context_text.sql). Review each migration against the deployed schema, back up the database, and apply only migrations not already reflected in it. The application bootstrap does not create or alter tables.
 5. Set `IRIS_DB_HOST`, `IRIS_DB_PORT`, `IRIS_DB_NAME`, `IRIS_DB_USER`, and `IRIS_DB_PASS` in [`config/db.php`](config/db.php) for the environment. The current defaults are intended for local XAMPP development, not production.
 6. Provision the initial active `super_admin` account through the deployment's secure account-bootstrap process. Self-registration is disabled. Super Admins can manage subsequent Admin and User accounts from the application.
 7. Open the application under its Apache document-root URL and sign in. The application root redirects signed-in users according to their normalized role.
@@ -247,7 +247,8 @@ The suite covers graph/chart mapping, record merge/File History behavior, table 
 ## Related Documentation
 
 - [`README_PHP.md`](README_PHP.md): PHP deployment notes.
-- [`README_V5.7.0.md`](README_V5.7.0.md): current release changes, migrations, and verification.
+- [`README_V6.7.0.md`](README_V6.7.0.md): current release changes, migrations, and verification.
+- [`README_V5.7.0.md`](README_V5.7.0.md): V5.7.0 release changes, migrations, and verification.
 - [`README_V5.3.0.md`](README_V5.3.0.md): V5.3.0 release changes and migration steps.
 - [`README_V4.5.0.md`](README_V4.5.0.md): V4.5.0 release changes and migration steps.
 - [`README_V3.4.7.md`](README_V3.4.7.md): Historical V3.4.7 release details.

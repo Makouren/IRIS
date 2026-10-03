@@ -68,11 +68,15 @@
     const categoryAxis = Array.isArray(options?.xAxis) ? options.xAxis[0]?.data : options?.xAxis?.data;
     const valueAxis = Array.isArray(options?.yAxis) ? options.yAxis[0]?.data : options?.yAxis?.data;
     const axisLabels = Array.isArray(categoryAxis) ? categoryAxis : (Array.isArray(valueAxis) ? valueAxis : []);
-    const labels = config.labels?.length ? config.labels.map(String) : points.map((point, index) => {
+    const nestedPie = config.type === 'nestedPie';
+    const hasCurrentPoints = points.length > 0;
+    const useConfiguredLabels = config.labels?.length && (nestedPie || !hasCurrentPoints || config.labels.length === points.length);
+    const labels = useConfiguredLabels ? config.labels.map(String) : points.map((point, index) => {
       if (point && typeof point === 'object' && point.name !== undefined) return String(point.name);
       return String(axisLabels[index] ?? `Item ${index + 1}`);
     });
-    const values = Array.isArray(config.rawValues)
+    const useConfiguredValues = Array.isArray(config.rawValues) && (nestedPie || !hasCurrentPoints || config.rawValues.length === points.length);
+    const values = useConfiguredValues
       ? config.rawValues.slice()
       : points.map(point => point && typeof point === 'object' ? point.rawValue ?? point.value : point);
     return { labels, values, series };

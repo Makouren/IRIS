@@ -1,5 +1,7 @@
 # IRIS V4.5.0 Release Notes
 
+> Current release: [V6.7.0](README_V6.7.0.md). The V4.5.0 notes below are historical.
+
 V4.5.0 expands template-driven office uploads and Ranking History management while keeping ranking and Summary Card import sources separate from the general Review Editor dataset.
 
 ## Office Upload Destinations
@@ -28,9 +30,11 @@ V4.5.0 expands template-driven office uploads and Ranking History management whi
 Historical migrations from before the 3NF conversion target `iris_db`; do not apply them to `iris_db_3nf`. The V4.5.0 application expects the normalized schema to be provisioned separately. Its reviewed additive migrations are:
 
 - `migrations/20261002_seed_super_admin_role.sql`
+- `migrations/20261003_ranking_history_published_flag.sql`
+- `migrations/20261003_template_destination.sql`
 - `migrations/20261004_add_normalized_ranking_display_values.sql`
 
-The normalized ranking-display migration preserves source text such as rank ranges and suffixes separately from numeric sort values. The PHP bootstrap does not create or modify schema objects.
+Run additive migrations against the configured `iris_db_3nf` database. The ranking publication migration adds an `is_published` flag and keeps existing ranking rows published by default. The template-destination migration adds the three Office Upload categories and preserves existing template assignments from import profiles, defaulting other templates to Data & Report Visualization. The normalized ranking-display migration preserves source text such as rank ranges and suffixes separately from numeric sort values. The PHP bootstrap does not create or modify schema objects.
 
 ## Verification
 
@@ -43,4 +47,4 @@ node --test scanner/test/*.test.js
 
 Against local XAMPP/MySQL, verify all three upload purposes, template filtering, import preview and apply, Ranking History search and defaults, and the Review Editor's separation of import-only workbooks.
 
-See [README.md](README.md) for setup and architecture, [README_PHP.md](README_PHP.md) for deployment details, and [README_V3.4.7.md](README_V3.4.7.md) for the preceding documented release.
+See [README_V6.7.0.md](README_V6.7.0.md) for the current release, [README.md](README.md) for setup and architecture, [README_PHP.md](README_PHP.md) for deployment details, and [README_V3.4.7.md](README_V3.4.7.md) for the preceding documented release.

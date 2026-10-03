@@ -116,7 +116,7 @@ require_once __DIR__.'/includes/header.php';
                         <div style="grid-column: 1 / -1;"><label class="form-label" for="summaryCardEditorSecondaryDescription">Italic Supporting Text</label><textarea id="summaryCardEditorSecondaryDescription" class="form-input" rows="2" maxlength="65535"></textarea></div>
                         <div style="grid-column: 1 / -1;"><label class="form-label" for="summaryCardEditorInfoText">ⓘ Information</label><textarea id="summaryCardEditorInfoText" class="form-input" rows="2" maxlength="65535"></textarea></div>
                         <div><label class="form-label" for="summaryCardEditorDisplayOrder">Display Order</label><input type="number" id="summaryCardEditorDisplayOrder" class="form-input" value="0" min="0" step="1"></div>
-                        <div><label class="form-label" for="summaryCardEditorCategory">Categories</label><select id="summaryCardEditorCategory" class="form-input" multiple size="3" aria-describedby="summaryCardEditorCategoryHelp"></select><span id="summaryCardEditorCategoryHelp" class="text-xs" style="color:var(--text-muted);">Select one or more; leave empty for Uncategorized.</span><div style="display:flex; gap:0.5rem; margin-top:0.5rem;"><button type="button" id="summaryCardEditorAddCategory" class="btn-studio-action">+ New category</button><input type="text" id="summaryCardEditorNewCategory" class="form-input" maxlength="40" placeholder="Category name" style="display:none;"></div></div>
+                        <div><span class="form-label">Categories</span><div id="summaryCardEditorCategory" role="group" aria-describedby="summaryCardEditorCategoryHelp" style="display:grid; gap:0.35rem; max-height:7.5rem; overflow-y:auto; padding:0.5rem; border:1px solid var(--border-light); border-radius:var(--radius-sm);"></div><span id="summaryCardEditorCategoryHelp" class="text-xs" style="color:var(--text-muted);">Choose any categories; leave all unchecked for Uncategorized.</span><div style="display:flex; gap:0.5rem; margin-top:0.5rem;"><button type="button" id="summaryCardEditorAddCategory" class="btn-studio-action">+ New category</button><input type="text" id="summaryCardEditorNewCategory" class="form-input" maxlength="40" placeholder="Category name" style="display:none;"></div></div>
                         <div><label class="form-label" for="summaryCardEditorPrecision">Display Precision</label><select id="summaryCardEditorPrecision" class="form-input"><option value="0">No decimals</option><option value="1">1 decimal</option><option value="2" selected>2 decimals</option></select></div>
                         <label style="display:flex; align-items:center; gap:0.5rem; margin-top:0.6rem; font-size:0.8rem; font-weight:700; color: var(--text-muted);"><input type="checkbox" id="summaryCardEditorPublished"> Publish card</label>
                     </div>
@@ -193,53 +193,64 @@ require_once __DIR__.'/includes/header.php';
     </div>
 
     <div id="rankingHistoryEditorPanel" class="modal-overlay" aria-hidden="true">
-        <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="rankingHistoryEditorHeading" style="max-width: 960px; max-height: calc(100vh - 2rem); overflow-y: auto;">
+        <div class="modal-card summary-card-editor-modal" role="dialog" aria-modal="true" aria-labelledby="rankingHistoryEditorHeading">
             <div class="modal-header">
                 <h3 id="rankingHistoryEditorHeading" class="modal-title">Manage Ranking History</h3>
                 <button type="button" id="closeRankingHistoryEditor" class="export-cancel-button" aria-label="Close">&times;</button>
             </div>
             <div id="rankingHistoryManagerView">
-                <div style="display:flex; justify-content:space-between; align-items:center; gap:0.75rem; flex-wrap:wrap; margin-bottom:0.75rem;">
-                    <div style="display:flex; gap:0.75rem; flex-wrap:wrap; align-items:center;">
-                        <label class="form-label" style="margin:0; display:inline-flex; align-items:center; gap:0.25rem;">Year
-                            <select id="rankingHistoryAdminYearFilter" class="form-input" style="display:inline-block; width:auto; min-width:110px; margin-left:0.25rem;"><option value="all">All years</option></select>
+                <div style="display:flex; justify-content:space-between; align-items:end; gap:0.75rem; margin-bottom:0.75rem; flex-wrap:wrap;">
+                    <label class="form-label" for="rankingHistoryAdminSearch" style="margin:0;">Search rankings
+                        <input id="rankingHistoryAdminSearch" type="search" class="form-input" placeholder="Search rankings..." aria-label="Search ranking organization, type, year, rank, or information" style="display:inline-block; width:min(300px, 65vw); margin-left:0.35rem;">
+                    </label>
+                    <label class="form-label" for="rankingHistoryAdminYearFilter" style="margin:0;">Filter year
+                        <select id="rankingHistoryAdminYearFilter" class="form-input" style="display:inline-block; width:auto; min-width:130px; margin-left:0.35rem;"><option value="all">All years</option></select>
+                    </label>
+                    <div class="summary-card-manager-actions">
+                        <label id="selectAllRankingLabel" style="display:inline-flex; align-items:center; gap:0.4rem; font-size:0.8rem; font-weight:700; cursor:pointer; color:var(--text-muted);">
+                            <input type="checkbox" id="selectAllRanking" style="width:1rem;height:1rem; cursor:pointer;"> Select all
                         </label>
-                        <input id="rankingHistoryAdminSearch" type="search" class="form-input" placeholder="Search rankings..." aria-label="Search ranking organization, type, year, rank, or information" style="width:min(260px, 100%);">
-                        <label class="form-label" style="margin:0; display:inline-flex; align-items:center; gap:0.25rem;">Public organization
-                            <select id="rankingHistoryChartDefaultOrganization" class="form-input" style="display:inline-block; width:auto; min-width:150px; margin-left:0.25rem;"><option value="">All organizations</option></select>
-                        </label>
-                        <label class="form-label" style="margin:0; display:inline-flex; align-items:center; gap:0.25rem;">Default list
-                            <select id="rankingHistoryChartDefaultList" class="form-input" style="display:inline-block; width:auto; min-width:150px; margin-left:0.25rem;"><option value="">All lists for selected organization</option></select>
-                        </label>
-                        <button id="saveRankingHistoryChartDefaults" type="button" class="export-cancel-button">Save chart defaults</button>
-                        <span id="rankingHistoryChartDefaultsStatus" class="text-xs" role="status" aria-live="polite"></span>
-                    </div>
-                    <div style="display:flex; gap:0.5rem; align-items:center;">
+                        <button id="bulkDeleteRankingHistory" type="button" class="export-cancel-button" style="display:none; color:#B91C1C; border-color:#FECACA; background-color:#FEF2F2;">
+                            <i class="fa-solid fa-trash" aria-hidden="true"></i> Delete Selected (<span id="bulkDeleteCount">0</span>)
+                        </button>
+                        <button id="addRankingHistoryRow" type="button" class="btn-save-modal"><i class="fa-solid fa-plus" aria-hidden="true"></i> Add ranking</button>
                         <?php if (($_SESSION['role'] ?? '') === 'super_admin'): ?>
                             <button type="button" data-ranking-body-manager-open class="export-cancel-button" aria-haspopup="dialog" aria-controls="rankingBodyManagerModal">
                                 <i class="fa-solid fa-building-columns" aria-hidden="true"></i> Manage ranking bodies
                             </button>
                         <?php endif; ?>
-                        <label id="selectAllRankingLabel" style="display:inline-flex; align-items:center; gap:0.4rem; font-size:0.8rem; font-weight:700; cursor:pointer; color:var(--text-muted);">
-                            <input type="checkbox" id="selectAllRanking" style="width:1rem;height:1rem; cursor:pointer;"> Select all
-                        </label>
-                        <button id="bulkDeleteRankingHistory" type="button" class="export-cancel-button" style="display:none; align-items:center; gap:0.35rem; color:#B91C1C; border-color:#FECACA; background-color:#FEF2F2; font-weight:700; padding:0.3rem 0.65rem; border-radius:0.5rem;">
-                            <i class="fa-solid fa-trash" aria-hidden="true"></i> Delete Selected (<span id="bulkDeleteCount">0</span>)
-                        </button>
-                        <button id="addRankingHistoryRow" type="button" class="btn-save-modal"><i class="fa-solid fa-plus" aria-hidden="true"></i> Add ranking</button>
                     </div>
                 </div>
-                <div id="rankingHistoryAdminList" style="display:grid; gap:0.5rem;"></div>
+                <section class="summary-card-public-default" aria-labelledby="rankingHistoryChartDefaultHeading">
+                    <div>
+                        <h4 id="rankingHistoryChartDefaultHeading">Public chart defaults</h4>
+                        <p>Choose which organization and list visitors see first on the public ranking chart. Visitors can still switch options.</p>
+                    </div>
+                    <label for="rankingHistoryChartDefaultOrganization">Public organization
+                        <select id="rankingHistoryChartDefaultOrganization" class="form-input"><option value="">All organizations</option></select>
+                    </label>
+                    <label for="rankingHistoryChartDefaultList">Default list
+                        <select id="rankingHistoryChartDefaultList" class="form-input"><option value="">All lists for selected organization</option></select>
+                    </label>
+                    <button id="saveRankingHistoryChartDefaults" type="button" class="btn-save-modal">Save chart defaults</button>
+                    <span id="rankingHistoryChartDefaultsStatus" role="status" aria-live="polite"></span>
+                </section>
+                <div id="rankingHistoryAdminList" style="display:grid; gap:0.75rem;"></div>
             </div>
             <form id="rankingHistoryAdminForm" style="display:none;">
                 <input type="hidden" id="rankingHistoryAdminId">
                 <p id="rankingHistoryAdminNotice" role="status" aria-live="polite" hidden></p>
                 <div style="display:grid; grid-template-columns:repeat(auto-fit,minmax(190px,1fr)); gap:1rem;">
-                    <label class="form-label">Organization<input type="text" id="rankingHistoryAdminBody" list="rankingBodySuggestions" class="form-input bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 border-gray-300 dark:border-gray-600 rounded-lg" maxlength="100" placeholder="Select or type organization..." required><datalist id="rankingBodySuggestions"></datalist></label>
+                    <label class="form-label">Organization<input type="text" id="rankingHistoryAdminBody" list="rankingBodySuggestions" class="form-input bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 border-gray-300 dark:border-gray-600 rounded-lg" placeholder="Select or type organization..." required><datalist id="rankingBodySuggestions"></datalist></label>
                     <label class="form-label">Ranking type<input type="text" id="rankingHistoryAdminType" list="rankingTypeSuggestions" class="form-input bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 border-gray-300 dark:border-gray-600 rounded-lg" maxlength="320" placeholder="QS Asia" required><datalist id="rankingTypeSuggestions"></datalist></label>
                     <label class="form-label">Year<input type="number" id="rankingHistoryAdminYear" class="form-input" min="1900" max="2200" step="1" required></label>
                     <label class="form-label">Rank display<input type="text" id="rankingHistoryAdminGlobalRank" class="form-input" maxlength="50" placeholder="161, 601-650, or 601+" required></label>
-                    <label class="form-label" style="grid-column:1/-1;">Information<textarea id="rankingHistoryAdminInfoText" class="form-input" rows="3" maxlength="65535" placeholder="Additional context shown from the information icon"></textarea></label>
+                    <label class="form-label" style="grid-column:1/-1;">Information<textarea id="rankingHistoryAdminInfoText" class="form-input" rows="3" placeholder="Additional context shown from the information icon"></textarea></label>
+                    <section id="rankingHistoryCustomFields" style="grid-column:1/-1;" aria-labelledby="rankingHistoryCustomFieldsHeading">
+                        <h4 id="rankingHistoryCustomFieldsHeading" class="form-label">Custom fields</h4>
+                        <p class="text-xs text-gray-500 dark:text-gray-400">Fields configured in Manage Templates appear here automatically.</p>
+                        <div id="rankingHistoryCustomFieldsList"></div>
+                    </section>
                 </div>
                 <div id="formDuplicateError" class="p-3 bg-amber-50 dark:bg-amber-900/30 border border-amber-200 dark:border-amber-700 rounded-lg text-sm text-amber-800 dark:text-amber-200 font-medium mt-3" style="display:none;">This ranking already exists. <button type="button" id="editDuplicateLink" class="underline font-bold hover:text-amber-900 dark:hover:text-amber-100">Edit it instead?</button></div>
                 <div style="display:flex; justify-content:flex-end; gap:0.75rem; margin-top:1rem;">
@@ -356,11 +367,11 @@ require_once __DIR__.'/includes/header.php';
                         <div class="studio-chart-type-group">
                             <label class="studio-field-mapping-label">Chart Type:</label>
                             <select id="studioChartTypeSelect" class="form-input studio-chart-type-select" style="font-size: 0.82rem; font-weight: 700; color: var(--text-main);">
-                                <option value="bar">Bar Chart</option>
                                 <option value="line">Line Chart</option>
+                                <option value="stackedArea">Stacked Area Chart</option>
+                                <option value="bar">Bar Chart</option>
                                 <option value="pie">Pie Chart</option>
                                 <option value="doughnut">Doughnut Chart</option>
-                                <option value="rankedBar">Ranked Bar Chart</option>
                                 <option value="nestedPie">Nested Pie</option>
                             </select>
                         </div>
@@ -371,6 +382,10 @@ require_once __DIR__.'/includes/header.php';
                         <div class="studio-field-mapping-group">
                             <label class="studio-field-mapping-label" id="studioCategoryLabel">Category (X-axis):</label>
                             <select id="studioCategoryCol" class="form-input studio-field-mapping-select" aria-label="Category column"></select>
+                        </div>
+                        <div id="studioSeriesFieldWrapper" class="studio-field-mapping-group" style="display: none;">
+                            <label for="studioSeriesField" class="studio-field-mapping-label">Series (group by):</label>
+                            <select id="studioSeriesField" class="form-input studio-field-mapping-select"></select>
                         </div>
                         <div class="studio-field-mapping-group">
                             <label class="studio-field-mapping-label" id="studioValueLabel">Value (Y-axis):</label>
@@ -388,13 +403,13 @@ require_once __DIR__.'/includes/header.php';
                                 <option value="2" selected>2 decimals</option>
                             </select>
                         </div>
-                        <div id="studioRankedYearWrapper" class="studio-field-mapping-group" style="display: none;">
-                            <label class="studio-field-mapping-label" id="studioRankedYearLabel">Year:</label>
-                            <select id="studioRankedYearSelect" class="form-input studio-field-mapping-select" aria-label="Year for Ranked Bar Chart"></select>
+                        <div id="studioYearWrapper" class="studio-field-mapping-group" style="display: none;">
+                            <label class="studio-field-mapping-label" for="studioYearSelect">Year:</label>
+                            <select id="studioYearSelect" class="form-input studio-field-mapping-select" aria-label="Filter chart by year"></select>
                         </div>
-                        <div id="studioRankedReverseOrderWrapper" class="studio-field-mapping-group" style="display: none;">
-                            <label class="studio-field-mapping-label" id="studioRankedReverseOrderLabel">
-                                <input id="studioRankedReverseOrder" type="checkbox" aria-label="Reverse ranked bar display order">Reverse order
+                        <div id="studioReverseOrderWrapper" class="studio-field-mapping-group" style="display: none;">
+                            <label class="studio-field-mapping-label" for="studioReverseOrder">
+                                <input id="studioReverseOrder" type="checkbox" aria-label="Reverse chart order">Reverse order
                             </label>
                         </div>
                         <div id="studioFieldWarning" style="display:none; font-size: 0.75rem; color: #DC2626; font-weight: 700; background: rgba(254,242,242,0.9); border: 1px solid #FECACA; border-radius: 4px; padding: 0.2rem 0.6rem;"></div>
@@ -620,12 +635,27 @@ require_once __DIR__.'/includes/header.php';
             };
 
             function renderCategoryOptions() {
-                const selected = [...categorySelect.selectedOptions].map(option => option.value);
-                categorySelect.innerHTML = categories.map(category => `<option value="${escapeHtml(category.id)}">${escapeHtml(category.name)}</option>`).join('');
-                [...categorySelect.options].forEach(option => { option.selected = selected.includes(option.value); });
+                const selected = selectedSummaryCategoryIds();
+                categorySelect.innerHTML = categories.map(category => `
+                    <label for="summary-card-category-${escapeHtml(category.id)}" style="display:flex; align-items:center; gap:0.5rem; cursor:pointer; font-size:0.85rem;">
+                        <input id="summary-card-category-${escapeHtml(category.id)}" type="checkbox" value="${escapeHtml(category.id)}" ${selected.includes(String(category.id)) ? 'checked' : ''}>
+                        <span>${escapeHtml(category.name)}</span>
+                    </label>
+                `).join('');
                 const filterValue = categoryFilter.value || 'all';
                 categoryFilter.innerHTML = '<option value="all">All categories</option><option value="uncategorized">Uncategorized</option>' + categories.map(category => `<option value="${escapeHtml(category.id)}">${escapeHtml(category.name)}</option>`).join('');
                 if ([...categoryFilter.options].some(option => option.value === filterValue)) categoryFilter.value = filterValue;
+            }
+
+            function selectedSummaryCategoryIds() {
+                return [...categorySelect.querySelectorAll('input[type="checkbox"]:checked')].map(input => input.value);
+            }
+
+            function setSelectedSummaryCategoryIds(ids) {
+                const selected = new Set(ids.map(String));
+                categorySelect.querySelectorAll('input[type="checkbox"]').forEach(input => {
+                    input.checked = selected.has(input.value);
+                });
             }
 
             function renderPublicDefaultCategory() {
@@ -973,7 +1003,7 @@ require_once __DIR__.'/includes/header.php';
                         document.getElementById('summaryCardEditorInfoText').value = card.info_text || '';
                         document.getElementById('summaryCardEditorDisplayOrder').value = card.display_order ?? 0;
                         const selectedIds = (card.category_ids || (card.category_id ? [card.category_id] : [])).map(String);
-                        [...categorySelect.options].forEach(option => { option.selected = selectedIds.includes(option.value); });
+                        setSelectedSummaryCategoryIds(selectedIds);
                         newCategoryInput.value = '';
                         newCategoryInput.style.display = 'none';
                         document.getElementById('summaryCardEditorPrecision').value = String(card.display_precision ?? 2);
@@ -1168,7 +1198,7 @@ require_once __DIR__.'/includes/header.php';
                     })(),
                     is_published: document.getElementById('summaryCardEditorPublished').checked
                 };
-                payload.category_ids = [...categorySelect.selectedOptions].map(option => Number(option.value));
+                payload.category_ids = selectedSummaryCategoryIds().map(Number);
                 const newCategoryName = newCategoryInput.value.trim();
                 if (newCategoryName) payload.category_names = [newCategoryName];
                 const id = document.getElementById('summaryCardEditorId').value;
@@ -1203,7 +1233,7 @@ require_once __DIR__.'/includes/header.php';
             document.getElementById('addSummaryCardFromManager').addEventListener('click', () => {
                 form.reset();
                 document.getElementById('summaryCardEditorId').value = '';
-                [...categorySelect.options].forEach(option => { option.selected = false; });
+                setSelectedSummaryCategoryIds([]);
                 newCategoryInput.style.display = 'none';
                 newCategoryInput.value = '';
                 document.getElementById('summaryCardEditorPrecision').value = '2';
@@ -1214,7 +1244,7 @@ require_once __DIR__.'/includes/header.php';
             document.getElementById('cancelSummaryCardEditor').addEventListener('click', () => {
                 form.reset();
                 document.getElementById('summaryCardEditorId').value = '';
-                [...categorySelect.options].forEach(option => { option.selected = false; });
+                setSelectedSummaryCategoryIds([]);
                 newCategoryInput.style.display = 'none';
                 newCategoryInput.value = '';
                 showCardList();

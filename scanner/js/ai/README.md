@@ -1,5 +1,7 @@
 # Graph Generation and Chart Data
 
+> Current application release: [V6.7.0](../../../README_V6.7.0.md).
+
 V5.7.0 adds saved-graph editing and standalone chart-color persistence through the shared chart/data modules. It does not introduce a remote AI service or change the chart-recommendation boundary described here.
 
 This folder contains browser-side chart recommendations. It does not call an external AI service. The `AI` label describes the recommendation logic, not a remote model dependency.
@@ -17,6 +19,6 @@ This folder contains browser-side chart recommendations. It does not call an ext
 
 ## Chart types
 
-GraphEngine suggestions use Bar, Line, Pie, and Doughnut. Studio also supports Ranked Bar with year selection and reverse display order, plus Nested Pie with a selected group field. All chart views are built by the shared Apache ECharts option builder. Excel drafts use parser-provided rows, retain separate numerical fields as separate chart suggestions, infer chronological sequences from values as well as headers, and omit invalid cells rather than converting them to zero.
+GraphEngine and Studio support Line, Stacked Area, Bar, Pie, Doughnut, and Nested Pie charts. Studio provides year filtering, reverse order for axis charts, a series grouping field for Stacked Area, and a selected group field for Nested Pie. All chart views are built by the shared Apache ECharts option builder. Excel drafts use parser-provided rows, retain separate numerical fields as separate chart suggestions, infer chronological sequences from values as well as headers, and omit invalid cells rather than converting them to zero.
 
 Saved-graph SQL-formatted text exports use graph data, not rendered canvas pixels. Print exports render a chart preview separately from the data table. Publishing is separate from chart generation: the database graph row carries the explicit publication flag.

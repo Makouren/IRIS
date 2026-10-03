@@ -167,7 +167,7 @@ function save_graph_relations(PDO $pdo, int $graphId, array $data): void {
 function normalize_graph_type($type): string {
     $value = (string)($type ?? 'bar');
     if (in_array(strtolower($value), ['polararea', 'polar-area', 'rose', 'nightingale'], true)) return 'bar';
-    foreach (['bar', 'line', 'pie', 'doughnut', 'rankedBar', 'nestedPie'] as $allowed) {
+    foreach (['line', 'stackedArea', 'bar', 'pie', 'doughnut', 'nestedPie'] as $allowed) {
         if (strtolower($value) === strtolower($allowed)) return $allowed;
     }
     return 'bar';

@@ -1,6 +1,6 @@
 # IRIS V3.3.0 Change History
 
-This is the historical V3.3.0 record. Current release changes are documented in [README_V4.5.0.md](README_V4.5.0.md).
+> Current release: [V6.7.0](README_V6.7.0.md). This document remains the historical V3.3.0 record.
 
 ## Scope
 
@@ -108,7 +108,7 @@ Key files:
 
 ## Phase 4: Supported Chart Types and Legacy Chart Handling
 
-The current supported chart types are Bar, Line, Pie, Doughnut, Ranked Bar, and Nested Pie.
+The current supported chart types are Line, Stacked Area, Bar, Pie, Doughnut, and Nested Pie.
 
 - Added Nested Pie with a group-field mapping and an explicit empty state when no group field is selected.
 - Removed Nightingale Rose from selectors, rendering, draft choices, color controls, documentation, and print/export code.

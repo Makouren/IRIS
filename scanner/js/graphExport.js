@@ -12,11 +12,9 @@
       if (type === undefined || type === null || String(type).trim() === '') return fallback;
       const normalized = String(type).trim();
       const lower = normalized.toLowerCase();
-      if (['polar-area', 'polararea', 'rose', 'nightingale'].includes(lower)) return 'bar';
-      if (lower === 'ranked-bar' || lower === 'rankedbar' || lower === 'ranked') return 'rankedBar';
-      if (lower === 'barh' || lower === 'horizontal') return 'bar';
-      if (lower === 'bar' || lower === 'column' || lower === 'vertical') return 'bar';
+      if (lower === 'bar' || lower === 'column' || lower === 'vertical' || lower === 'barh' || lower === 'horizontal') return 'bar';
       if (lower === 'line') return 'line';
+      if (lower === 'stackedarea' || lower === 'stacked-area') return 'stackedArea';
       if (lower === 'pie') return 'pie';
       if (lower === 'doughnut') return 'doughnut';
       if (lower === 'nestedpie' || lower === 'nested-pie') return 'nestedPie';
@@ -74,7 +72,7 @@
       const labels = {
         pie: 'pie chart',
         doughnut: 'Doughnut chart',
-        rankedBar: 'Ranked Bar chart',
+        stackedArea: 'Stacked Area chart',
         nestedPie: 'Nested Pie chart',
         line: 'Line chart',
         bar: 'Bar chart'
@@ -93,7 +91,7 @@
     function buildSavedChartOption(graph, options = {}) {
       return root.IRISChartBuilder?.buildSavedGraphOption(graph, {
         width: options.width || 0,
-        theme: options.theme || { dark: document.documentElement?.classList?.contains('dark') },
+        theme: options.theme || { dark: typeof document !== 'undefined' && document.documentElement?.classList?.contains('dark') },
         colors: options.colors,
         fieldColors: options.fieldColors || root.IRISFieldColors || {}
       }) || {};

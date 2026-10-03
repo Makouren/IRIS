@@ -85,7 +85,7 @@ try {
     <script>window.IRISFieldColors = <?= json_encode($fieldColors, JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>; window.IRISFieldColorUpdatedAt = <?= json_encode($fieldColorUpdatedAt, JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>;</script>
     <script src="<?= e(base_url('scanner/js/graphExport.js')) ?>?v=<?= (int) filemtime(__DIR__.'/../scanner/js/graphExport.js') ?>"></script>
     <script type="module">
-        import * as IRISChartBuilder from '../scanner/js/modules/chartEngine.js?v=remove-rose-20261001';
+        import * as IRISChartBuilder from '../scanner/js/modules/chartEngine.js?v=echarts-six-chart-types-1';
         window.IRISChartBuilder = IRISChartBuilder;
     </script>
     <!-- Font Awesome -->
@@ -99,6 +99,59 @@ try {
             display: grid;
             grid-template-columns: repeat(auto-fit, minmax(min(270px, 100%), 1fr));
             gap: 1rem;
+        }
+        .iris-hover-card {
+            position: relative;
+            transition: transform .2s ease, box-shadow .2s ease;
+        }
+        .iris-hover-card::after {
+            position: absolute;
+            z-index: 2;
+            inset: 0;
+            padding: 1.5px;
+            border-radius: inherit;
+            background: linear-gradient(125deg, var(--iris-green), var(--iris-gold) 52%, var(--iris-green));
+            content: "";
+            opacity: .28;
+            pointer-events: none;
+            transition: opacity .2s ease;
+            -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+            -webkit-mask-composite: xor;
+            mask-composite: exclude;
+        }
+        .scanner-published-scope {
+            max-height: min(75vh, 620px);
+            overflow-y: auto;
+            overscroll-behavior: contain;
+            scrollbar-gutter: stable;
+        }
+        .scanner-published-scope::-webkit-scrollbar { width: 8px; }
+        .scanner-published-scope::-webkit-scrollbar-thumb {
+            border: 2px solid transparent;
+            border-radius: 999px;
+            background: linear-gradient(var(--iris-green), var(--iris-gold)) padding-box;
+            background-clip: padding-box;
+        }
+        .scanner-published-scope { scrollbar-color: var(--iris-green) transparent; scrollbar-width: thin; }
+        .scanner-published-scope > header {
+            position: sticky;
+            top: -1rem;
+            z-index: 4;
+            background: var(--iris-surface);
+        }
+        @media (hover: hover) {
+            .iris-hover-card:hover,
+            .iris-hover-card:focus-within {
+                z-index: 3;
+                transform: translateY(-3px);
+                box-shadow: 0 14px 30px rgba(30, 96, 49, .13), 0 3px 12px rgba(224, 167, 13, .12);
+            }
+            .iris-hover-card:hover::after,
+            .iris-hover-card:focus-within::after { opacity: .95; }
+        }
+        @media (prefers-reduced-motion: reduce) {
+            .iris-hover-card,
+            .iris-hover-card::after { transition: none; }
         }
         @media (max-width: 767px) {
             .admin-nav-inner > .logo-refresh-trigger > div:last-child { display: none !important; }
@@ -126,9 +179,10 @@ try {
         .admin-dropdown .dropdown-name { color: #f8fafc !important; }
         .admin-dropdown ul { margin: 0; padding: .25rem 0 !important; }
         .admin-dropdown li { display: flex !important; align-items: center !important; }
-        .admin-dropdown a, .admin-dropdown .signout { display: flex !important; align-items: center !important; justify-content: flex-start !important; gap: .6rem !important; width: 100% !important; text-align: left !important; line-height: 1.2 !important; white-space: nowrap !important; }
-        .admin-dropdown a { color: #dbeafe !important; padding: .7rem 1rem !important; }
-        .admin-dropdown a:hover { background: rgba(16,185,129,.12) !important; color: #ecfdf5 !important; }
+        .admin-dropdown a, .admin-dropdown li > button, .admin-dropdown .signout { display: flex !important; align-items: center !important; justify-content: flex-start !important; gap: .6rem !important; width: 100% !important; text-align: left !important; line-height: 1.2 !important; white-space: nowrap !important; }
+        .admin-dropdown a, .admin-dropdown li > button { color: #dbeafe !important; padding: .7rem 1rem !important; transition: background .16s ease, color .16s ease, transform .16s ease; }
+        .admin-dropdown a:hover, .admin-dropdown li > button:hover { background: rgba(16,185,129,.12) !important; color: #ecfdf5 !important; }
+        @media (hover: hover) and (pointer: fine) and (prefers-reduced-motion: no-preference) { .admin-dropdown a:hover, .admin-dropdown li > button:not(:disabled):hover { transform: translateY(-1px); } }
         .admin-dropdown .signout { padding: .75rem 1rem !important; color: #fca5a5 !important; border-radius: .75rem !important; transition: background .2s ease,color .2s ease; }
         .admin-dropdown .signout:hover { background: rgba(239,68,68,.12) !important; color: #fee2e2 !important; }
         html:not(.dark) .admin-nav { background: #1E6031 !important; border-bottom: 3px solid #E0A70D !important; box-shadow: 0 4px 12px rgba(0,0,0,.08) !important; }
@@ -139,8 +193,8 @@ try {
         html:not(.dark) .admin-theme-btn, html:not(.dark) .admin-profile-btn { color: #fff !important; background: rgba(255,255,255,.1) !important; border: 1px solid rgba(255,255,255,.2) !important; }
         html:not(.dark) .admin-theme-btn:hover, html:not(.dark) .admin-profile-btn:hover { color: #fff !important; background: rgba(255,255,255,.2) !important; }
         html:not(.dark) .admin-dropdown { background: #fff !important; border: 1px solid rgba(30,96,49,.12) !important; color: #1F2A24 !important; box-shadow: 0 12px 30px rgba(15,23,42,.08) !important; }
-        html:not(.dark) .admin-dropdown .dropdown-name, html:not(.dark) .admin-dropdown a { color: #1F2A24 !important; }
-        html:not(.dark) .admin-dropdown a:hover { background: #EEF6F0 !important; color: #1E6031 !important; }
+        html:not(.dark) .admin-dropdown .dropdown-name, html:not(.dark) .admin-dropdown a, html:not(.dark) .admin-dropdown li > button { color: #1F2A24 !important; }
+        html:not(.dark) .admin-dropdown a:hover, html:not(.dark) .admin-dropdown li > button:hover { background: #EEF6F0 !important; color: #1E6031 !important; }
         html:not(.dark) .admin-dropdown .signout { color: #b91c1c !important; }
         html:not(.dark) .admin-dropdown .signout:hover { background: #fef2f2 !important; color: #991b1b !important; }
         html:not(.dark) .admin-footer { background: #1E6031 !important; border-top: 3px solid #E0A70D !important; color: #fff !important; }
@@ -406,36 +460,67 @@ try {
         </section>
 
         <section id="ranking-history" class="space-y-4 rounded-2xl border border-gray-200 bg-white/70 p-4 shadow-sm dark:border-gray-700 dark:bg-gray-800/50 sm:p-5">
-            <div class="flex flex-col sm:flex-row sm:items-end justify-between gap-3">
+            <div>
                 <div>
                     <h2 class="text-xl font-bold text-gray-900 dark:text-white flex items-center">
                         <i class="fa-solid fa-ranking-star text-amber-500 mr-2"></i> Ranking History
                     </h2>
                     <p class="text-xs text-gray-500 dark:text-gray-400">Compare institutional rankings across available years.</p>
                 </div>
-                <div class="flex flex-wrap items-center justify-end gap-2 text-sm font-semibold text-gray-700 dark:text-gray-200" aria-label="Filter Ranking History">
-                    <label class="flex items-center gap-1.5">Organization
-                        <select id="rankingOrganizationFilter" class="rounded-xl border border-gray-300 bg-white px-3 py-2 text-sm dark:border-gray-600 dark:bg-gray-900"><option value="all">All organizations</option></select>
+            </div>
+            <div class="relative flex flex-wrap items-center justify-start gap-2 text-sm font-semibold text-gray-700 dark:text-gray-200" aria-label="Ranking History controls">
+                <label class="flex items-center gap-1.5">View
+                    <select id="rankingDisplayMode" class="rounded-xl border border-gray-300 bg-white px-3 py-2 text-sm dark:border-gray-600 dark:bg-gray-900">
+                        <option value="charts">Charts</option>
+                        <option value="matrix">Ranking Trend Matrix</option>
+                    </select>
+                </label>
+                <label id="rankingGraphLayoutControl" class="flex items-center gap-1.5">Graph layout
+                    <select id="rankingGraphLayout" class="rounded-xl border border-gray-300 bg-white px-3 py-2 text-sm dark:border-gray-600 dark:bg-gray-900">
+                        <option value="one-per-row">One per row</option>
+                        <option value="side-by-side">Side by side</option>
+                    </select>
+                </label>
+                <button id="rankingResetDefaults" type="button" class="rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm font-semibold text-gray-700 transition hover:border-green-700 hover:bg-green-50 dark:border-gray-600 dark:bg-gray-900 dark:text-gray-200 dark:hover:bg-gray-800">Reset to default</button>
+                <details id="rankingFiltersControl" class="group">
+                    <summary class="flex cursor-pointer list-none items-center gap-2 rounded-xl border border-gray-300 bg-white px-3 py-2 text-sm dark:border-gray-600 dark:bg-gray-900">
+                        Filters <i class="fa-solid fa-chevron-down text-xs transition-transform group-open:rotate-180" aria-hidden="true"></i>
+                    </summary>
+                    <div id="rankingFiltersPopover" class="fixed z-[100] grid max-h-[min(75vh,560px)] w-[min(92vw,760px)] grid-cols-1 gap-3 overflow-y-auto rounded-xl border border-gray-200 bg-white p-4 text-sm shadow-xl dark:border-gray-700 dark:bg-gray-900 sm:grid-cols-2 lg:grid-cols-3" aria-label="Filter Ranking History">
+                    <label class="flex min-w-0 flex-col items-start gap-1">Organization
+                        <select id="rankingOrganizationFilter" class="w-full min-w-0 rounded-xl border border-gray-300 bg-white px-3 py-2 text-sm dark:border-gray-600 dark:bg-gray-900"><option value="all">All organizations</option></select>
                     </label>
-                    <label id="rankingListControl" class="hidden items-center gap-1.5">List
-                        <select id="rankingListFilter" class="rounded-xl border border-gray-300 bg-white px-3 py-2 text-sm dark:border-gray-600 dark:bg-gray-900"><option value="all">All lists</option></select>
+                    <label id="rankingListControl" class="hidden min-w-0 flex-col items-start gap-1">List
+                        <select id="rankingListFilter" class="w-full min-w-0 rounded-xl border border-gray-300 bg-white px-3 py-2 text-sm dark:border-gray-600 dark:bg-gray-900"><option value="all">All lists</option></select>
                     </label>
-                    <button id="rankingAllYears" type="button" class="rounded-lg border border-green-800 bg-green-800 px-3 py-2 text-white dark:border-amber-500 dark:bg-amber-500 dark:text-gray-950" aria-pressed="true">All years</button>
-                    <label class="flex items-center gap-1.5">From
-                        <select id="rankingYearFrom" class="rounded-xl border border-gray-300 bg-white px-3 py-2 text-sm dark:border-gray-600 dark:bg-gray-900" disabled><option>Loading...</option></select>
-                    </label>
-                    <label class="flex items-center gap-1.5">To
-                        <select id="rankingYearTo" class="rounded-xl border border-gray-300 bg-white px-3 py-2 text-sm dark:border-gray-600 dark:bg-gray-900" disabled><option>Loading...</option></select>
-                    </label>
-                </div>
+                    <button id="rankingAllYears" type="button" class="w-auto justify-self-start self-center rounded-lg border border-green-800 bg-green-800 px-3 py-2 text-white dark:border-amber-500 dark:bg-amber-500 dark:text-gray-950" aria-pressed="true">All years</button>
+                    <details id="rankingYearRangeControl" class="group min-w-0 sm:col-span-2 lg:col-span-3">
+                        <summary class="flex cursor-pointer list-none items-center gap-2 rounded-xl border border-gray-300 bg-white px-3 py-2 text-sm dark:border-gray-600 dark:bg-gray-900">
+                            Year range <i class="fa-solid fa-chevron-down text-xs transition-transform group-open:rotate-180" aria-hidden="true"></i>
+                        </summary>
+                        <div class="mt-2 grid grid-cols-1 gap-3 rounded-xl border border-gray-200 bg-white p-3 text-sm shadow-sm dark:border-gray-700 dark:bg-gray-900 sm:grid-cols-2">
+                            <label class="flex min-w-0 flex-col items-start gap-1">From
+                                <select id="rankingYearFrom" class="w-full min-w-0 rounded-xl border border-gray-300 bg-white px-3 py-2 text-sm dark:border-gray-600 dark:bg-gray-900" disabled><option>Loading...</option></select>
+                            </label>
+                            <label class="flex min-w-0 flex-col items-start gap-1">To
+                                <select id="rankingYearTo" class="w-full min-w-0 rounded-xl border border-gray-300 bg-white px-3 py-2 text-sm dark:border-gray-600 dark:bg-gray-900" disabled><option>Loading...</option></select>
+                            </label>
+                        </div>
+                    </details>
+                    </div>
+                </details>
             </div>
             <div id="rankingChart" class="grid min-h-64 w-full grid-cols-1 gap-4 xl:grid-cols-2"></div>
         </section>
 
-        <section id="star-rating-cards-section" class="hidden space-y-4">
-            <div class="flex items-center gap-2">
-                <i class="fa-solid fa-star text-amber-500" aria-hidden="true"></i>
-                <h2 class="text-xl font-bold text-gray-900 dark:text-white">University Star Ratings</h2>
+        <section id="star-rating-cards-section" class="hidden space-y-4 rounded-2xl border border-gray-200 bg-white/70 p-4 shadow-sm dark:border-gray-700 dark:bg-gray-800/50 sm:p-5">
+            <div class="flex flex-col sm:flex-row sm:items-end justify-between gap-3">
+                <div>
+                    <h2 class="text-xl font-bold text-gray-900 dark:text-white flex items-center">
+                        <i class="fa-solid fa-star text-amber-500 mr-2" aria-hidden="true"></i> University Star Ratings
+                    </h2>
+                    <p class="text-xs text-gray-500 dark:text-gray-400">Published institutional star ratings</p>
+                </div>
             </div>
             <div id="star-rating-category-filter" class="hidden -mx-4 overflow-x-auto px-4 sm:mx-0 sm:px-0" aria-label="Filter star rating cards by category">
                 <div id="star-rating-category-chips" class="flex w-max min-w-full items-center gap-2 pb-1" role="group" aria-label="Star rating categories"></div>
@@ -451,9 +536,16 @@ try {
                     </h2>
                     <p class="text-xs text-gray-500 dark:text-gray-400">Published institutional data and reports</p>
                 </div>
-                <span id="publishedGraphCount" class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-emerald-100 text-emerald-800 dark:bg-emerald-900/60 dark:text-emerald-300">
-                    <i class="fa-solid fa-circle-check mr-1"></i> Loading published graphs
-                </span>
+                <div class="flex flex-wrap items-center gap-3">
+                    <label for="publishedGraphLayout" class="text-xs font-semibold text-gray-600 dark:text-gray-300">Graph layout</label>
+                    <select id="publishedGraphLayout" class="rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-xs font-semibold text-gray-800 shadow-sm focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/30 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100">
+                        <option value="side-by-side">Side by side</option>
+                        <option value="one-per-row">One per row</option>
+                    </select>
+                    <span id="publishedGraphCount" class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-emerald-100 text-emerald-800 dark:bg-emerald-900/60 dark:text-emerald-300">
+                        <i class="fa-solid fa-circle-check mr-1"></i> Loading published graphs
+                    </span>
+                </div>
             </div>
             <div id="scannerPublishedGraphsGrid" class="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 <div id="scannerPublishedGraphsEmpty" class="lg:col-span-2 p-6 rounded-2xl border border-dashed border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-800/60 text-center text-sm text-gray-500 dark:text-gray-400">
@@ -640,7 +732,7 @@ try {
                     const accessibleLabel = `${label}: ${scoreText} out of ${maxStars} stars`;
                     return `<div class="flex flex-wrap items-center justify-between gap-x-3 gap-y-2 border-t border-gray-200 py-2.5 dark:border-gray-700" aria-label="${escapeHtmlDashboard(accessibleLabel)}" title="${escapeHtmlDashboard(accessibleLabel)}"><div class="flex max-w-full flex-wrap items-center gap-0.5">${renderRatingStars(maxStars, score, `rating-${cardIndex}-${rowIndex}`)}<span class="ml-1 whitespace-nowrap text-xs font-medium text-gray-600 dark:text-gray-300">${scoreText} / ${maxStars}</span></div><span class="min-w-0 break-words text-sm font-semibold text-gray-800 dark:text-gray-100">${escapeHtmlDashboard(label)}</span></div>`;
                 }).join('');
-                return `<article class="rounded-xl border border-gray-200 bg-white p-5 shadow-sm dark:border-gray-700 dark:bg-gray-900"><header class="flex min-h-20 flex-col items-center justify-center text-center">${logo}<h3 class="text-base font-bold text-gray-900 dark:text-white">${title}</h3></header>${year}<div class="mt-2">${rows}</div></article>`;
+                return `<article class="iris-hover-card rounded-xl border border-gray-200 bg-white p-5 shadow-sm dark:border-gray-700 dark:bg-gray-900"><header class="flex min-h-20 flex-col items-center justify-center text-center">${logo}<h3 class="text-base font-bold text-gray-900 dark:text-white">${title}</h3></header>${year}<div class="mt-2">${rows}</div></article>`;
             }).join('');
         }
 
@@ -695,9 +787,26 @@ try {
 
         window.addEventListener('popstate', () => restoreSummaryCategoryFromUrl());
 
+        let pinnedSummaryInfoControl = null;
+        document.addEventListener('click', event => {
+            if (!pinnedSummaryInfoControl || pinnedSummaryInfoControl.contains(event.target)) return;
+            const trigger = pinnedSummaryInfoControl.querySelector('[data-info-trigger]');
+            const panel = pinnedSummaryInfoControl.querySelector('[data-info-panel]');
+            if (panel) panel.hidden = true;
+            trigger?.setAttribute('aria-expanded', 'false');
+            pinnedSummaryInfoControl = null;
+        });
+
         function renderSummaryCards(cards) {
             const grid = document.getElementById('summaryCardsGrid');
             if (!grid) return;
+            if (pinnedSummaryInfoControl) {
+                const trigger = pinnedSummaryInfoControl.querySelector('[data-info-trigger]');
+                const panel = pinnedSummaryInfoControl.querySelector('[data-info-panel]');
+                if (panel) panel.hidden = true;
+                trigger?.setAttribute('aria-expanded', 'false');
+                pinnedSummaryInfoControl = null;
+            }
             const publishedCards = Array.isArray(cards) ? cards.filter(card => card && (card.is_published === true || card.is_published === 1 || card.is_published === '1')) : [];
             const visibleCards = publishedCards.filter(card => !activeSummaryCategorySlug || (Array.isArray(card.category_slugs) && card.category_slugs.includes(activeSummaryCategorySlug)));
             if (!visibleCards.length) {
@@ -730,7 +839,7 @@ try {
                             <div class="summary-card-history-panel mt-2 hidden rounded-lg border border-gray-200 p-3 dark:border-gray-700" data-id="${escapeHtmlDashboard(card.id)}" role="status" aria-live="polite"></div>
                         </div>` : '';
                     return `
-                        <article class="summary-card-shell relative overflow-visible rounded-2xl p-5 shadow-sm">
+                        <article class="iris-hover-card summary-card-shell relative overflow-visible rounded-2xl p-5 shadow-sm">
                             <div class="flex items-start justify-between gap-3">
                                 <div>
                                     <div class="summary-card-title text-[10px] font-bold uppercase tracking-[0.14em]">${escapeHtmlDashboard(card.title || 'Performance Snapshot')}</div>
@@ -759,21 +868,30 @@ try {
                 if (!trigger || !panel) return;
                 const open = () => { panel.hidden = false; trigger.setAttribute('aria-expanded', 'true'); };
                 const close = () => { panel.hidden = true; trigger.setAttribute('aria-expanded', 'false'); };
-                let touchToggleHandled = false;
-                trigger.addEventListener('mouseenter', open);
-                trigger.addEventListener('focus', open);
-                wrapper.addEventListener('mouseleave', event => { if (!panel.contains(event.relatedTarget)) close(); });
-                trigger.addEventListener('blur', close);
-                trigger.addEventListener('keydown', event => { if (event.key === 'Escape') { close(); trigger.blur(); } });
-                trigger.addEventListener('pointerdown', event => {
-                    if (event.pointerType !== 'touch') return;
-                    event.preventDefault();
-                    touchToggleHandled = true;
-                    panel.hidden ? open() : close();
+                trigger.addEventListener('mouseenter', () => { if (!pinnedSummaryInfoControl) open(); });
+                trigger.addEventListener('focus', () => { if (!pinnedSummaryInfoControl) open(); });
+                wrapper.addEventListener('mouseleave', event => { if (pinnedSummaryInfoControl !== wrapper && !panel.contains(event.relatedTarget)) close(); });
+                trigger.addEventListener('blur', () => { if (pinnedSummaryInfoControl !== wrapper) close(); });
+                trigger.addEventListener('click', () => {
+                    if (pinnedSummaryInfoControl === wrapper) {
+                        pinnedSummaryInfoControl = null;
+                        close();
+                        return;
+                    }
+                    if (pinnedSummaryInfoControl) {
+                        const previousTrigger = pinnedSummaryInfoControl.querySelector('[data-info-trigger]');
+                        const previousPanel = pinnedSummaryInfoControl.querySelector('[data-info-panel]');
+                        if (previousPanel) previousPanel.hidden = true;
+                        previousTrigger?.setAttribute('aria-expanded', 'false');
+                    }
+                    pinnedSummaryInfoControl = wrapper;
+                    open();
                 });
-                trigger.addEventListener('click', event => {
-                    if (touchToggleHandled) { touchToggleHandled = false; return; }
-                    if (event.detail === 0) return;
+                trigger.addEventListener('keydown', event => {
+                    if (event.key !== 'Escape') return;
+                    if (pinnedSummaryInfoControl === wrapper) pinnedSummaryInfoControl = null;
+                    close();
+                    trigger.blur();
                 });
             });
 
@@ -868,6 +986,17 @@ try {
 
         // --- Published Observatory Graphs ---
         let chartInstances = [];
+        let publishedGraphLayout = 'side-by-side';
+        const publishedGraphLayoutSelect = document.getElementById('publishedGraphLayout');
+
+        publishedGraphLayoutSelect?.addEventListener('change', () => {
+            publishedGraphLayout = publishedGraphLayoutSelect.value === 'one-per-row' ? 'one-per-row' : 'side-by-side';
+            document.querySelectorAll('[data-scope-graphs]').forEach(scopeGrid => {
+                scopeGrid.classList.toggle('lg:grid-cols-2', publishedGraphLayout === 'side-by-side');
+                scopeGrid.classList.toggle('grid-cols-1', true);
+            });
+            requestAnimationFrame(() => chartInstances.forEach(chart => chart?.resize?.()));
+        });
 
         // Live Filters
         const canManagePublishedGraphs = <?= json_encode(($_SESSION['role'] ?? null) === 'super_admin') ?>;
@@ -910,12 +1039,12 @@ try {
             orderedScopes.forEach(([scope, scopedGraphs]) => {
                 const scopeCard = document.createElement('section');
                 scopeCard.className = 'scanner-published-scope col-span-full rounded-2xl border border-gray-200 bg-white p-4 shadow-sm dark:border-gray-700 dark:bg-gray-800';
-                scopeCard.innerHTML = `<header class="mb-4 flex items-center justify-between gap-3 border-b border-gray-100 pb-3 dark:border-gray-700"><h3 class="text-base font-bold text-gray-900 dark:text-white">${escapeHtmlDashboard(scope)}</h3><span class="text-xs font-semibold text-gray-500 dark:text-gray-300">${scopedGraphs.length} graph${scopedGraphs.length === 1 ? '' : 's'}</span></header><div class="grid grid-cols-1 gap-6 lg:grid-cols-2" data-scope-graphs></div>`;
+                scopeCard.innerHTML = `<header class="mb-4 flex items-center justify-between gap-3 border-b border-gray-100 pb-3 dark:border-gray-700"><h3 class="text-base font-bold text-gray-900 dark:text-white">${escapeHtmlDashboard(scope)}</h3><span class="text-xs font-semibold text-gray-500 dark:text-gray-300">${scopedGraphs.length} graph${scopedGraphs.length === 1 ? '' : 's'}</span></header><div class="grid grid-cols-1 gap-6 ${publishedGraphLayout === 'side-by-side' ? 'lg:grid-cols-2' : ''}" data-scope-graphs></div>`;
                 grid.appendChild(scopeCard);
                 const scopeGrid = scopeCard.querySelector('[data-scope-graphs]');
                 scopedGraphs.forEach(graph => {
                 const card = document.createElement('div');
-                card.className = 'scanner-published-card bg-white dark:bg-gray-800 p-6 rounded-2xl border border-gray-200 dark:border-gray-700 shadow-sm';
+                card.className = 'iris-hover-card scanner-published-card bg-white dark:bg-gray-800 p-6 rounded-2xl border border-gray-200 dark:border-gray-700 shadow-sm';
                 const chartId = `scannerPublishedChart_${chartIndex++}`;
                 card.innerHTML = `
                     <div class="flex items-start justify-between gap-4 pb-4 border-b border-gray-100 dark:border-gray-700">
@@ -1016,6 +1145,6 @@ try {
         });
     </script>
 <script src="<?= e(base_url('user/js/rankingHistory.js')) ?>?v=<?= (int) filemtime(__DIR__ . '/js/rankingHistory.js') ?>" data-api="<?= e(base_url('api/rankings.php')) ?>" defer></script>
-<?php require __DIR__ . '/../includes/change_refresh_script.php'; ?>
+<?php $irisChangeRefreshView = 'public'; require __DIR__ . '/../includes/change_refresh_script.php'; ?>
 </body>
 </html>

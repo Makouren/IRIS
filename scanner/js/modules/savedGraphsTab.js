@@ -1,8 +1,8 @@
 import { $, escapeHtml } from '../utils/helpers.js';
-import { createChart, buildSavedGraphOption } from './chartEngine.js?v=remove-rose-20261001';
+import { createChart, buildSavedGraphOption } from './chartEngine.js?v=echarts-six-chart-types-1';
 
 function getRecordName(graph, records) {
-  const record = records.find(item => item.id === graph.record_id);
+  const record = records.find(item => String(item.id) === String(graph.record_id));
   return graph.source_file_name || record?.fileName || graph.record_id || 'Unknown file';
 }
 
@@ -196,50 +196,11 @@ export function initSavedGraphsTab(ctx) {
     card.className = 'graph-card';
     const sourceName = getRecordName(graph, records);
     const savedType = String(graph.chart_type || 'bar');
-    const chartType = /^(?:polararea|polar-area|rose|nightingale)$/i.test(savedType) ? 'bar' : (['bar', 'line', 'pie', 'doughnut', 'nestedPie', 'rankedBar'].includes(savedType) ? savedType : 'bar');
-    card.innerHTML = `<div class="graph-card-header"><div style="display:flex;gap:.6rem;align-items:flex-start;"><input class="saved-graph-checkbox" type="checkbox" data-graph-id="${escapeHtml(graph.id)}" ${state.savedGraphIds.has(graph.id) ? 'checked' : ''} aria-label="Select ${escapeHtml(graph.title || 'saved graph')}" /><div><div class="graph-card-title">${escapeHtml(graph.title || 'Saved Dashboard Chart')}</div><div style="font-size:.78rem;color:var(--text-muted);margin-top:.25rem;">Version ${version}</div><div style="font-size:.75rem;color:var(--text-muted);">Source: ${escapeHtml(sourceName)}</div></div></div><div class="graph-card-actions"><span class="badge badge-low">SAVED</span><button class="graph-action-button graph-action-publish" type="button" title="Publish this saved graph to the Observatory"><svg aria-hidden="true" viewBox="0 0 24 24"><path d="M12 2l7 7-1.4 1.4L13 5.8V18h-2V5.8L6.4 10.4 5 9l7-7zM5 20h14v2H5z"/></svg><span>Publish</span></button><button class="graph-action-button export-saved-mysql" type="button" title="Reflect graph data in the database"><svg aria-hidden="true" viewBox="0 0 24 24"><path d="M4 5h16v14H4zM8 9h8M8 13h5M8 17h3"/></svg><span>Reflect DB</span></button><button class="graph-action-button export-saved-print" type="button" title="Print this graph"><svg aria-hidden="true" viewBox="0 0 24 24"><path d="M6 9V4h12v5M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2M6 14h12v6H6z"/></svg><span>Print Sheet</span></button><button class="graph-action-button graph-action-delete btn-table-delete delete-saved-graph" type="button" data-graph-id="${escapeHtml(graph.id)}" title="Delete saved graph" aria-label="Delete saved graph"><svg aria-hidden="true" viewBox="0 0 24 24"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/></svg></button></div></div><div style="font-size:.82rem;color:var(--accent-cyan);margin-bottom:1rem;">Chart type: <strong>${escapeHtml(chartType.toUpperCase())}</strong></div><div class="graph-canvas-container" style="height:260px;position:relative;"><div id="${canvasId}" style="height:100%;width:100%"></div></div>`;
+    const chartType = ['line', 'stackedArea', 'bar', 'pie', 'doughnut', 'nestedPie'].includes(savedType) ? savedType : 'bar';
+    card.innerHTML = `<div class="graph-card-header"><div style="display:flex;gap:.6rem;align-items:flex-start;"><input class="saved-graph-checkbox" type="checkbox" data-graph-id="${escapeHtml(graph.id)}" ${state.savedGraphIds.has(graph.id) ? 'checked' : ''} aria-label="Select ${escapeHtml(graph.title || 'saved graph')}" /><div><div class="graph-card-title">${escapeHtml(graph.title || 'Saved Dashboard Chart')}</div><div style="font-size:.78rem;color:var(--text-muted);margin-top:.25rem;">Version ${version}</div><div style="font-size:.75rem;color:var(--text-muted);">Source: ${escapeHtml(sourceName)}</div></div></div><div class="graph-card-actions"><span class="badge badge-low">SAVED</span><button class="graph-action-button graph-action-publish" type="button" title="Publish this saved graph to the Observatory"><svg aria-hidden="true" viewBox="0 0 24 24"><path d="M12 2l7 7-1.4 1.4L13 5.8V18h-2V5.8L6.4 10.4 5 9l7-7zM5 20h14v2H5z"/></svg><span>Publish</span></button><button class="graph-action-button export-saved-mysql" type="button" title="Reflect graph data in the database"><svg aria-hidden="true" viewBox="0 0 24 24"><path d="M4 5h16v14H4zM8 9h8M8 13h5M8 17h3"/></svg><span>Reflect DB</span></button><button class="graph-action-button export-saved-print" type="button" title="Print this graph"><svg aria-hidden="true" viewBox="0 0 24 24"><path d="M6 9V4h12v5M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2M6 14h12v6H6z"/></svg><span>Print Sheet</span></button><button class="graph-action-button graph-action-delete btn-table-delete delete-saved-graph" type="button" data-graph-id="${escapeHtml(graph.id)}" title="Delete saved graph" aria-label="Delete saved graph"><svg aria-hidden="true" viewBox="0 0 24 24"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/></svg></button></div></div><div style="font-size:.82rem;color:var(--accent-cyan);margin-bottom:1rem;">Chart type: <strong>${escapeHtml(chartType.toUpperCase())}</strong></div><div class="graph-canvas-container"><div id="${canvasId}" style="height:100%;width:100%"></div></div>`;
 
     const typeLabel = chartType.replace(/([a-z])([A-Z])/g, '$1 $2').toUpperCase();
     card.querySelector('.graph-card-header')?.nextElementSibling?.querySelector('strong')?.replaceChildren(document.createTextNode(typeLabel));
-
-    const scopeEditor = document.createElement('div');
-    scopeEditor.style.cssText = 'display:flex;align-items:end;gap:.6rem;margin:.75rem 0;border:1px solid var(--border-light);border-radius:8px;padding:.75rem;';
-    const scopeLabel = document.createElement('label');
-    scopeLabel.style.cssText = 'display:grid;flex:1;gap:.3rem;font-size:.75rem;font-weight:700;color:var(--text-muted);';
-    scopeLabel.textContent = 'Published scope';
-    const scopeInput = document.createElement('input');
-    scopeInput.type = 'text';
-    scopeInput.maxLength = 150;
-    scopeInput.value = graph.scope || '';
-    scopeInput.placeholder = 'Leave blank for General';
-    scopeInput.className = 'form-input';
-    scopeLabel.append(scopeInput);
-    const saveScope = document.createElement('button');
-    saveScope.type = 'button';
-    saveScope.className = 'archive-load-button';
-    saveScope.textContent = 'Save scope';
-    saveScope.addEventListener('click', async () => {
-      const scope = scopeInput.value.trim();
-      saveScope.disabled = true;
-      try {
-        const response = await fetch(ctx.dbManager.config.endpoints.graphById(graph.id), {
-          method: 'PATCH',
-          headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': $('savedDashboardGraphsContainer').dataset.csrf || '' },
-          body: JSON.stringify({ scope })
-        });
-        const result = await response.json().catch(() => ({}));
-        if (!response.ok) throw new Error(result.error || 'Unable to save graph scope.');
-        graph.scope = result.scope || '';
-        showSavedGraphToast('Published scope saved.');
-      } catch (error) {
-        window.alert(error.message || 'Unable to save graph scope.');
-      } finally {
-        saveScope.disabled = false;
-      }
-    });
-    const chartHostForScope = card.querySelector(`#${canvasId}`);
-    if (chartHostForScope) chartHostForScope.parentNode.insertBefore(scopeEditor, chartHostForScope);
-    scopeEditor.append(scopeLabel, saveScope);
 
     const render = () => {
       const chartHost = $(canvasId);
@@ -268,6 +229,7 @@ export function initSavedGraphsTab(ctx) {
       card._savedChart?.dispose?.();
       card._savedGraph = { ...graph, chart_type: chartType };
       card._savedChart = createChart(chartHost, chartType, card._savedGraph);
+      card._savedChart?.resize?.();
       if (typeof ResizeObserver !== 'undefined') {
         card._savedChartResizeObserver = new ResizeObserver(() => card._savedChart?.resize?.());
         card._savedChartResizeObserver.observe(chartHost);
@@ -316,12 +278,17 @@ export function initSavedGraphsTab(ctx) {
     const records = await ctx.dbManager.getAllRecords();
     ctx.api.savedGraphsRecords = records;
     const select = $('savedGraphsRecordSelect');
-    const ids = [...new Set(graphs.map(graph => graph.record_id).filter(Boolean))];
+    const ids = [...new Set(graphs.map(graph => String(graph.record_id || '')).filter(Boolean))];
+
+    const viewAllBtn = $('savedGraphsViewAllBtn');
+    if (viewAllBtn) {
+      viewAllBtn.textContent = state.savedGraphsViewAll ? 'View Per File' : 'View All';
+    }
 
     if (select) {
-      const previousSelection = select.value;
+      const previousSelection = String(select.value || '');
       select.innerHTML = ids.length ? ids.map(id => {
-        const record = records.find(item => item.id === id);
+        const record = records.find(item => String(item.id) === String(id));
         return `<option value="${escapeHtml(id)}">${escapeHtml(record?.fileName || id)} (${escapeHtml((record?.fileType || 'FILE').toUpperCase())})</option>`;
       }).join('') : '<option value="">No files available</option>';
       if (state.savedGraphsViewAll) {
@@ -332,8 +299,8 @@ export function initSavedGraphsTab(ctx) {
       }
     }
 
-    const selectedId = select?.value || ids[0] || '';
-    let visibleGraphs = state.savedGraphsViewAll ? graphs : graphs.filter(graph => graph.record_id === selectedId);
+    const selectedId = String(select?.value || ids[0] || '');
+    let visibleGraphs = state.savedGraphsViewAll ? graphs : graphs.filter(graph => String(graph.record_id || '') === selectedId);
     ctx.api.savedGraphsVisible = visibleGraphs;
     container.querySelectorAll('.graph-card').forEach(card => { card._savedChartResizeObserver?.disconnect?.(); card._savedChart?.dispose?.(); card._savedChart?.destroy?.(); });
     container.innerHTML = '';
@@ -346,17 +313,30 @@ export function initSavedGraphsTab(ctx) {
 
     if (state.savedGraphsViewAll) {
       const groups = new Map();
-      visibleGraphs.forEach(graph => { const key = graph.record_id || 'unknown'; if (!groups.has(key)) groups.set(key, []); groups.get(key).push(graph); });
-      groups.forEach(group => {
+      visibleGraphs.forEach(graph => { const key = String(graph.record_id || 'unknown'); if (!groups.has(key)) groups.set(key, []); groups.get(key).push(graph); });
+      groups.forEach((group, recordId) => {
         const heading = document.createElement('h4');
         const first = group[0];
+        const record = records.find(r => String(r.id) === String(recordId));
         heading.style.cssText = 'margin:1.25rem 0 .65rem;color:#146C36;border-bottom:1px solid #D7E3DA;padding-bottom:.45rem;';
-        heading.innerHTML = `<i class="fa-solid fa-folder" aria-hidden="true"></i> ${escapeHtml(getRecordName(first, records))} (${(first.source_file_type || records.find(record => record.id === first.record_id)?.fileType || 'FILE').toUpperCase()})`;
+        heading.innerHTML = `<i class="fa-solid fa-folder" aria-hidden="true"></i> ${escapeHtml(getRecordName(first, records))} (${(first.source_file_type || record?.fileType || 'FILE').toUpperCase()})`;
         container.appendChild(heading);
-        group.forEach((graph, index) => { const rendered = renderCard(graph, group.length - index, records); container.appendChild(rendered.card); setTimeout(rendered.render, 20); });
+        group.forEach((graph, index) => {
+          const rendered = renderCard(graph, group.length - index, records);
+          container.appendChild(rendered.card);
+          requestAnimationFrame(() => {
+            rendered.render();
+          });
+        });
       });
     } else {
-      visibleGraphs.forEach((graph, index) => { const rendered = renderCard(graph, visibleGraphs.length - index, records); container.appendChild(rendered.card); setTimeout(rendered.render, 20); });
+      visibleGraphs.forEach((graph, index) => {
+        const rendered = renderCard(graph, visibleGraphs.length - index, records);
+        container.appendChild(rendered.card);
+        requestAnimationFrame(() => {
+          rendered.render();
+        });
+      });
     }
 
     refreshSelectionUi(visibleGraphs);

@@ -11,6 +11,15 @@ function templates_fail(string $message, int $status = 400): never {
     exit;
 }
 
+function templates_require_destination_schema(PDO $pdo): void {
+    $query = $pdo->prepare('SELECT 1 FROM information_schema.COLUMNS
+        WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? AND COLUMN_NAME = ? LIMIT 1');
+    $query->execute(['templates', 'destination']);
+    if (!$query->fetchColumn()) {
+        templates_fail('Apply migrations/20261003_template_destination.sql to the configured database before managing template categories.', 503);
+    }
+}
+
 function templates_custom_mapping_field(mixed $field, array $customFields): bool {
     return is_string($field)
         && preg_match('/^custom_fields\.([a-z][a-z0-9_]{0,47})$/', $field, $matches) === 1
@@ -85,7 +94,9 @@ try {
             $profileId = filter_var($_GET['profile_id'] ?? null, FILTER_VALIDATE_INT);
             $destination = (string)($_GET['destination'] ?? '');
             if (!$profileId || !in_array($destination, ['summary_cards', 'ranking_history'], true)) templates_fail('Choose a valid import profile.');
-            $profile = SummaryCardImportProfiles::get(db(), (int)$profileId, false, $destination);
+            $pdo = db();
+            $profile = SummaryCardImportProfiles::get($pdo, (int)$profileId, false, $destination);
+            if ($destination === 'ranking_history') $profile = TemplateImportSupport::normalizeRankingProfile($profile);
             echo json_encode([
                 'id' => (int)$profile['id'],
                 'profile_name' => $profile['profile_name'],
@@ -98,7 +109,8 @@ try {
                 'defaults' => $profile['defaults_json'],
                 'workbook_header_row' => $profile['workbook_header_row'] ?? null,
                 'workbook_headers' => $profile['workbook_headers'] ?? [],
-                'workbook_original_filename' => $profile['workbook_original_filename'] ?? null
+                'workbook_original_filename' => $profile['workbook_original_filename'] ?? null,
+                'workbook_preview' => ProfileWorkbookService::savedWorkbookPreview($pdo, (int)$profileId, $destination)
             ], JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT);
             exit;
         }
@@ -120,7 +132,8 @@ try {
             requireRole(['super_admin'], true);
             $profileId = filter_var($_GET['profile_id'] ?? null, FILTER_VALIDATE_INT);
             if (!$profileId || $profileId < 1) templates_fail('Choose a valid Summary Card profile.');
-            $profile = SummaryCardImportProfiles::get(db(), (int)$profileId);
+            $pdo = db();
+            $profile = SummaryCardImportProfiles::get($pdo, (int)$profileId);
             echo json_encode([
                 'id' => (int)$profile['id'],
                 'profile_name' => $profile['profile_name'],
@@ -133,7 +146,8 @@ try {
                 'defaults' => $profile['defaults_json'],
                 'workbook_header_row' => $profile['workbook_header_row'] ?? null,
                 'workbook_headers' => $profile['workbook_headers'] ?? [],
-                'workbook_original_filename' => $profile['workbook_original_filename'] ?? null
+                'workbook_original_filename' => $profile['workbook_original_filename'] ?? null,
+                'workbook_preview' => ProfileWorkbookService::savedWorkbookPreview($pdo, (int)$profileId, 'summary_cards')
             ], JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT);
             exit;
         }
@@ -194,9 +208,11 @@ try {
             requireRole(['super_admin'], true);
             $recordId = trim((string)($_GET['record_id'] ?? ''));
             if ($recordId === '') templates_fail('Record id is required.');
-            $profile = db()->prepare('SELECT records.template_id, records.import_profile_id, records.metadata,
+            $pdo = db();
+            templates_require_destination_schema($pdo);
+            $profile = $pdo->prepare('SELECT records.template_id, records.import_profile_id, records.metadata,
                     COALESCE(upload_profiles.profile_name, profiles.profile_name, templates.name) AS template_name,
-                    COALESCE(upload_profiles.destination, profiles.destination) AS destination
+                    COALESCE(upload_profiles.destination, profiles.destination, templates.destination) AS destination
                 FROM records
                 LEFT JOIN templates ON templates.template_id = records.template_id
                 LEFT JOIN template_import_profiles profiles ON profiles.template_id = templates.template_id
@@ -231,10 +247,11 @@ try {
         }
         requireRole(['super_admin', 'admin'], true);
         $pdo = db();
+        templates_require_destination_schema($pdo);
         $customFieldsColumn = CustomImportFields::columnExists($pdo, 'template_import_profiles')
             ? 'profiles.custom_fields'
             : 'NULL AS custom_fields';
-        $templateQuery = 'SELECT templates.template_id AS id, templates.name, templates.original_filename, templates.ranking_body_id, bodies.name AS ranking_body_name, templates.is_active, templates.created_at, profiles.destination AS import_destination, profiles.sheet_selector, profiles.header_aliases, profiles.required_columns, profiles.identity_fields, profiles.mapping_rules, ' . $customFieldsColumn . ', profiles.defaults_json FROM templates LEFT JOIN ranking_bodies bodies ON bodies.ranking_body_id = templates.ranking_body_id LEFT JOIN template_import_profiles profiles ON profiles.template_id = templates.template_id';
+        $templateQuery = 'SELECT templates.template_id AS id, templates.name, templates.original_filename, templates.ranking_body_id, bodies.name AS ranking_body_name, templates.destination, templates.is_active, templates.created_at, COALESCE(profiles.destination, templates.destination, \'analytics\') AS import_destination, profiles.sheet_selector, profiles.header_aliases, profiles.required_columns, profiles.identity_fields, profiles.mapping_rules, ' . $customFieldsColumn . ', profiles.defaults_json FROM templates LEFT JOIN ranking_bodies bodies ON bodies.ranking_body_id = templates.ranking_body_id LEFT JOIN template_import_profiles profiles ON profiles.template_id = templates.template_id';
         $templateQuery .= ($_SESSION['role'] ?? '') === 'super_admin'
             ? ' ORDER BY templates.created_at DESC, templates.template_id DESC'
             : ' WHERE templates.is_active = 1 ORDER BY templates.name ASC, templates.template_id DESC';
@@ -294,6 +311,7 @@ try {
         exit;
     }
     if ($action === 'save-import-profile-settings') {
+        templates_require_destination_schema($pdo);
         $profileId = filter_var($_POST['profile_id'] ?? null, FILTER_VALIDATE_INT);
         $destination = (string)($_POST['destination'] ?? '');
         $profileName = trim((string)($_POST['profile_name'] ?? ''));
@@ -316,11 +334,25 @@ try {
             templates_fail('Aliases, mappings, required columns, identities, and defaults have invalid shapes.');
         }
         if ($destination === 'ranking_history') {
+            $profileData = TemplateImportSupport::normalizeRankingProfile([
+                'header_aliases' => $aliases,
+                'mapping_rules' => $mapping,
+                'defaults' => $defaults,
+                'required_columns' => $required,
+                'identity_fields' => $identityFields
+            ]);
+            $aliases = $profileData['header_aliases'];
+            $mapping = $profileData['mapping_rules'];
+            $defaults = $profileData['defaults'];
+            $required = $profileData['required_columns'];
+            $identityFields = $profileData['identity_fields'];
+        }
+        if ($destination === 'ranking_history') {
             foreach ($removedFields as $field) {
                 unset($aliases[$field], $mapping[$field], $defaults[$field]);
                 $required = array_values(array_filter($required, static fn($requiredField): bool => $requiredField !== $field));
             }
-            $allowedFields = ['organization', 'ranking_type', 'year', 'global_rank', 'ph_rank', 'source'];
+            $allowedFields = ['organization', 'ranking_type', 'year', 'global_rank', 'ph_rank', 'info_text'];
             $identityFields = ['organization', 'ranking_type', 'year'];
             $required = ['organization', 'ranking_type', 'year', 'global_rank'];
             foreach (['organization', 'ranking_type', 'year', 'global_rank'] as $field) {
@@ -574,7 +606,7 @@ try {
         $profileData = json_decode($rawProfile, true);
         if (!is_array($profileData)) templates_fail('Import profile must be valid JSON.');
         $allowedFields = $destination === 'ranking_history'
-            ? ['organization', 'ranking_type', 'year', 'global_rank', 'ph_rank', 'source']
+            ? ['organization', 'ranking_type', 'year', 'global_rank', 'ph_rank', 'info_text']
             : ['import_key', 'card_title', 'main_value', 'secondary_value', 'year_date', 'main_label', 'secondary_label', 'description', 'secondary_description', 'info_text', 'source_info', 'period_key'];
         $aliases = $profileData['header_aliases'] ?? [];
         $mapping = $profileData['mapping_rules'] ?? [];
@@ -656,6 +688,7 @@ try {
         $updateSql = implode(', ', array_map(static fn(string $field): string => '`' . $field . '` = VALUES(`' . $field . '`)', $updates));
         $save = $pdo->prepare('INSERT INTO template_import_profiles (' . $quotedColumns . ') VALUES (' . $placeholders . ') ON DUPLICATE KEY UPDATE ' . $updateSql);
         $save->execute(array_values($profileFields));
+        $pdo->prepare('UPDATE templates SET destination = ? WHERE template_id = ?')->execute([$destination, (int)$templateId]);
         echo json_encode(['success' => true]);
         exit;
     }
@@ -665,7 +698,7 @@ try {
         $shortName = trim((string)($_POST['short_name'] ?? ''));
         $sortOrder = filter_var($_POST['sort_order'] ?? 100, FILTER_VALIDATE_INT);
         $nameLength = function_exists('mb_strlen') ? mb_strlen($bodyName, 'UTF-8') : strlen($bodyName);
-        if ($bodyName === '' || $nameLength > 100) templates_fail('Ranking body name is required and must not exceed 100 characters.');
+        if ($bodyName === '' || $nameLength > 512) templates_fail('Ranking body name is required and must not exceed 512 characters.');
         if ($shortName === '' || strlen($shortName) > 20) templates_fail('Short name is required and must not exceed 20 characters.');
         if ($sortOrder === false || $sortOrder < 0 || $sortOrder > 1000000) templates_fail('Sort order must be a whole number from 0 to 1,000,000.');
 
@@ -718,9 +751,12 @@ try {
         }
     }
     if ($action === 'upload') {
+        templates_require_destination_schema($pdo);
         $name = trim((string)($_POST['name'] ?? ''));
         $nameLength = function_exists('mb_strlen') ? mb_strlen($name, 'UTF-8') : strlen($name);
         if ($name === '' || $nameLength > 150) templates_fail('Template name is required and must not exceed 150 characters.');
+        $destination = (string)($_POST['destination'] ?? '');
+        if (!in_array($destination, ['analytics', 'summary_cards', 'ranking_history'], true)) templates_fail('Choose a valid template category.');
         $rankingBodyId = null;
         if (isset($_POST['ranking_body_id']) && $_POST['ranking_body_id'] !== '') {
             $rankingBodyId = filter_var($_POST['ranking_body_id'], FILTER_VALIDATE_INT);
@@ -775,8 +811,8 @@ try {
         $originalName = function_exists('mb_substr') ? mb_substr($originalName, 0, 255, 'UTF-8') : substr($originalName, 0, 255);
 
         try {
-            $insert = $pdo->prepare('INSERT INTO templates (name, file_path, original_filename, ranking_body_id, uploaded_by) VALUES (?, ?, ?, ?, ?)');
-            $insert->execute([$name, $storedName, $originalName, $rankingBodyId, (int)$_SESSION['user_id']]);
+            $insert = $pdo->prepare('INSERT INTO templates (name, file_path, original_filename, destination, ranking_body_id, uploaded_by) VALUES (?, ?, ?, ?, ?, ?)');
+            $insert->execute([$name, $storedName, $originalName, $destination, $rankingBodyId, (int)$_SESSION['user_id']]);
         } catch (Throwable $exception) {
             if (is_file($storedPath)) unlink($storedPath);
             throw $exception;

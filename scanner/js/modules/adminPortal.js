@@ -26,7 +26,7 @@ export function initAdminPortal(ctx) {
   const openRecordHistory = async record => {
     const overlay = document.createElement('div');
     overlay.className = 'modal-overlay active';
-    overlay.innerHTML = '<div class="modal-card" style="max-width:900px;max-height:calc(100vh - 2rem);overflow:auto" role="dialog" aria-modal="true" aria-labelledby="recordHistoryTitle"><div class="modal-header"><h3 class="modal-title" id="recordHistoryTitle">File History</h3><button type="button" class="export-cancel-button" data-close>Close</button></div><p role="status" aria-live="polite">Loading versions...</p></div>';
+    overlay.innerHTML = '<div class="modal-card file-history-card" role="dialog" aria-modal="true" aria-labelledby="recordHistoryTitle"><div class="modal-header"><h3 class="modal-title" id="recordHistoryTitle">File History</h3><button type="button" class="export-cancel-button" data-close>Close</button></div><p role="status" aria-live="polite">Loading versions...</p></div>';
     document.body.appendChild(overlay);
     const card = overlay.querySelector('.modal-card');
     const close = () => overlay.remove();
@@ -45,17 +45,19 @@ export function initAdminPortal(ctx) {
 
     const renderList = () => {
       card.innerHTML = `<div class="modal-header"><h3 class="modal-title" id="recordHistoryTitle">File History: ${escape(record.fileName || `Record ${record.id}`)}</h3><button type="button" class="export-cancel-button" data-close>Close</button></div>
-        <p>Merge history is append-only. Select exactly two versions to compare.</p>
-        <div style="display:flex;gap:.5rem;margin:.75rem 0"><button type="button" class="archive-load-button" data-compare disabled>Compare selected</button></div>
-        <div style="overflow:auto"><table class="admin-records-table"><thead><tr><th>Compare</th><th>Version</th><th>Entry</th><th>Method</th><th>Created</th><th>File</th><th>Actions</th></tr></thead><tbody>
-          ${versions.map(version => `<tr><td><input type="checkbox" data-compare-version="${escape(version.version_id)}" aria-label="Select version ${escape(version.version_id)} for comparison"></td><td>${escape(version.version_id)}</td><td>${escape(version.entry_type)}</td><td>${escape(version.merge_method)}</td><td>${escape(new Date(version.created_at).toLocaleString())}</td><td>${version.original_file_name ? escape(version.original_file_name) : 'No file snapshot'}</td><td><button type="button" class="archive-load-button" data-view-version="${escape(version.version_id)}">View</button> ${version.file_snapshot_key ? `<a class="archive-load-button" href="${escape(ctx.dbManager.config.endpoints.fileHistoryDownload(version.version_id))}">Download</a>` : ''} <button type="button" class="archive-load-button" data-restore-version="${escape(version.version_id)}">Restore</button></td></tr>`).join('')}
+        <div class="file-history-toolbar"><p>Select two versions to compare.</p><div><span data-selection-count aria-live="polite">0 selected</span><button type="button" class="archive-load-button" data-compare disabled>Compare</button></div></div>
+        <div class="file-history-table-wrap"><table class="admin-records-table file-history-table"><thead><tr><th scope="col">Compare</th><th scope="col">Version</th><th scope="col">Created</th><th scope="col">File</th><th scope="col">Actions</th></tr></thead><tbody>
+          ${versions.map(version => `<tr><td><input type="checkbox" data-compare-version="${escape(version.version_id)}" aria-label="Select version ${escape(version.version_id)} for comparison"></td><td><div class="file-history-version"><strong>v${escape(version.version_id)}</strong><span>${escape(version.entry_type)} · ${escape(version.merge_method)}</span></div></td><td class="file-history-created">${escape(new Date(version.created_at).toLocaleString())}</td><td><span class="file-history-filename" title="${escape(version.original_file_name || 'No file snapshot')}">${version.original_file_name ? escape(version.original_file_name) : 'No file snapshot'}</span></td><td><div class="file-history-actions"><button type="button" class="archive-load-button file-history-action-button" data-view-version="${escape(version.version_id)}">View</button>${version.file_snapshot_key ? `<a class="archive-load-button file-history-action-button" href="${escape(ctx.dbManager.config.endpoints.fileHistoryDownload(version.version_id))}">Download</a>` : ''}<button type="button" class="export-cancel-button file-history-action-button" data-restore-version="${escape(version.version_id)}">Restore</button></div></td></tr>`).join('')}
         </tbody></table></div>`;
       card.querySelector('[data-close]').addEventListener('click', close);
       const compareButton = card.querySelector('[data-compare]');
+      const selectionCount = card.querySelector('[data-selection-count]');
       card.querySelectorAll('[data-compare-version]').forEach(input => input.addEventListener('change', () => {
         const selected = [...card.querySelectorAll('[data-compare-version]:checked')];
         if (selected.length > 2) input.checked = false;
-        compareButton.disabled = card.querySelectorAll('[data-compare-version]:checked').length !== 2;
+        const count = card.querySelectorAll('[data-compare-version]:checked').length;
+        compareButton.disabled = count !== 2;
+        selectionCount.textContent = `${count} selected`;
       }));
       compareButton.addEventListener('click', async () => {
         const ids = [...card.querySelectorAll('[data-compare-version]:checked')].map(input => input.dataset.compareVersion);
@@ -156,30 +158,32 @@ export function initAdminPortal(ctx) {
     }
     const typeSelect = $('studioChartTypeSelect');
     const savedType = String(graph.chart_type || 'bar');
-    const chartType = /^(?:polararea|polar-area|rose|nightingale)$/i.test(savedType) ? 'bar' : savedType;
+    const chartType = typeSelect && [...typeSelect.options].some(option => option.value === savedType) ? savedType : 'bar';
     const irisConfig = graph.chart_data?.irisConfig || {};
-    if (typeSelect && [...typeSelect.options].some(option => option.value === chartType)) typeSelect.value = chartType;
+    if (typeSelect) typeSelect.value = chartType;
     ctx.state.studioChartConfig = { ...(ctx.state.studioChartConfig || {}), ...irisConfig, orientation: graph.orientation || irisConfig.orientation || 'vertical' };
     ctx.state.studioChartOverrides = Array.isArray(graph.colors) ? [...graph.colors] : null;
 
     const sheet = ctx.api.getStudioActiveSheet(record)?.data;
-    const mapping = graph.chart_data?.rankedBar || {};
     if (sheet) {
       ctx.api.updateFieldSelectOptions(sheet);
       const category = $('studioCategoryCol');
       const value = $('studioValueCol');
       const hasSavedIndex = index => index !== null && index !== undefined && index !== '' && Number.isInteger(Number(index)) && Number(index) >= 0 && Number(index) < sheet.headers.length;
-      const categoryField = irisConfig.categoryField ?? mapping.categoryField;
-      const valueField = irisConfig.valueField ?? mapping.valueField;
+      const categoryField = irisConfig.categoryField;
+      const valueField = irisConfig.valueField;
       const groupField = irisConfig.groupField;
       if (hasSavedIndex(categoryField) && category) category.value = String(categoryField);
       if (hasSavedIndex(valueField) && value) value.value = String(valueField);
+      ctx.api.updateFieldSelectOptions(sheet);
       const group = $('studioGroupField');
       if (hasSavedIndex(groupField) && group) group.value = String(groupField);
+      const seriesField = $('studioSeriesField');
+      if (hasSavedIndex(irisConfig.seriesField) && seriesField && [...seriesField.options].some(option => option.value === String(irisConfig.seriesField))) seriesField.value = String(irisConfig.seriesField);
       const precision = $('studioValuePrecisionSelect');
       if (precision && irisConfig.precision !== undefined) precision.value = String(irisConfig.precision);
-      const reverse = $('studioRankedReverseOrder');
-      if (reverse) reverse.checked = Boolean(irisConfig.reverseOrder ?? mapping.reverseOrder);
+      const reverse = $('studioReverseOrder');
+      if (reverse) reverse.checked = Boolean(irisConfig.reverseOrder);
       const restoreValue = (id, key, fallback = '') => {
         const input = $(id);
         if (input && irisConfig[key] !== undefined && irisConfig[key] !== null) input.value = String(irisConfig[key]);

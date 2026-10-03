@@ -1,17 +1,25 @@
 (() => {
   const chartHost = document.getElementById('rankingChart');
+  const displayModeSelect = document.getElementById('rankingDisplayMode');
+  const graphLayoutSelect = document.getElementById('rankingGraphLayout');
+  const graphLayoutControl = document.getElementById('rankingGraphLayoutControl');
   const organizationSelect = document.getElementById('rankingOrganizationFilter');
   const listControl = document.getElementById('rankingListControl');
   const listSelect = document.getElementById('rankingListFilter');
   const fromSelect = document.getElementById('rankingYearFrom');
   const toSelect = document.getElementById('rankingYearTo');
   const allYearsButton = document.getElementById('rankingAllYears');
+  const resetDefaultsButton = document.getElementById('rankingResetDefaults');
+  const filtersControl = document.getElementById('rankingFiltersControl');
+  const filtersPopover = document.getElementById('rankingFiltersPopover');
   const api = document.currentScript?.dataset.api;
   if (!chartHost || !organizationSelect || !listControl || !listSelect || !fromSelect || !toSelect || !api) return;
 
   let rows = [];
   let charts = [];
+  let pinnedRankingInfoControl = null;
   let allYearsActive = true;
+  let defaultDisplayState = null;
   let colorOverrides = {};
   try {
     const stored = JSON.parse(localStorage.getItem('iris-ranking-series-colors') || '{}');
@@ -21,8 +29,20 @@
   const escapeHtml = value => String(value ?? '').replace(/[&<>"']/g, character => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[character]));
   const isNumeric = row => row.rank_value !== null && row.rank_value !== '' && Number.isFinite(Number(row.rank_value));
   const numericRows = () => rows.filter(isNumeric);
+  const rankingRows = () => rows.filter(row => row.year !== null && row.year !== '' && Number.isFinite(Number(row.year)));
   const selectedOrganization = () => organizationSelect.value || 'all';
   const selectedList = () => listSelect.value || 'all';
+  const selectedDisplayMode = () => displayModeSelect?.value === 'matrix' ? 'matrix' : 'charts';
+  const selectedGraphLayout = () => graphLayoutSelect?.value === 'side-by-side' ? 'side-by-side' : 'one-per-row';
+
+  document.addEventListener('click', event => {
+    if (!pinnedRankingInfoControl || pinnedRankingInfoControl.contains(event.target)) return;
+    const trigger = pinnedRankingInfoControl.querySelector('button');
+    const panel = pinnedRankingInfoControl.querySelector('[role="tooltip"]');
+    if (panel) panel.hidden = true;
+    trigger?.setAttribute('aria-expanded', 'false');
+    pinnedRankingInfoControl = null;
+  });
 
   function selectedYears() {
     if (allYearsActive) return null;
@@ -40,25 +60,58 @@
     return numericRows().filter(row => selectedOrganization() === 'all' || row.organization === selectedOrganization());
   }
 
+  function rankingRowsForOrganization() {
+    return rankingRows().filter(row => selectedOrganization() === 'all' || row.organization === selectedOrganization());
+  }
+
   function updateListOptions() {
     if (selectedOrganization() === 'all') {
       listSelect.value = 'all';
       listControl.classList.add('hidden');
-      listControl.classList.remove('inline-flex');
+      listControl.classList.remove('flex');
       return;
     }
-    const types = [...new Set(rowsForOrganization().filter(inSelectedRange).map(row => String(row.ranking_type || '')))]
+    const types = [...new Set(rankingRowsForOrganization().filter(inSelectedRange).map(row => String(row.ranking_type || '')))]
       .filter(Boolean);
     const previous = selectedList();
     listSelect.replaceChildren(new Option('All lists', 'all'));
     for (const type of types) listSelect.add(new Option(type, type));
     listSelect.value = types.includes(previous) ? previous : 'all';
     listControl.classList.toggle('hidden', selectedOrganization() === 'all' || types.length <= 1);
-    listControl.classList.toggle('inline-flex', selectedOrganization() !== 'all' && types.length > 1);
+    listControl.classList.toggle('flex', selectedOrganization() !== 'all' && types.length > 1);
   }
 
+  function positionFiltersPopover() {
+    if (!filtersControl?.open || !filtersPopover) return;
+    const trigger = filtersControl.querySelector('summary');
+    if (!trigger) return;
+    const anchor = trigger.getBoundingClientRect();
+    const panel = filtersPopover.getBoundingClientRect();
+    const margin = 12;
+    const left = Math.max(margin, Math.min(anchor.right - panel.width, window.innerWidth - panel.width - margin));
+    const below = anchor.bottom + 8;
+    const top = below + panel.height <= window.innerHeight - margin
+      ? below
+      : Math.max(margin, anchor.top - panel.height - 8);
+    filtersPopover.style.left = `${Math.round(left)}px`;
+    filtersPopover.style.top = `${Math.round(top)}px`;
+  }
+
+  filtersControl?.addEventListener('toggle', () => {
+    if (!filtersControl.open) return;
+    requestAnimationFrame(positionFiltersPopover);
+  });
+  document.addEventListener('click', event => {
+    if (filtersControl?.open && !filtersControl.contains(event.target)) filtersControl.open = false;
+  });
+  document.addEventListener('keydown', event => {
+    if (event.key === 'Escape' && filtersControl?.open) filtersControl.open = false;
+  });
+  window.addEventListener('resize', positionFiltersPopover);
+  window.addEventListener('scroll', positionFiltersPopover, true);
+
   function renderYearOptions() {
-    const years = [...new Set(numericRows().map(row => Number(row.year)))].filter(Number.isFinite).sort((left, right) => left - right);
+    const years = [...new Set(rankingRows().map(row => Number(row.year)))].filter(Number.isFinite).sort((left, right) => left - right);
     const options = years.map(year => new Option(String(year), String(year)));
     fromSelect.replaceChildren(...options.map(option => option.cloneNode(true)));
     toSelect.replaceChildren(...options.map(option => option.cloneNode(true)));
@@ -85,19 +138,127 @@
   function disposeCharts() {
     charts.forEach(chart => chart?.dispose?.());
     charts = [];
+    if (pinnedRankingInfoControl) {
+      const trigger = pinnedRankingInfoControl.querySelector('button');
+      const panel = pinnedRankingInfoControl.querySelector('[role="tooltip"]');
+      if (panel) panel.hidden = true;
+      trigger?.setAttribute('aria-expanded', 'false');
+      pinnedRankingInfoControl = null;
+    }
   }
 
   function showEmpty(message = 'No numeric rankings found for the selected filters.') {
     disposeCharts();
-    chartHost.className = 'grid min-h-64 w-full grid-cols-1 gap-4';
+    chartHost.className = rankingChartGridClass();
     chartHost.innerHTML = `<div class="rounded-xl border border-dashed border-gray-300 bg-gray-50 p-6 text-center text-sm text-gray-600 dark:border-gray-600 dark:bg-gray-800/60 dark:text-gray-300"><i class="fa-solid fa-folder-open mb-2 text-2xl text-gray-400" aria-hidden="true"></i><p>${escapeHtml(message)}</p></div>`;
   }
 
+  function rankingChartGridClass() {
+    return selectedGraphLayout() === 'side-by-side'
+      ? 'grid min-h-64 w-full grid-cols-1 gap-4 xl:grid-cols-2'
+      : 'grid min-h-64 w-full grid-cols-1 gap-4';
+  }
+
+  function buildTrendMatrixTable(visible, includeOrganization) {
+    const years = [...new Set(visible.map(row => Number(row.year)))]
+      .filter(Number.isFinite)
+      .sort((left, right) => right - left);
+    const families = new Map();
+    for (const row of visible) {
+      const organization = String(row.organization || 'Organization');
+      const rankingType = String(row.ranking_type || 'Ranking');
+      const key = `${organization}\0${rankingType}`;
+      if (!families.has(key)) families.set(key, { organization, rankingType, byYear: new Map() });
+      families.get(key).byYear.set(Number(row.year), row);
+    }
+
+    const headers = years.map(year => `<th scope="col" class="min-w-32 border-b border-l border-amber-100 bg-amber-50/80 px-4 py-3 text-center text-xs font-bold uppercase tracking-wide text-gray-600 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-300">${year}</th>`).join('');
+    const body = [...families.values()].map(family => {
+      const name = includeOrganization
+        ? `<span class="block text-xs font-semibold text-green-800 dark:text-green-300">${escapeHtml(family.organization)}</span><span class="mt-1 block">${escapeHtml(family.rankingType)}</span>`
+        : escapeHtml(family.rankingType);
+      const recordedYears = family.byYear.size;
+      const cells = years.map(year => {
+        const row = family.byYear.get(year);
+        if (!row) return '<td class="border-b border-l border-amber-100 px-3 py-3 text-center text-xs text-gray-400 dark:border-gray-700 dark:text-gray-500"><span class="inline-block rounded-full bg-gray-100 px-2.5 py-1 font-semibold dark:bg-gray-700">N/A</span><span class="mt-1 block">No record</span></td>';
+        const globalRank = String(row.global_rank ?? '').trim() || 'N/A';
+        const phRank = String(row.ph_rank ?? '').trim() || 'N/A';
+        return `<td class="border-b border-l border-amber-100 px-3 py-3 text-center dark:border-gray-700"><span class="inline-block max-w-full rounded-full bg-amber-100 px-2.5 py-1 text-xs font-bold text-green-900 dark:bg-amber-400/20 dark:text-amber-200">${escapeHtml(globalRank)}</span><span class="mt-1 block text-xs text-gray-500 dark:text-gray-400">Philippines: ${escapeHtml(phRank)}</span></td>`;
+      }).join('');
+      return `<tr><th scope="row" class="min-w-56 border-b border-amber-100 bg-amber-50/40 px-4 py-4 text-left text-sm font-semibold text-gray-800 dark:border-gray-700 dark:bg-gray-800/60 dark:text-gray-100">${name}<span class="mt-1 block text-xs font-normal text-gray-500 dark:text-gray-400">${recordedYears} recorded ${recordedYears === 1 ? 'year' : 'years'}</span></th>${cells}</tr>`;
+    }).join('');
+    return `<div class="max-w-full overflow-x-auto"><table class="w-full min-w-max border-separate border-spacing-0 text-sm"><thead><tr><th scope="col" class="sticky left-0 z-10 min-w-56 border-b border-amber-100 bg-amber-50 px-4 py-3 text-left text-xs font-bold uppercase tracking-wide text-gray-600 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-300">Ranking Name</th>${headers}</tr></thead><tbody>${body}</tbody></table></div>`;
+  }
+
+  function renderTrendMatrix() {
+    const visible = rankingRowsForOrganization()
+      .filter(inSelectedRange)
+      .filter(row => selectedList() === 'all' || row.ranking_type === selectedList());
+    if (!visible.length) {
+      disposeCharts();
+      chartHost.className = rankingChartGridClass();
+      chartHost.innerHTML = '<div class="rounded-xl border border-dashed border-gray-300 bg-gray-50 p-6 text-center text-sm text-gray-600 dark:border-gray-600 dark:bg-gray-800/60 dark:text-gray-300">No rankings found for the selected filters.</div>';
+      return;
+    }
+
+    disposeCharts();
+
+    chartHost.className = 'min-h-64 w-full overflow-hidden rounded-xl border border-amber-200 bg-white dark:border-gray-700 dark:bg-gray-900';
+    chartHost.innerHTML = `<div class="border-b border-amber-100 px-4 py-4 dark:border-gray-700"><h3 class="font-bold tracking-wide text-green-900 dark:text-green-200">Ranking Trend Matrix</h3><p class="mt-1 text-sm text-gray-500 dark:text-gray-400">Each year stays in its own column, with the global rank and Philippine rank shown together for easier comparison.</p></div>${buildTrendMatrixTable(visible, selectedOrganization() === 'all')}`;
+  }
+
+  function openTrendMatrixDialog(title, matrixRows) {
+    const dialog = document.createElement('dialog');
+    dialog.className = 'm-auto max-h-[90vh] w-[min(96vw,1100px)] overflow-hidden rounded-2xl border border-amber-200 bg-white p-0 text-gray-800 shadow-2xl backdrop:bg-gray-950/50 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100';
+    const headingId = `ranking-matrix-dialog-title-${Date.now()}`;
+    dialog.innerHTML = `<div class="flex items-center justify-between gap-4 border-b border-amber-100 px-5 py-4 dark:border-gray-700"><div><h2 id="${headingId}" class="font-bold text-green-900 dark:text-green-200">Ranking Trend Matrix</h2><p class="mt-1 text-sm text-gray-500 dark:text-gray-400">${escapeHtml(title)}</p></div><button type="button" class="ranking-matrix-dialog-close rounded-lg border border-gray-300 px-3 py-2 text-sm font-semibold hover:bg-gray-100 dark:border-gray-600 dark:hover:bg-gray-800" aria-label="Close Ranking Trend Matrix">Close</button></div><div class="max-h-[calc(90vh-76px)] overflow-auto">${buildTrendMatrixTable(matrixRows, false)}</div>`;
+    dialog.setAttribute('aria-labelledby', headingId);
+    dialog.querySelector('.ranking-matrix-dialog-close').addEventListener('click', () => dialog.close());
+    dialog.addEventListener('click', event => {
+      if (event.target === dialog) dialog.close();
+    });
+    dialog.addEventListener('close', () => dialog.remove(), { once: true });
+    document.body.append(dialog);
+    dialog.showModal();
+  }
+
+  function isRankingContextField(key, field) {
+    return String(key || '').toLowerCase() === 'ranking_context'
+      || String(field?.label || '').trim().toLowerCase() === 'ranking context';
+  }
+
+  function addRankingExplanation(content, rows) {
+    const rankingContext = [...rows]
+      .sort((left, right) => Number(right.year) - Number(left.year))
+      .map(row => ({
+        value: Object.entries(row.custom_fields || {})
+          .find(([key, field]) => isRankingContextField(key, field) && String(field?.value || '').trim())?.[1]?.value
+      }))
+      .find(item => item.value);
+    if (!rankingContext) return;
+
+    const section = document.createElement('details');
+    section.className = 'min-w-0 rounded-lg bg-gray-50 p-3 dark:bg-gray-900/70';
+    const heading = document.createElement('summary');
+    heading.className = 'cursor-pointer text-sm font-bold text-gray-800 dark:text-gray-100';
+    heading.textContent = 'What this ranking means';
+    const description = document.createElement('p');
+    description.className = 'mt-2 whitespace-pre-wrap break-words text-sm leading-relaxed text-gray-700 dark:text-gray-200';
+    description.textContent = String(rankingContext.value).trim();
+    section.append(heading, description);
+    content.append(section);
+  }
+
   function addInformationControl(wrapper, chartRows) {
-    const infoRows = chartRows.filter(row => String(row.info_text || '').trim() || Object.keys(row.custom_fields || {}).length);
+    const infoRows = chartRows.filter(row =>
+      String(row.info_text || '').trim() ||
+      Object.entries(row.custom_fields || {}).some(([key, field]) =>
+        !isRankingContextField(key, field) && String(field?.value || '').trim()
+      )
+    );
     if (!infoRows.length) return;
     const control = document.createElement('div');
-    control.className = 'absolute right-3 top-3 z-40';
+    control.className = 'ranking-info-control absolute right-3 top-3 z-40';
     const trigger = document.createElement('button');
     trigger.type = 'button';
     trigger.className = 'flex h-7 w-7 cursor-pointer items-center justify-center rounded-full border border-gray-500/40 bg-white/90 text-sm text-gray-500 shadow-sm hover:bg-gray-100 dark:bg-gray-800/90 dark:text-gray-300 dark:hover:bg-gray-700';
@@ -116,8 +277,8 @@
       year.textContent = `${row.year}: `;
       entry.append(year);
       if (String(row.info_text || '').trim()) entry.append(document.createTextNode(String(row.info_text).trim()));
-      for (const field of Object.values(row.custom_fields || {})) {
-        if (!field?.value) continue;
+      for (const [key, field] of Object.entries(row.custom_fields || {})) {
+        if (isRankingContextField(key, field) || !String(field?.value || '').trim()) continue;
         const detail = document.createElement('span');
         detail.className = 'block pl-2';
         detail.textContent = `${field.label}: ${field.value}`;
@@ -127,21 +288,30 @@
     }
     const open = () => { panel.hidden = false; trigger.setAttribute('aria-expanded', 'true'); };
     const close = () => { panel.hidden = true; trigger.setAttribute('aria-expanded', 'false'); };
-    let touchToggleHandled = false;
-    trigger.addEventListener('mouseenter', open);
-    trigger.addEventListener('focus', open);
-    control.addEventListener('mouseleave', close);
-    trigger.addEventListener('blur', close);
-    trigger.addEventListener('keydown', event => { if (event.key === 'Escape') { close(); trigger.blur(); } });
-    trigger.addEventListener('pointerdown', event => {
-      if (event.pointerType !== 'touch') return;
-      event.preventDefault();
-      touchToggleHandled = true;
-      panel.hidden ? open() : close();
+    trigger.addEventListener('mouseenter', () => { if (!pinnedRankingInfoControl) open(); });
+    trigger.addEventListener('focus', () => { if (!pinnedRankingInfoControl) open(); });
+    control.addEventListener('mouseleave', () => { if (pinnedRankingInfoControl !== control) close(); });
+    trigger.addEventListener('blur', () => { if (pinnedRankingInfoControl !== control) close(); });
+    trigger.addEventListener('click', () => {
+      if (pinnedRankingInfoControl === control) {
+        pinnedRankingInfoControl = null;
+        close();
+        return;
+      }
+      if (pinnedRankingInfoControl) {
+        const previousTrigger = pinnedRankingInfoControl.querySelector('button');
+        const previousPanel = pinnedRankingInfoControl.querySelector('[role="tooltip"]');
+        if (previousPanel) previousPanel.hidden = true;
+        previousTrigger?.setAttribute('aria-expanded', 'false');
+      }
+      pinnedRankingInfoControl = control;
+      open();
     });
-    trigger.addEventListener('click', event => {
-      if (touchToggleHandled) { touchToggleHandled = false; return; }
-      if (event.detail === 0) return;
+    trigger.addEventListener('keydown', event => {
+      if (event.key !== 'Escape') return;
+      if (pinnedRankingInfoControl === control) pinnedRankingInfoControl = null;
+      close();
+      trigger.blur();
     });
     control.append(trigger, panel);
     wrapper.append(control);
@@ -159,19 +329,34 @@
     return { label: 'No change', color: '#64748B' };
   }
 
-  function makeChart(title, rowsForChart, color, index) {
+  function makeChart(title, rowsForChart, color, index, showMatrixAction, hasSingleChart) {
     const wrapper = document.createElement('div');
-    wrapper.className = 'ranking-history-card relative min-w-0 overflow-visible rounded-xl border border-gray-200 bg-white p-3 shadow-sm dark:border-gray-700 dark:bg-gray-800';
+    wrapper.className = 'iris-hover-card ranking-history-card relative min-w-0 overflow-visible rounded-xl border border-gray-200 bg-white p-3 shadow-sm dark:border-gray-700 dark:bg-gray-800';
     wrapper.style.position = 'relative';
-    wrapper.style.minHeight = '360px';
     wrapper.style.width = '100%';
+    const header = document.createElement('div');
+    header.className = 'mb-2 flex min-h-8 items-center justify-between gap-3 pr-10';
     const heading = document.createElement('h3');
-    heading.className = 'mb-2 min-h-6 pr-10 text-sm font-bold text-gray-700 dark:text-gray-200';
+    heading.className = 'min-w-0 text-sm font-bold text-gray-700 dark:text-gray-200';
     heading.textContent = title;
+    header.append(heading);
+    if (showMatrixAction) {
+      const matrixButton = document.createElement('button');
+      matrixButton.type = 'button';
+      matrixButton.className = 'shrink-0 rounded-lg border border-green-800/30 px-2.5 py-1.5 text-xs font-semibold text-green-900 transition hover:border-green-800 hover:bg-green-50 dark:border-amber-500/40 dark:text-amber-200 dark:hover:bg-amber-400/10';
+      matrixButton.textContent = 'Pop Ranking Trend Matrix';
+      matrixButton.addEventListener('click', () => openTrendMatrixDialog(title, rowsForChart));
+      header.append(matrixButton);
+    }
+    const content = document.createElement('div');
+    content.className = 'grid min-w-0 grid-cols-1 gap-3';
     const surface = document.createElement('div');
+    surface.className = 'min-w-0';
     surface.style.height = '320px';
     surface.style.width = '100%';
-    wrapper.append(heading, surface);
+    content.append(surface);
+    wrapper.append(header, content);
+    addRankingExplanation(content, rowsForChart);
     addInformationControl(wrapper, rowsForChart);
     chartHost.append(wrapper);
     const chart = echarts.init(surface);
@@ -215,24 +400,39 @@
     });
   }
 
-  function makeImpactChart(organization, sdgRows, index) {
+  function makeImpactChart(organization, sdgRows, index, showMatrixAction, hasSingleChart) {
     const years = [...new Set(sdgRows.map(row => Number(row.year)))].sort((left, right) => left - right);
     const targetYear = years.at(-1);
     const selectedRows = sdgRows.filter(row => Number(row.year) === targetYear).sort((left, right) => Number(left.rank_value) - Number(right.rank_value));
     if (!selectedRows.length) return;
     const title = `${selectedOrganization() === 'all' ? `${organization} ` : ''}THE Impact SDG - ${targetYear}`;
     const wrapper = document.createElement('div');
-    wrapper.className = 'ranking-history-card relative min-w-0 overflow-visible rounded-xl border border-gray-200 bg-white p-3 shadow-sm dark:border-gray-700 dark:bg-gray-800';
+    wrapper.className = 'iris-hover-card ranking-history-card relative min-w-0 overflow-visible rounded-xl border border-gray-200 bg-white p-3 shadow-sm dark:border-gray-700 dark:bg-gray-800';
     wrapper.style.position = 'relative';
-    wrapper.style.minHeight = '360px';
     wrapper.style.width = '100%';
+    const header = document.createElement('div');
+    header.className = 'mb-2 flex min-h-8 items-center justify-between gap-3 pr-10';
     const heading = document.createElement('h3');
-    heading.className = 'mb-2 min-h-6 pr-10 text-sm font-bold text-gray-700 dark:text-gray-200';
+    heading.className = 'min-w-0 text-sm font-bold text-gray-700 dark:text-gray-200';
     heading.textContent = title;
+    header.append(heading);
+    if (showMatrixAction) {
+      const matrixButton = document.createElement('button');
+      matrixButton.type = 'button';
+      matrixButton.className = 'shrink-0 rounded-lg border border-green-800/30 px-2.5 py-1.5 text-xs font-semibold text-green-900 transition hover:border-green-800 hover:bg-green-50 dark:border-amber-500/40 dark:text-amber-200 dark:hover:bg-amber-400/10';
+      matrixButton.textContent = 'Pop Ranking Trend Matrix';
+      matrixButton.addEventListener('click', () => openTrendMatrixDialog(title, sdgRows));
+      header.append(matrixButton);
+    }
+    const content = document.createElement('div');
+    content.className = 'grid min-w-0 grid-cols-1 gap-3';
     const surface = document.createElement('div');
+    surface.className = 'min-w-0';
     surface.style.height = '320px';
     surface.style.width = '100%';
-    wrapper.append(heading, surface);
+    content.append(surface);
+    wrapper.append(header, content);
+    addRankingExplanation(content, selectedRows);
     addInformationControl(wrapper, selectedRows);
     chartHost.append(wrapper);
     const chart = echarts.init(surface);
@@ -262,6 +462,7 @@
 
   function render() {
     updateListOptions();
+    if (selectedDisplayMode() === 'matrix') return renderTrendMatrix();
     const list = rowsForOrganization().filter(inSelectedRange);
     const selectedType = selectedList();
     const visible = selectedType === 'all' ? list : list.filter(row => row.ranking_type === selectedType);
@@ -283,22 +484,20 @@
       families.get(key).rows.push(row);
     }
     const chartCount = families.size + impact.size;
-    chartHost.className = chartCount === 1
-      ? 'grid min-h-64 w-full grid-cols-1 gap-4'
-      : 'grid min-h-64 w-full grid-cols-1 gap-4 xl:grid-cols-2';
+    chartHost.className = rankingChartGridClass();
     let index = 0;
     for (const family of families.values()) {
       const title = selectedOrganization() === 'all' ? `${family.organization} ${family.type}` : family.type;
-      makeChart(title, family.rows, seriesColor(`${family.organization} ${family.type}`, index), index++);
+      makeChart(title, family.rows, seriesColor(`${family.organization} ${family.type}`, index), index++, chartCount > 1, chartCount === 1);
     }
-    for (const [organization, sdgRows] of impact) makeImpactChart(organization, sdgRows, index++);
+    for (const [organization, sdgRows] of impact) makeImpactChart(organization, sdgRows, index++, chartCount > 1, chartCount === 1);
     if (!families.size && !impact.size) showEmpty();
   }
 
   function updateAllYearsButton() {
     if (!allYearsButton) return;
     allYearsButton.setAttribute('aria-pressed', String(allYearsActive));
-    allYearsButton.className = `rounded-lg border px-3 py-2 ${allYearsActive ? 'border-green-800 bg-green-800 text-white dark:border-amber-500 dark:bg-amber-500 dark:text-gray-950' : 'border-green-800/30 bg-white text-green-900 dark:border-gray-600 dark:bg-gray-900 dark:text-gray-200'}`;
+    allYearsButton.className = `w-auto justify-self-start self-center rounded-lg border px-2.5 py-1.5 text-xs ${allYearsActive ? 'border-green-800 bg-green-800 text-white dark:border-amber-500 dark:bg-amber-500 dark:text-gray-950' : 'border-green-800/30 bg-white text-green-900 dark:border-gray-600 dark:bg-gray-900 dark:text-gray-200'}`;
   }
 
   function setRangeChanged() {
@@ -318,6 +517,12 @@
     renderYearOptions();
     updateListOptions();
     if ([...listSelect.options].some(option => option.value === defaults.default_list)) listSelect.value = defaults.default_list;
+    defaultDisplayState = {
+      mode: selectedDisplayMode(),
+      layout: selectedGraphLayout(),
+      organization: organizationSelect.value || 'all',
+      list: listSelect.value || 'all'
+    };
     updateAllYearsButton();
     render();
   }
@@ -327,10 +532,34 @@
     render();
   });
   listSelect.addEventListener('change', render);
+  displayModeSelect?.addEventListener('change', render);
+  displayModeSelect?.addEventListener('change', () => {
+    if (graphLayoutControl) graphLayoutControl.classList.toggle('hidden', selectedDisplayMode() !== 'charts');
+  });
+  graphLayoutSelect?.addEventListener('change', render);
+  resetDefaultsButton?.addEventListener('click', () => {
+    if (defaultDisplayState) {
+      if ([...displayModeSelect.options].some(option => option.value === defaultDisplayState.mode)) displayModeSelect.value = defaultDisplayState.mode;
+      if (graphLayoutSelect && [...graphLayoutSelect.options].some(option => option.value === defaultDisplayState.layout)) graphLayoutSelect.value = defaultDisplayState.layout;
+      if ([...organizationSelect.options].some(option => option.value === defaultDisplayState.organization)) organizationSelect.value = defaultDisplayState.organization;
+      updateListOptions();
+      if ([...listSelect.options].some(option => option.value === defaultDisplayState.list)) listSelect.value = defaultDisplayState.list;
+    }
+    if (graphLayoutControl) graphLayoutControl.classList.toggle('hidden', selectedDisplayMode() !== 'charts');
+    allYearsActive = true;
+    const yearRangeControl = document.getElementById('rankingYearRangeControl');
+    if (yearRangeControl) yearRangeControl.open = false;
+    if (fromSelect.options.length) fromSelect.selectedIndex = 0;
+    if (toSelect.options.length) toSelect.selectedIndex = toSelect.options.length - 1;
+    updateAllYearsButton();
+    render();
+  });
   fromSelect.addEventListener('change', setRangeChanged);
   toSelect.addEventListener('change', setRangeChanged);
   allYearsButton?.addEventListener('click', () => {
     allYearsActive = true;
+    const yearRangeControl = document.getElementById('rankingYearRangeControl');
+    if (yearRangeControl) yearRangeControl.open = false;
     if (fromSelect.options.length) fromSelect.selectedIndex = 0;
     if (toSelect.options.length) toSelect.selectedIndex = toSelect.options.length - 1;
     updateAllYearsButton();

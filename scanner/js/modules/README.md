@@ -1,5 +1,7 @@
 # Scanner Frontend Modules
 
+> Current application release: [V6.7.0](../../../README_V6.7.0.md).
+
 V5.7.0 adds explicit saved-graph editing, independent chart-color persistence, Summary Card category/default management, and Super Admin record merge/File History workflows. `changeRefresh.js` provides role-aware refresh signaling across open IRIS pages.
 
 [`../app.js`](../app.js) initializes the browser application and creates a shared context with scanner, database manager, state, and module APIs. Modules exchange callbacks through `ctx.api`; DOM queries stay with the module that owns the UI.
@@ -8,7 +10,7 @@ V5.7.0 adds explicit saved-graph editing, independent chart-color persistence, S
 
 [`state.js`](state.js) stores the active scan/record, queues, filters, and chart instances. [`chartEngine.js`](chartEngine.js) handles Studio row filtering, sorting, grouping, limits, and ECharts options. [`studioWorkbench.js`](studioWorkbench.js) saves the active chart and its configuration to Saved Graphs; editing a saved graph restores its field mappings, filters, sorting, limits, grouping, and chart-specific settings. Studio Publish approves the active record and publishes only its active chart.
 
-`chartEngine.js` builds the ECharts option used by Studio, Saved Graphs, and the public Observatory. Draft and saved graph cards mount options through `createChart()`, which also adapts legacy saved label/value payloads. Studio can reopen saved graph configuration for editing; shared field colors are saved independently from a chart. Supported chart types are Bar, Line, Pie, Doughnut, Ranked Bar, and Nested Pie.
+`chartEngine.js` builds the ECharts option used by Studio, Saved Graphs, and the public Observatory. Draft and saved graph cards mount options through `createChart()`, which also adapts legacy saved label/value payloads. Studio can reopen saved graph configuration for editing; shared field colors are saved independently from a chart. Supported chart types are Line, Stacked Area, Bar, Pie, Doughnut, and Nested Pie.
 
 ## Module responsibilities
 

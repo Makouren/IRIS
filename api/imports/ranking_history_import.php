@@ -25,7 +25,9 @@ function ranking_import_csrf(): void
 function ranking_import_row(PDO $pdo, array $data, array $defaults, int $rowNumber): array
 {
     $organization = trim((string)($data['organization'] ?? ''));
-    if ($organization === '' || strlen($organization) > 100) throw new RuntimeException("Row {$rowNumber}: Organization is required and must not exceed 100 characters.");
+    if ($organization === '') throw new RuntimeException("Row {$rowNumber}: Organization is blank.");
+    $organizationLength = function_exists('mb_strlen') ? mb_strlen($organization, 'UTF-8') : strlen($organization);
+    if ($organizationLength > 512) throw new RuntimeException("Row {$rowNumber}: Organization exceeds 512 characters.");
     $bodyQuery = $pdo->prepare('SELECT ranking_body_id AS id, name FROM ranking_bodies WHERE LOWER(name) = LOWER(?) OR LOWER(short_name) = LOWER(?) LIMIT 1');
     $bodyQuery->execute([$organization, $organization]);
     $body = $bodyQuery->fetch(PDO::FETCH_ASSOC) ?: null;
@@ -64,7 +66,7 @@ function ranking_import_row(PDO $pdo, array $data, array $defaults, int $rowNumb
         'rank_high' => $high,
         'rank_value' => $value,
         'ph_rank_input' => $optional('ph_rank', 50),
-        'source_input' => $optional('source', 500),
+        'info_text_input' => $optional('info_text', 16777215),
         'custom_fields' => CustomImportFields::merge([], $data['custom_fields'] ?? [])
     ];
 }
@@ -84,7 +86,7 @@ function ranking_import_find(PDO $pdo, array $identity, bool $lock): array
     $sql = 'SELECT rankings.ranking_id AS id, rankings.ranking_body_id, rankings.ranking_type_id,
             ranking_types.name AS ranking_type, rankings.year, rankings.global_rank, rankings.global_rank_display, rankings.rank_low,
             rankings.rank_high, rankings.rank_value, rankings.ph_rank, rankings.ph_rank_display, rankings.ph_rank_value,
-            rankings.source, ' . $customFieldsColumn . ', rankings.seed_managed
+            rankings.source, rankings.info_text, ' . $customFieldsColumn . ', rankings.seed_managed
         FROM rankings
         INNER JOIN ranking_types ON ranking_types.ranking_type_id = rankings.ranking_type_id
         WHERE rankings.ranking_body_id = ? AND LOWER(ranking_types.name) = LOWER(?) AND rankings.year = ?
@@ -102,7 +104,7 @@ function ranking_import_version(array $matches): string
 
 function ranking_import_values_match(array $existing, array $incoming): bool
 {
-    foreach (['global_rank', 'global_rank_display', 'rank_low', 'rank_high', 'rank_value', 'ph_rank', 'ph_rank_display', 'ph_rank_value', 'source'] as $field) {
+    foreach (['global_rank', 'global_rank_display', 'rank_low', 'rank_high', 'rank_value', 'ph_rank', 'ph_rank_display', 'ph_rank_value', 'source', 'info_text'] as $field) {
         $current = $existing[$field] ?? null;
         $next = $incoming[$field] ?? null;
         if ($current === null || $next === null || $current === '' || $next === '') {
@@ -121,12 +123,51 @@ function ranking_import_preview(PDO $pdo, array $parsed, bool $lock = false, boo
     $rows = [];
     $seen = [];
     $typeExists = $pdo->prepare('SELECT 1 FROM ranking_types WHERE ranking_body_id = ? AND LOWER(name) = LOWER(?) LIMIT 1');
+    $organizationIndex = $parsed['field_indexes']['organization'] ?? null;
+    $organizationHeader = is_int($organizationIndex)
+        ? trim((string)($parsed['sheet']['headers'][$organizationIndex] ?? ''))
+        : '';
+    $organizationColumn = null;
+    if (is_int($organizationIndex) && $organizationIndex >= 0) {
+        $columnNumber = $organizationIndex + 1;
+        $columnLetters = '';
+        while ($columnNumber > 0) {
+            $columnNumber--;
+            $columnLetters = chr(65 + ($columnNumber % 26)) . $columnLetters;
+            $columnNumber = intdiv($columnNumber, 26);
+        }
+        $organizationColumn = [
+            'field' => 'Organization',
+            'header' => $organizationHeader !== '' ? $organizationHeader : '(blank header)',
+            'letter' => $columnLetters
+        ];
+    }
     foreach ($parsed['rows'] as $input) {
         try {
             $incoming = ranking_import_row($pdo, $input['values'], $parsed['profile']['defaults_json'], $input['row_number']);
         } catch (Throwable $exception) {
+            $error = $exception->getMessage();
+            if (str_contains($error, 'Organization is blank.')) {
+                $error .= $organizationColumn
+                    ? " Blocked field: Organization. Source column: \"{$organizationColumn['header']}\" (Column {$organizationColumn['letter']}); its cell is blank. Check the mapping, worksheet, and header row."
+                    : ' Blocked field: Organization. No source worksheet column is mapped to this field.';
+            } elseif (str_contains($error, 'Organization exceeds 512 characters.')) {
+                $error .= $organizationColumn
+                    ? " Blocked field: Organization. Source column: \"{$organizationColumn['header']}\" (Column {$organizationColumn['letter']})."
+                    : ' Blocked field: Organization.';
+            }
             $key = hash('sha256', json_encode([$input['sheet_name'], $input['row_number']], JSON_UNESCAPED_UNICODE));
-            $rows[] = ['key' => $key, 'kind' => 'blocked', 'error' => $exception->getMessage(), 'identity' => $input['values'], 'sheet_name' => $input['sheet_name'], 'row_number' => $input['row_number'], 'row_version' => ranking_import_version([])];
+            $rows[] = [
+                'key' => $key,
+                'kind' => 'blocked',
+                'error' => $error,
+                'blocked_field' => str_contains($error, 'Blocked field: Organization.') ? 'Organization' : null,
+                'blocked_column' => $organizationColumn,
+                'identity' => $input['values'],
+                'sheet_name' => $input['sheet_name'],
+                'row_number' => $input['row_number'],
+                'row_version' => ranking_import_version([])
+            ];
             continue;
         }
         $key = ranking_import_key($incoming);
@@ -149,7 +190,7 @@ function ranking_import_preview(PDO $pdo, array $parsed, bool $lock = false, boo
         }
         $existing = $matches[0] ?? null;
         $incoming['custom_fields'] = CustomImportFields::merge($existing['custom_fields'] ?? [], $incoming['custom_fields'] ?? []);
-        foreach (['ph_rank', 'source'] as $field) {
+        foreach (['ph_rank', 'info_text'] as $field) {
             $inputKey = $field . '_input';
             $existingValue = $field === 'ph_rank'
                 ? ($existing['ph_rank_display'] ?? (isset($existing['ph_rank']) ? (string)$existing['ph_rank'] : null))
@@ -175,7 +216,8 @@ function ranking_import_preview(PDO $pdo, array $parsed, bool $lock = false, boo
             'ph_rank' => $incoming['ph_rank'],
             'ph_rank_display' => $incoming['ph_rank_display'],
             'ph_rank_value' => $incoming['ph_rank_value'],
-            'source' => $incoming['source'],
+            'source' => $existing['source'] ?? null,
+            'info_text' => $incoming['info_text'],
             'custom_fields' => $incoming['custom_fields'],
             'seed_managed' => 0
         ];
@@ -248,7 +290,7 @@ TemplateImportSupport::response(static function () use ($data): array {
         $inserted = count(array_filter($work, static fn(array $row): bool => $row['kind'] === 'insert'));
         $updated = count($work) - $inserted;
         $batchId = ImportBatchAudit::create($pdo, $parsed['record'], 'ranking_history', (int)$_SESSION['user_id'], $inserted, $updated);
-        $columns = ['ranking_body_id', 'ranking_type_id', 'year', 'global_rank', 'global_rank_display', 'rank_low', 'rank_high', 'rank_value', 'ph_rank', 'ph_rank_display', 'ph_rank_value', 'source'];
+        $columns = ['ranking_body_id', 'ranking_type_id', 'year', 'global_rank', 'global_rank_display', 'rank_low', 'rank_high', 'rank_value', 'ph_rank', 'ph_rank_display', 'ph_rank_value', 'source', 'info_text'];
         if (CustomImportFields::columnExists($pdo, 'rankings')) $columns[] = 'custom_fields';
         $insert = $pdo->prepare('INSERT INTO rankings (' . implode(', ', $columns) . ', seed_managed) VALUES (' . implode(', ', array_fill(0, count($columns), '?')) . ', 0)');
         $set = implode(', ', array_map(static fn(string $column): string => '`' . $column . '` = ?', $columns));
@@ -274,7 +316,7 @@ TemplateImportSupport::response(static function () use ($data): array {
                 $update->execute([...$values, $id]);
             }
             $customFieldsColumn = in_array('custom_fields', $columns, true) ? 'custom_fields' : 'NULL AS custom_fields';
-            $savedQuery = $pdo->prepare('SELECT ranking_id AS id, ranking_body_id, ranking_type_id, year, global_rank, global_rank_display, rank_low, rank_high, rank_value, ph_rank, ph_rank_display, ph_rank_value, source, ' . $customFieldsColumn . ', seed_managed FROM rankings WHERE ranking_id = ?');
+            $savedQuery = $pdo->prepare('SELECT ranking_id AS id, ranking_body_id, ranking_type_id, year, global_rank, global_rank_display, rank_low, rank_high, rank_value, ph_rank, ph_rank_display, ph_rank_value, source, info_text, ' . $customFieldsColumn . ', seed_managed FROM rankings WHERE ranking_id = ?');
             $savedQuery->execute([$id]);
             $after = $savedQuery->fetch(PDO::FETCH_ASSOC);
             ImportBatchAudit::row($pdo, $batchId, 'ranking', (string)$id, $row['sheet_name'], $row['row_number'], $before, $after);

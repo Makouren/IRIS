@@ -94,8 +94,20 @@ final class TemplateImportSupport
     public static function normalizeRankingProfile(array $profile): array
     {
         $removedFields = ['scope', 'scope_id', 'level', 'level_id', 'edition', 'category', 'rank_low', 'rank_high', 'note', 'verification_status'];
-        foreach (['header_aliases', 'mapping_rules', 'defaults_json'] as $field) {
+        foreach (['header_aliases', 'mapping_rules', 'defaults_json', 'defaults'] as $field) {
             foreach ($removedFields as $removedField) unset($profile[$field][$removedField]);
+        }
+        foreach (['header_aliases', 'mapping_rules', 'defaults_json', 'defaults'] as $field) {
+            if (isset($profile[$field]['source']) && !isset($profile[$field]['info_text'])) {
+                $profile[$field]['info_text'] = $profile[$field]['source'];
+            }
+            unset($profile[$field]['source']);
+        }
+        if (in_array('source', $profile['required_columns'] ?? [], true)) {
+            $profile['required_columns'] = array_values(array_unique(array_map(
+                static fn(string $field): string => $field === 'source' ? 'info_text' : $field,
+                $profile['required_columns']
+            )));
         }
         $profile['required_columns'] = array_values(array_filter($profile['required_columns'] ?? [], static fn(string $field): bool => !in_array($field, $removedFields, true)));
         $profile['required_columns'] = array_values(array_unique(array_merge(['organization', 'ranking_type', 'year', 'global_rank'], $profile['required_columns'])));
@@ -106,7 +118,7 @@ final class TemplateImportSupport
             'year' => ['Year', 'Edition Year'],
             'global_rank' => ['Rank', 'Global Rank', 'Overall Rank', 'World Rank'],
             'ph_rank' => ['Philippine Rank', 'PH Rank', 'National Rank'],
-            'source' => ['Source', 'Source Information', 'Reference', 'URL']
+            'info_text' => ['Information', 'Information Text', 'Information Text (ⓘ)', 'Information Text (i)', 'Info', 'Info Text', 'Source', 'Source Information', 'Reference', 'URL']
         ], $profile['header_aliases'] ?? []);
         $profile['mapping_rules'] = array_replace([
             'organization' => 'Organization',
@@ -114,7 +126,7 @@ final class TemplateImportSupport
             'year' => 'Year',
             'global_rank' => 'Rank',
             'ph_rank' => 'Philippine Rank',
-            'source' => 'Source'
+            'info_text' => 'Information'
         ], $profile['mapping_rules'] ?? []);
         return $profile;
     }
@@ -299,6 +311,17 @@ final class TemplateImportSupport
         return (int)$text;
     }
 
+    private static function hasImportValue(mixed $value): bool
+    {
+        if (is_array($value)) {
+            if (array_key_exists('value', $value)) return self::hasImportValue($value['value']);
+            foreach ($value as $item) if (self::hasImportValue($item)) return true;
+            return false;
+        }
+        if ($value === null) return false;
+        return !is_string($value) || trim($value) !== '';
+    }
+
     public static function parse(PDO $pdo, string $recordId, string $destination, ?string $selectedSheet = null, ?int $selectedHeaderRow = null): array
     {
         $record = self::record($pdo, $recordId);
@@ -399,7 +422,8 @@ final class TemplateImportSupport
                 if (str_starts_with($field, 'custom_fields.')) {
                     $key = substr($field, strlen('custom_fields.'));
                     $label = $profile['custom_fields'][$key] ?? null;
-                    if (is_string($label)) $mapped['custom_fields'][$key] = ['label' => $label, 'value' => trim($rawValue)];
+                    $customValue = trim($rawValue);
+                    if (is_string($label) && $customValue !== '') $mapped['custom_fields'][$key] = ['label' => $label, 'value' => $customValue];
                     continue;
                 }
                 $mapped[$field] = $field === 'import_key' ? $rawValue : trim($rawValue);
@@ -407,7 +431,7 @@ final class TemplateImportSupport
             if ($builtInSummary && !empty($mapped['import_key']) && !empty($mapped['main_label'])) {
                 $legacyImportKey = self::builtInSummaryLegacyKey($mapped['main_label']);
             }
-            if (!array_filter($mapped, static fn($value): bool => $value !== '')) continue;
+            if (!self::hasImportValue($mapped)) continue;
             $rows[] = ['values' => array_replace($profile['defaults_json'], $mapped), 'legacy_import_key' => $legacyImportKey, 'sheet_name' => $sheet['name'], 'row_number' => (int)$row['row_number']];
         }
         if (!$rows) throw new RuntimeException('No non-empty import rows were found in the selected worksheet.');

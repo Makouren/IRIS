@@ -75,7 +75,7 @@ final class CustomImportFields
                 unset($fields[$key]);
                 continue;
             }
-            if (strlen($value) > 65535) throw new RuntimeException("Custom field '{$key}' exceeds its storage limit.");
+            if (strlen($value) > 16777215) throw new RuntimeException("Custom field '{$key}' exceeds the 16 MB storage limit.");
             $label = trim((string)($field['label'] ?? $fields[$key]['label'] ?? $key));
             $fields[$key] = ['label' => $label, 'value' => $value];
         }

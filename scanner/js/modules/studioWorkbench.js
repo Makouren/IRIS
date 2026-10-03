@@ -1,6 +1,6 @@
 import { $, escapeHtml, parseEditableValue } from '../utils/helpers.js';
-import { renderStudioChart } from './chartEngine.js?v=remove-rose-20261001';
-import { initStudioColorCustomizer } from './studioColorCustomizer.js?v=remove-rose-20261001';
+import { renderStudioChart } from './chartEngine.js?v=echarts-six-chart-types-1';
+import { initStudioColorCustomizer } from './studioColorCustomizer.js?v=echarts-six-chart-types-1';
 
 export function initStudioWorkbench(ctx) {
   initStudioColorCustomizer(ctx);
@@ -41,17 +41,24 @@ export function initStudioWorkbench(ctx) {
     const inferred = window.ChartMapping.inferColumns(sheet.headers, sheet.rows || []);
     const chartType = $('studioChartTypeSelect')?.value || 'bar';
     const circular = ['pie', 'doughnut', 'nestedPie'].includes(chartType);
-    const ranked = chartType === 'rankedBar';
     const groupWrap = $('studioGroupFieldWrapper');
     const groupSelect = $('studioGroupField');
-    const yearWrap = $('studioRankedYearWrapper');
-    const reverseWrap = $('studioRankedReverseOrderWrapper');
-    if (yearWrap) yearWrap.style.display = ranked ? 'flex' : 'none';
-    if (reverseWrap) reverseWrap.style.display = ranked ? 'flex' : 'none';
+    const seriesWrap = $('studioSeriesFieldWrapper');
+    const seriesSelect = $('studioSeriesField');
+    const reverseWrap = $('studioReverseOrderWrapper');
+    if (seriesWrap) seriesWrap.style.display = chartType === 'stackedArea' ? 'flex' : 'none';
+    if (reverseWrap) reverseWrap.style.display = ['line', 'stackedArea', 'bar'].includes(chartType) ? 'flex' : 'none';
     if (groupWrap) groupWrap.style.display = chartType === 'nestedPie' ? 'flex' : 'none';
     const category = $('studioCategoryCol'); const value = $('studioValueCol'); const previousCategory = category?.value; const previousValue = value?.value;
     if (category) { category.disabled = false; category.innerHTML = sheet.headers.map((header, index) => `<option value="${index}">${escapeHtml(header || `Column ${index + 1}`)}</option>`).join(''); category.value = previousCategory !== '' && sheet.headers[Number(previousCategory)] ? previousCategory : String(inferred.labelColumn); }
     if (value) { value.disabled = false; value.innerHTML = sheet.headers.map((header, index) => `<option value="${index}">${escapeHtml(header || `Column ${index + 1}`)}${inferred.columnTypes?.[index] === 'numeric' ? ' <i class="fa-solid fa-check" aria-hidden="true"></i>' : inferred.columnTypes?.[index] === 'text' ? ' (text)' : ''}</option>`).join(''); value.value = previousValue !== '' && sheet.headers[Number(previousValue)] ? previousValue : String(inferred.valueColumn); }
+    if (seriesSelect) {
+      const previousSeries = ctx.state.studioChartConfig?.seriesField ?? seriesSelect.value;
+      const excluded = new Set([Number(category?.value), Number(value?.value)]);
+      const candidates = sheet.headers.map((header, index) => ({ header, index })).filter(item => !excluded.has(item.index));
+      seriesSelect.innerHTML = `<option value="">No grouping (single area)</option>${candidates.map(item => `<option value="${item.index}">${escapeHtml(item.header || `Column ${item.index + 1}`)}</option>`).join('')}`;
+      seriesSelect.value = candidates.some(item => String(item.index) === String(previousSeries)) ? String(previousSeries) : '';
+    }
     if (groupSelect) {
       const previousGroup = ctx.state.studioChartConfig?.groupField ?? groupSelect.value;
       groupSelect.innerHTML = `<option value="">Choose group field</option>${sheet.headers.map((header, index) => `<option value="${index}">${escapeHtml(header || `Column ${index + 1}`)}</option>`).join('')}`;
@@ -78,9 +85,10 @@ export function initStudioWorkbench(ctx) {
       categorySelect: $('studioCategoryCol'),
       valueSelect: $('studioValueCol'),
       groupFieldSelect: $('studioGroupField'),
+      seriesFieldSelect: $('studioSeriesField'),
       valuePrecision: $('studioValuePrecisionSelect'),
-      rankedYearSelect: $('studioRankedYearSelect'),
-      rankedReverseOrder: $('studioRankedReverseOrder'),
+      yearSelect: $('studioYearSelect'),
+      reverseOrder: $('studioReverseOrder'),
       filterField: $('studioFilterField'),
       filterOperator: $('studioFilterOperator'),
       filterValue: $('studioFilterValue'),
@@ -102,24 +110,30 @@ export function initStudioWorkbench(ctx) {
       const current = window.ChartData.serializeChartState(options, config);
       const selectedType = $('studioChartTypeSelect')?.value || 'bar';
       const sheet = ctx.api.getStudioActiveSheet(record)?.data;
-      const yearColumn = selectedType === 'rankedBar' ? window.ChartMapping.detectYearColumn(sheet?.headers || [], sheet?.rows || []) : null;
-      const categoryField = Number($('studioCategoryCol')?.value ?? -1);
-      const valueField = Number($('studioValueCol')?.value ?? -1);
-      const groupField = Number($('studioGroupField')?.value ?? -1);
+      const selectedColumn = id => {
+        const raw = $(id)?.value;
+        const index = raw === '' || raw === undefined || raw === null ? -1 : Number(raw);
+        return Number.isInteger(index) && index >= 0 && index < (sheet?.headers?.length || 0) ? index : null;
+      };
+      const categoryField = selectedColumn('studioCategoryCol');
+      const valueField = selectedColumn('studioValueCol');
+      const groupField = selectedColumn('studioGroupField');
+      const seriesField = selectedColumn('studioSeriesField');
       const upperFilterValue = $('studioFilterUpperValue')?.value;
       const rowLimit = Number($('studioRowLimit')?.value ?? 30);
       const irisConfig = {
         ...config,
         type: selectedType,
-        categoryField: Number.isInteger(categoryField) && categoryField >= 0 ? categoryField : null,
-        valueField: Number.isInteger(valueField) && valueField >= 0 ? valueField : null,
-        groupField: Number.isInteger(groupField) && groupField >= 0 ? groupField : null,
+        categoryField,
+        valueField,
+        groupField,
+        seriesField,
         precision: Number($('studioValuePrecisionSelect')?.value ?? 2),
         rawValues: current.values,
         series: current.series,
         rankSemantic: config.rankSemantic === true,
-        reverseOrder: Boolean(config.reverseOrder),
-        selectedYear: $('studioRankedYearSelect')?.value || config.selectedYear || config.rankedYear || null,
+        reverseOrder: Boolean($('studioReverseOrder')?.checked),
+        selectedYear: $('studioYearSelect')?.value || config.selectedYear || 'all',
         filterField: $('studioFilterField')?.value || 'all',
         filterOperator: $('studioFilterOperator')?.value || 'all',
         filterValue: $('studioFilterValue')?.value || '',
@@ -135,15 +149,12 @@ export function initStudioWorkbench(ctx) {
         chart_type: selectedType,
         colors: $('studioColorApplyAll')?.checked ? null : ctx.state.studioChartOverrides,
         orientation: config.orientation || 'vertical',
-        valueAxisReversed: Boolean(config.reverseOrder),
         rankSemantic: config.rankSemantic === true,
-        rankValueMin: config.rankValueMin,
-        rankValueMax: config.rankValueMax,
         valueAxisMin: config.valueAxisMin,
         valueAxisMax: config.valueAxisMax,
         labels: current.labels,
         values_data: current.values,
-        chart_data: { ...options, irisConfig, rankedBar: { selectedYear: irisConfig.selectedYear, yearColumn, reverseOrder: irisConfig.reverseOrder, categoryField: irisConfig.categoryField, valueField: irisConfig.valueField, yearField: yearColumn, chartType: selectedType } }
+        chart_data: { ...options, irisConfig }
       };
     }
     if (!savedChart && !approve) throw new Error('Render a chart before saving it to Saved Graphs.');
@@ -164,23 +175,6 @@ export function initStudioWorkbench(ctx) {
 
     const updated = await ctx.dbManager.updateRecord(record.id, { docType: $('studioDocTypeInput')?.value.trim() || record.docType, status: approve ? 'Approved' : ($('studioStatusSelect')?.value || record.status), adminNotes: $('studioNotesInput')?.value.trim() || record.adminNotes, extractedData: record.extractedData, graphDrafts: [] });
     if (savedChart) {
-      const savedMapping = savedChart.chart_data?.rankedBar || {};
-      const categorySelection = $('studioCategoryCol')?.value;
-      const valueSelection = $('studioValueCol')?.value;
-      const hasColumnIndex = value => value !== undefined && value !== null && value !== '' && Number.isInteger(Number(value)) && Number(value) >= 0;
-      savedChart.chart_data = {
-        ...(savedChart.chart_data || {}),
-        irisConfig: { ...(savedChart.chart_data?.irisConfig || {}), categoryField: hasColumnIndex(categorySelection) ? Number(categorySelection) : null, valueField: hasColumnIndex(valueSelection) ? Number(valueSelection) : null, groupField: hasColumnIndex($('studioGroupField')?.value) ? Number($('studioGroupField').value) : null },
-        rankedBar: {
-          selectedYear: ctx.state.studioChartConfig?.selectedYear ?? ctx.state.studioChartConfig?.rankedYear ?? null,
-          yearColumn: ctx.state.studioChartConfig?.yearColumn ?? null,
-          reverseOrder: Boolean(ctx.state.studioChartConfig?.reverseOrder),
-          chartType: savedChart.chart_type || savedMapping.chartType || 'bar',
-          categoryField: hasColumnIndex(categorySelection) ? Number(categorySelection) : (savedMapping.categoryField ?? null),
-          valueField: hasColumnIndex(valueSelection) ? Number(valueSelection) : (savedMapping.valueField ?? null),
-          yearField: ctx.state.studioChartConfig?.yearField ?? null
-        }
-      };
       savedChart.is_published = approve === true;
       if (graphIdToUpdate) {
         if (approve !== true) delete savedChart.is_published;
@@ -208,7 +202,7 @@ export function initStudioWorkbench(ctx) {
       ? `Graph "${savedChart.title}" and its dataset were saved.${approve ? ' The graph is published.' : ''}${savedGraphsRefreshError}`
       : `Dataset '${record.fileName}' successfully saved to database!${approve ? ' (Published)' : ''}`);
   };
-  ['studioChartTypeSelect', 'studioCategoryCol', 'studioValueCol', 'studioValuePrecisionSelect', 'studioGroupField', 'studioRankedYearSelect', 'studioRankedReverseOrder', 'studioFilterField', 'studioFilterOperator', 'studioFilterValue', 'studioFilterUpperValue', 'studioSortOrder', 'studioRowLimit', 'studioGroupDuplicates'].forEach(id => $(id)?.addEventListener('change', () => { if (id === 'studioChartTypeSelect') { const sheet = ctx.api.getStudioActiveSheet(ctx.state.studioActiveRecord)?.data; if (sheet) ctx.api.updateFieldSelectOptions(sheet); } window.IRIS_STUDIO_DIRTY = true; ctx.api.updateStudioChart(); }));
+  ['studioChartTypeSelect', 'studioCategoryCol', 'studioValueCol', 'studioValuePrecisionSelect', 'studioGroupField', 'studioSeriesField', 'studioYearSelect', 'studioReverseOrder', 'studioFilterField', 'studioFilterOperator', 'studioFilterValue', 'studioFilterUpperValue', 'studioSortOrder', 'studioRowLimit', 'studioGroupDuplicates'].forEach(id => $(id)?.addEventListener('change', () => { if (['studioChartTypeSelect', 'studioCategoryCol', 'studioValueCol'].includes(id)) { const sheet = ctx.api.getStudioActiveSheet(ctx.state.studioActiveRecord)?.data; if (sheet) ctx.api.updateFieldSelectOptions(sheet); } window.IRIS_STUDIO_DIRTY = true; ctx.api.updateStudioChart(); }));
   $('studioFilterValue')?.addEventListener('input', () => { window.IRIS_STUDIO_DIRTY = true; ctx.api.updateStudioChart(); }); $('studioRowLimit')?.addEventListener('input', () => { window.IRIS_STUDIO_DIRTY = true; ctx.api.updateStudioChart(); }); $('studioChartTitleInput')?.addEventListener('input', event => { window.IRIS_STUDIO_DIRTY = true; event.target.setAttribute('data-customized', 'true'); });
   ['studioDocTypeInput', 'studioStatusSelect', 'studioNotesInput'].forEach(id => $(id)?.addEventListener('change', () => { window.IRIS_STUDIO_DIRTY = true; }));
   document.addEventListener('input', event => { if (event.target?.classList?.contains('studio-cell-input') || event.target?.classList?.contains('header-rename-input')) window.IRIS_STUDIO_DIRTY = true; });

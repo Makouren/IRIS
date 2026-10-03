@@ -205,9 +205,12 @@ if (modal) {
       }
       const snapshotTime = item.snapshot_before?.updated_at ? ` · Snapshot updated ${item.snapshot_before.updated_at}` : '';
       const rankingAction = item.new_type ? `NEW TYPE · ${item.kind.toUpperCase()}` : item.kind === 'legacy' ? 'ADOPT LEGACY' : item.kind.toUpperCase();
+      const rankingError = !isSummary && item.error
+        ? `${item.error}${item.blocked_field ? `\nBlocked field: ${item.blocked_field}${item.blocked_column ? ` · source column ${item.blocked_column.header} (Column ${item.blocked_column.letter})` : ''}` : ''}`
+        : '';
       addCell(row, isSummary
         ? `${item.preview_status || item.kind} · ${item.snapshot_after?.main_label || item.import_key} · ${item.period_label}${snapshotTime}`
-        : `${rankingAction} · ${identityLabel(item, state.destination)}${item.error ? `\n${item.error}` : ''}`,
+        : `${rankingAction} · ${identityLabel(item, state.destination)}${rankingError ? `\n${rankingError}` : ''}`,
       item.kind === 'blocked' ? 'text-red-700' : '');
       const existingCell = document.createElement('td');
       existingCell.className = 'whitespace-pre-wrap p-2 align-top text-xs';

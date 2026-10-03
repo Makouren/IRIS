@@ -178,11 +178,13 @@ $pageTitle = $pageTitle ?? 'IRIS Admin Control Panel';
         html.dark button {
             color: #e2e8f0 !important;
         }
-        html.dark #summaryCardEditorPanel {
+        html.dark #summaryCardEditorPanel,
+        html.dark #rankingHistoryEditorPanel {
             background: #172033 !important;
             border-color: #334155 !important;
         }
-        html.dark #summaryCardEditorList > div {
+        html.dark #summaryCardEditorList > div,
+        html.dark #rankingHistoryAdminList > div {
             background: #273449 !important;
             border-color: #475569 !important;
         }
@@ -216,9 +218,13 @@ $pageTitle = $pageTitle ?? 'IRIS Admin Control Panel';
         .admin-dropdown ul{margin:0;padding:.25rem 0!important;}
         .admin-dropdown li{display:flex!important;align-items:center!important;}
         .admin-dropdown a,
+        .admin-dropdown li > button,
         .admin-dropdown .signout{display:flex!important;align-items:center!important;justify-content:flex-start!important;gap:.6rem!important;width:100%!important;text-align:left!important;line-height:1.2!important;white-space:nowrap!important;}
-        .admin-dropdown a{color:#dbeafe!important;padding:.7rem 1rem!important;}
-        .admin-dropdown a:hover{background:rgba(16,185,129,.12)!important;color:#ecfdf5!important;}
+        .admin-dropdown a,
+        .admin-dropdown li > button{color:#dbeafe!important;padding:.7rem 1rem!important;transition:background .16s ease,color .16s ease,transform .16s ease;}
+        .admin-dropdown a:hover,
+        .admin-dropdown li > button:hover{background:rgba(16,185,129,.12)!important;color:#ecfdf5!important;}
+        @media (hover:hover) and (pointer:fine) and (prefers-reduced-motion:no-preference){.admin-dropdown a:hover,.admin-dropdown li > button:not(:disabled):hover{transform:translateY(-1px);}}
         .admin-dropdown .signout{padding:.75rem 1rem!important;color:#fca5a5!important;border-radius:.75rem!important;transition:background .2s ease,color .2s ease;}
         .admin-dropdown .signout:hover{background:rgba(239,68,68,.12)!important;color:#fee2e2!important;}
         html:not(.dark) .admin-nav{background:#1E6031!important;border-bottom:3px solid #E0A70D!important;box-shadow:0 4px 12px rgba(0,0,0,0.08)!important;}
@@ -233,8 +239,10 @@ $pageTitle = $pageTitle ?? 'IRIS Admin Control Panel';
         html:not(.dark) .admin-profile-btn:hover{background:rgba(255,255,255,0.20)!important;}
         html:not(.dark) .admin-dropdown{background:#ffffff!important;border:1px solid rgba(30,96,49,0.12)!important;color:#1F2A24!important;box-shadow:0 12px 30px rgba(15,23,42,.08)!important;}
         html:not(.dark) .admin-dropdown .dropdown-name{color:#1F2A24!important;}
-        html:not(.dark) .admin-dropdown a{color:#1F2A24!important;}
-        html:not(.dark) .admin-dropdown a:hover{background:#EEF6F0!important;color:#1E6031!important;}
+        html:not(.dark) .admin-dropdown a,
+        html:not(.dark) .admin-dropdown li > button{color:#1F2A24!important;}
+        html:not(.dark) .admin-dropdown a:hover,
+        html:not(.dark) .admin-dropdown li > button:hover{background:#EEF6F0!important;color:#1E6031!important;}
         html:not(.dark) .admin-dropdown .signout{color:#b91c1c!important;}
         html:not(.dark) .admin-dropdown .signout:hover{background:#fef2f2!important;color:#991b1b!important;}
         #page-loader{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;background:rgba(15,23,42,.68);backdrop-filter:blur(6px);z-index:10000;transition:opacity .3s ease,visibility .3s ease;}

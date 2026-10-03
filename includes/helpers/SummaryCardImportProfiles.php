@@ -61,7 +61,7 @@ final class SummaryCardImportProfiles
                     'year', JSON_ARRAY('Year', 'Edition Year'),
                     'global_rank', JSON_ARRAY('Rank', 'Global Rank', 'Overall Rank', 'World Rank'),
                     'ph_rank', JSON_ARRAY('Philippine Rank', 'PH Rank', 'National Rank'),
-                    'source', JSON_ARRAY('Source', 'Source Information', 'Reference', 'URL')
+                    'info_text', JSON_ARRAY('Information', 'Information Text', 'Info', 'Source', 'Source Information', 'Reference', 'URL')
                 ),
                 JSON_ARRAY('organization', 'ranking_type', 'year', 'global_rank'),
                 JSON_ARRAY('organization', 'ranking_type', 'year'),
@@ -71,7 +71,7 @@ final class SummaryCardImportProfiles
                     'year', 'Year',
                     'global_rank', 'Rank',
                     'ph_rank', 'Philippine Rank',
-                    'source', 'Source'
+                    'info_text', 'Information'
                 ),
                 JSON_OBJECT()
             WHERE NOT EXISTS (
@@ -165,10 +165,28 @@ final class SummaryCardImportProfiles
     {
         $profile = self::get($pdo, $profileId, true, $destination);
         if (!in_array($destination, ['summary_cards', 'ranking_history'], true)) throw new InvalidArgumentException('Choose a valid import destination.');
-        $path = '$.summary_card_import_profiles.' . $destination . '.active_profile_id';
-        $update = $pdo->prepare('INSERT INTO app_change_state (id, state_data) VALUES (1, JSON_SET(JSON_OBJECT(), ?, CAST(? AS UNSIGNED)))
-            ON DUPLICATE KEY UPDATE state_data = JSON_SET(COALESCE(state_data, JSON_OBJECT()), ?, CAST(? AS UNSIGNED))');
-        $update->execute([$path, $profileId, $path, $profileId]);
+        $ownsTransaction = !$pdo->inTransaction();
+        if ($ownsTransaction) $pdo->beginTransaction();
+        try {
+            $stateQuery = $pdo->query('SELECT state_data FROM app_change_state WHERE id = 1 FOR UPDATE');
+            $encodedState = $stateQuery->fetchColumn();
+            $state = $encodedState === false || $encodedState === null || $encodedState === ''
+                ? []
+                : json_decode((string)$encodedState, true);
+            if (!is_array($state)) throw new RuntimeException('Application state is invalid and the active import profile could not be changed.');
+            if (!isset($state['summary_card_import_profiles']) || !is_array($state['summary_card_import_profiles'])) {
+                $state['summary_card_import_profiles'] = [];
+            }
+            $state['summary_card_import_profiles'][$destination] = ['active_profile_id' => $profileId];
+            $encodedState = json_encode($state, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR);
+            $update = $pdo->prepare('INSERT INTO app_change_state (id, state_data) VALUES (1, ?)
+                ON DUPLICATE KEY UPDATE state_data = VALUES(state_data)');
+            $update->execute([$encodedState]);
+            if ($ownsTransaction) $pdo->commit();
+        } catch (Throwable $exception) {
+            if ($ownsTransaction && $pdo->inTransaction()) $pdo->rollBack();
+            throw $exception;
+        }
         return $profile;
     }
 }

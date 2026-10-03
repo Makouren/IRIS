@@ -10,7 +10,7 @@
     year_date: 'Year / date', secondary_label: 'Secondary label', secondary_value: 'Secondary value', description: 'Description',
     secondary_description: 'Secondary description', info_text: 'Information text', source_info: 'Source information',
     category_names: 'Categories', display_precision: 'Display precision', organization: 'Organization', ranking_type: 'Ranking type',
-    year: 'Year', global_rank: 'Rank', ph_rank: 'Philippine Rank', source: 'Source'
+    year: 'Year', global_rank: 'Rank', ph_rank: 'Philippine Rank', info_text: 'Information'
   };
 
   function showNotice(message) {
@@ -407,6 +407,9 @@
     fileInput.addEventListener('change', () => { if (fileInput.files?.[0]) upload(panel, fileInput.files[0]); });
     select?.addEventListener('change', () => { clearWorkbook(panel); refreshPanel(panel); });
     panel.querySelector('[data-mapper-preview]').addEventListener('click', () => preview(panel));
+    panel.querySelector('[data-mapper-close-preview]').addEventListener('click', () => {
+      panel.querySelector('[data-mapper-preview-panel]').classList.add('hidden');
+    });
     panel.querySelector('[data-mapper-confirm]').addEventListener('click', () => confirm(panel));
     panel.querySelector('[data-mapper-add-field]').addEventListener('click', () => addCustomField(panel));
   });

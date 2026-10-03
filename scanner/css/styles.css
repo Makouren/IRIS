@@ -7,6 +7,27 @@
 /* TODO: Self-host Buttershine Serif for headings when the IAO provides the licensed font file. */
 @import url('https://fonts.googleapis.com/css2?family=Libre+Franklin:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&family=Inter:wght@400;500;600;700;800&display=swap');
 
+button,
+input[type="button"],
+input[type="submit"],
+input[type="reset"],
+[role="button"] {
+  transition-property: transform, filter, box-shadow;
+  transition-duration: 140ms;
+  transition-timing-function: ease;
+}
+
+@media (hover: hover) and (pointer: fine) and (prefers-reduced-motion: no-preference) {
+  button:not(:disabled):hover,
+  input[type="button"]:not(:disabled):hover,
+  input[type="submit"]:not(:disabled):hover,
+  input[type="reset"]:not(:disabled):hover,
+  [role="button"]:not([aria-disabled="true"]):hover {
+    transform: translateY(-1px);
+    filter: brightness(1.04);
+  }
+}
+
 :root {
   /* ── CLSU Brand Book 2024 tokens ── */
   --clsu-green:        #009639;   /* Pantone 355 C/U — primary accent */
@@ -273,6 +294,30 @@ body {
 .office-upload-layout { color: var(--text-main); }
 .office-upload-layout h2,
 .office-upload-layout label { color: var(--text-main); }
+.office-active-template-title {
+  color: #1F2A24 !important;
+  font-size: 1rem;
+  font-weight: 700;
+  line-height: 1.5;
+}
+.office-active-template-filename {
+  color: #1F2A24 !important;
+  font-size: 1rem;
+  font-weight: 600;
+  line-height: 1.5;
+}
+html.dark .office-active-template-title { color: #F8FAFC !important; }
+html.dark .office-active-template-filename { color: #F1F5F9 !important; }
+.office-upload-layout .text-gray-700,
+.office-upload-layout .text-gray-500,
+#templateManagerModal .text-gray-500 {
+  color: #475569 !important;
+}
+html.dark .office-upload-layout .text-gray-700,
+html.dark .office-upload-layout .text-gray-500,
+html.dark #templateManagerModal .text-gray-500 {
+  color: #CBD5E1 !important;
+}
 .office-upload-form-card,
 .office-uploads-panel,
 .office-templates-section {
@@ -1724,6 +1769,8 @@ html:not(.dark) .dropzone-container:hover, html:not(.dark) .dropzone-container.d
   border: 1px solid var(--border-light);
   border-radius: var(--radius-lg);
   padding: 1.5rem;
+  min-width: 0;
+  max-width: 100%;
   margin-bottom: 1.5rem;
   box-shadow: 0 2px 10px rgba(0, 0, 0, 0.03);
 }
@@ -1826,9 +1873,20 @@ html:not(.dark) .dropzone-container:hover, html:not(.dark) .dropzone-container.d
 }
 
 .graph-canvas-container {
-  height: 330px;
+  height: 420px;
   position: relative;
   width: 100%;
+  min-width: 0;
+  overflow: hidden;
+  box-sizing: border-box;
+}
+
+.graph-canvas-container > div {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  min-width: 0;
 }
 
 /* ====================================================================
@@ -2626,8 +2684,8 @@ html.dark .progress-card {
 .studio-field-mapping-label { color: var(--text-muted); font-size: .75rem; font-weight: 700; }
 .studio-field-mapping-select { width: auto; min-width: 9.5rem; max-width: min(34rem, 75vw); min-height: 2.35rem; padding: .35rem 2.25rem .35rem .65rem !important; }
 #studioValuePrecisionSelect { min-width: 10.5rem; }
-#studioRankedYearSelect { min-width: 8.5rem; }
-#studioRankedReverseOrderLabel { display: inline-flex; align-items: center; gap: .4rem; }
+#studioYearSelect { min-width: 8.5rem; }
+#studioReverseOrderWrapper label { display: inline-flex; align-items: center; gap: .4rem; }
 #studioFieldWarning { flex: 1 1 100%; min-width: 0; }
 .studio-chart-type-select,
 .studio-field-mapping-select { line-height: 1.25; }
@@ -2655,10 +2713,14 @@ html.dark .progress-card {
   overflow: hidden;
   padding: 1.25rem;
 }
-#summaryCardEditorPanel .modal-header { flex: 0 0 auto; margin-bottom: 1rem; }
+#summaryCardEditorPanel .modal-header,
+#rankingHistoryEditorPanel .modal-header { flex: 0 0 auto; margin-bottom: 1rem; }
+#rankingHistoryManagerView,
+#rankingHistoryAdminForm,
 #summaryCardManagerView,
 #summaryCardEditorForm { flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain; }
-#summaryCardManagerView { padding-right: .25rem; }
+#summaryCardManagerView,
+#rankingHistoryManagerView { padding-right: .25rem; }
 .summary-card-public-default { display: flex; align-items: center; flex-wrap: wrap; gap: .75rem; margin: 0 0 1rem; padding: .75rem 1rem; border: 1px solid var(--border-light); border-radius: var(--radius-sm); background: var(--bg-highlight); color: var(--text-main); }
 .summary-card-public-default > div { flex: 1 1 100%; }
 .summary-card-public-default h4 { font-weight: 800; }
@@ -2810,4 +2872,133 @@ html.dark #scannerWorkspaceView strong { color: #F8FAFC; }
 
 .modal-card {
   max-height: calc(100vh - 2rem);
+}
+
+.file-history-card {
+  width: min(1000px, calc(100vw - 2rem));
+  max-width: 1000px;
+  max-height: calc(100vh - 2rem);
+  overflow: auto;
+  padding: clamp(1rem, 3vw, 2rem);
+}
+
+.file-history-card .modal-header {
+  margin-bottom: 1rem;
+}
+
+.file-history-toolbar,
+.file-history-toolbar > div {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: .75rem;
+}
+
+.file-history-toolbar {
+  margin-bottom: .75rem;
+  color: var(--text-muted);
+  font-size: .88rem;
+}
+
+.file-history-toolbar > div {
+  flex-shrink: 0;
+}
+
+.file-history-toolbar [data-selection-count] {
+  min-width: 5.5rem;
+  text-align: right;
+  font-size: .78rem;
+}
+
+.file-history-table-wrap {
+  overflow-x: auto;
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-sm);
+}
+
+.file-history-table {
+  width: 100%;
+  min-width: 700px;
+  border-collapse: collapse;
+  table-layout: fixed;
+}
+
+.file-history-table th,
+.file-history-table td {
+  padding: .7rem .65rem;
+  text-align: left;
+  vertical-align: middle;
+}
+
+.file-history-table th:first-child,
+.file-history-table td:first-child {
+  width: 2.8rem;
+  text-align: center;
+}
+
+.file-history-table th:nth-child(2) { width: 10.5rem; }
+.file-history-table th:nth-child(3) { width: 10.5rem; }
+.file-history-table th:nth-child(5) { width: 14rem; }
+
+.file-history-version {
+  display: grid;
+  gap: .2rem;
+}
+
+.file-history-version strong {
+  color: var(--text-main);
+}
+
+.file-history-version span,
+.file-history-created {
+  color: var(--text-muted);
+  font-size: .78rem;
+}
+
+.file-history-filename {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.file-history-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: .35rem;
+}
+
+.file-history-action-button {
+  justify-content: center;
+  padding: .4rem .55rem;
+  font-size: .75rem;
+  line-height: 1.2;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.file-history-card .file-history-action-button.export-cancel-button {
+  background: var(--bg-highlight);
+  color: var(--text-main);
+  border-color: var(--border-light);
+}
+
+.file-history-card .file-history-action-button.export-cancel-button:hover {
+  background: var(--border-light);
+}
+
+@media (max-width: 700px) {
+  .file-history-card .modal-title {
+    font-size: 1.05rem;
+    overflow-wrap: anywhere;
+  }
+
+  .file-history-toolbar {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .file-history-toolbar > div {
+    align-self: flex-end;
+  }
 }

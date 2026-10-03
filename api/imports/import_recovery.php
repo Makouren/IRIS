@@ -68,7 +68,7 @@ try {
         }
         if ($audit['entity_type'] === 'ranking') {
             $id = (int)$audit['entity_id'];
-            $fields = ['ranking_body_id', 'ranking_type_id', 'category_id', 'year', 'global_rank', 'global_rank_display', 'rank_low', 'rank_high', 'rank_value', 'ph_rank', 'ph_rank_display', 'ph_rank_value', 'source'];
+            $fields = ['ranking_body_id', 'ranking_type_id', 'category_id', 'year', 'global_rank', 'global_rank_display', 'rank_low', 'rank_high', 'rank_value', 'ph_rank', 'ph_rank_display', 'ph_rank_value', 'source', 'info_text'];
             if (CustomImportFields::columnExists($pdo, 'rankings')) $fields[] = 'custom_fields';
             $fields[] = 'seed_managed';
             $query = $pdo->prepare('SELECT ranking_id AS id, ' . implode(', ', array_map(static fn(string $field): string => '`' . $field . '`', $fields)) . ' FROM rankings WHERE ranking_id = ? FOR UPDATE');

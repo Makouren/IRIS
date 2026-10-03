@@ -1,6 +1,8 @@
 # Scanner Tests
 
-V5.7.0 adds coverage for record merge, File History snapshots, Summary Card categories/defaults, saved graph editing, chart colors, and custom import mapping. Run both PHP-specific checks and the JavaScript suite. Authenticated XAMPP/MySQL smoke tests remain necessary for database-backed merge/restore, imports, publication, and role-gated behavior. See [README_V5.7.0.md](../../README_V5.7.0.md) for release verification details.
+> Current application release: [V6.7.0](../../README_V6.7.0.md).
+
+Coverage includes record merge, File History snapshots, Summary Card categories/defaults, saved graph editing, chart colors, custom import mapping, and Ranking History display behavior. Run both PHP-specific checks and the JavaScript suite. Authenticated XAMPP/MySQL smoke tests remain necessary for database-backed merge/restore, imports, publication, and role-gated behavior. See [README_V6.7.0.md](../../README_V6.7.0.md) for release verification details.
 
 ```powershell
 php scanner/test/templateImportMapping.test.php
@@ -22,7 +24,7 @@ node --test scanner/test/chartMapping.test.js scanner/test/dashboardData.test.js
 ## Coverage
 
 - Chart field inference, numeric parsing, and existing rank detection/inversion
-- ECharts graph generation, Ranked Bar mapping, category/time columns, identifier exclusion, invalid cells, and multiple metrics
+- ECharts graph generation across the six supported chart types, category/time columns, identifier exclusion, invalid cells, and multiple metrics
 - Table filtering and document pagination
 - Graph serialization, ECharts-series normalization, printable sheets, and SQL-formatted text exports
 - Publish/unpublish API wiring, explicit graph publication state, Studio active-chart publication, and public dashboard cache behavior

@@ -119,10 +119,10 @@
       const details = document.createElement('div');
       details.className = 'min-w-0';
       const name = document.createElement('p');
-      name.className = 'break-words text-sm font-semibold text-gray-900 dark:text-white';
+      name.className = 'office-active-template-title break-words';
       name.textContent = template.name;
       const originalName = document.createElement('p');
-      originalName.className = 'break-all text-xs text-gray-700 dark:text-slate-300';
+      originalName.className = 'office-active-template-filename break-all';
       originalName.textContent = template.original_filename;
       details.append(name, originalName);
       const download = document.createElement('a');

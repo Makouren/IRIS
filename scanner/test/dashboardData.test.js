@@ -5,7 +5,7 @@ const path = require('node:path');
 const { prepareCircularData, serializeChartState } = require('../js/chartData');
 const { pairSelectedText } = require('../js/sourceIngestion');
 const { normalizeGraphExportItem, buildPrintableGraphSheet, buildSavedChartOption } = require('../js/graphExport');
-const { createChart, renderStudioChart } = require('../js/modules/chartEngine');
+const { buildChartOption, buildSavedGraphOption, createChart, renderStudioChart } = require('../js/modules/chartEngine');
 const { buildColoredSeriesData, getChartColors, isValidChartColor, normalizeFieldKey, resolveFieldColors } = require('../js/chartColors');
 const savedGraphsSource = fs.readFileSync(path.join(__dirname, '..', 'js', 'modules', 'savedGraphsTab.js'), 'utf8');
 const studioColorCustomizerSource = fs.readFileSync(path.join(__dirname, '..', 'js', 'modules', 'studioColorCustomizer.js'), 'utf8');
@@ -16,6 +16,49 @@ const publicGraphApiSource = fs.readFileSync(path.join(__dirname, '..', '..', 'a
 const reviewEditorSource = fs.readFileSync(path.join(__dirname, '..', '..', 'admin', 'review_editor.php'), 'utf8');
 const chartEngineSource = fs.readFileSync(path.join(__dirname, '..', 'js', 'modules', 'chartEngine.js'), 'utf8');
 const rankingHistoryControllerSource = fs.readFileSync(path.join(__dirname, '..', '..', 'user', 'js', 'rankingHistory.js'), 'utf8');
+
+test('all six chart builders use live rows, precision formatting, and mapped colors', () => {
+  const common = {
+    labels: ['Alpha', 'Beta'],
+    values: [1.234, 2.5],
+    rawValues: [1.234, 2.5],
+    colors: ['#112233', '#445566'],
+    precision: 1,
+    config: { title: 'Score — Sheet', seriesName: 'Score', reverseOrder: true },
+    showTitle: true
+  };
+  const line = buildChartOption({ ...common, type: 'line' });
+  const area = buildChartOption({
+    ...common,
+    type: 'stackedArea',
+    series: [{ name: 'Group A', data: [1.234, 2.5] }, { name: 'Group B', data: [3, 4] }]
+  });
+  const bar = buildChartOption({ ...common, type: 'bar' });
+  const pie = buildChartOption({ ...common, type: 'pie' });
+  const doughnut = buildChartOption({ ...common, type: 'doughnut' });
+  const nestedPie = buildChartOption({
+    ...common,
+    type: 'nestedPie',
+    config: { ...common.config, nestedGroups: [{ label: 'Parent', value: 3.734, children: [{ label: 'Alpha', value: 1.234, rawValue: 1.234 }, { label: 'Beta', value: 2.5, rawValue: 2.5 }] }] }
+  });
+
+  assert.deepEqual(line.xAxis.data, ['Beta', 'Alpha']);
+  assert.deepEqual(line.series[0].data.map(point => point.value), [2.5, 1.234]);
+  assert.equal(line.yAxis.axisLabel.formatter(1.234), '1.2');
+  assert.equal(area.series.length, 2);
+  assert.deepEqual(area.xAxis.data, ['Beta', 'Alpha']);
+  assert.deepEqual(area.series[0].data.map(point => point.value), [2.5, 1.234]);
+  assert.equal(area.series[0].type, 'line');
+  assert.equal(area.series[0].stack, 'Total');
+  assert.deepEqual(bar.xAxis.data, ['Beta', 'Alpha']);
+  assert.deepEqual(bar.series[0].data.map(point => point.itemStyle.color), ['#112233', '#445566']);
+  assert.equal(pie.series[0].radius, '55%');
+  assert.deepEqual(pie.series[0].data.map(point => point.itemStyle.color), ['#112233', '#445566']);
+  assert.deepEqual(doughnut.series[0].radius, ['38%', '65%']);
+  assert.deepEqual(nestedPie.series.map(series => series.type), ['pie', 'pie']);
+  assert.deepEqual(nestedPie.series.map(series => series.data.length), [1, 2]);
+  assert.equal(buildChartOption({ ...common, type: 'retired-chart' }).series[0].type, 'bar');
+});
 
 test('newer saved field colors override graph colors without changing older graph snapshots', () => {
   const graphColor = '#112233';
@@ -144,7 +187,7 @@ test('published pie labels are white with no text stroke in dark mode', () => {
   global.document = { documentElement: { classList: { contains: className => className === 'dark' } } };
 
   try {
-    const option = buildSavedChartOption({
+    const option = buildSavedGraphOption({
       chart_type: 'pie',
       labels: ['SDG 1', 'SDG 2'],
       values_data: [60, 40]
@@ -154,7 +197,7 @@ test('published pie labels are white with no text stroke in dark mode', () => {
     assert.equal(label.color, '#FFFFFF');
     assert.equal(label.textBorderWidth, 0);
     assert.equal(label.textBorderColor, 'transparent');
-    assert.equal(label.formatter({ name: 'SDG 1', percent: 60 }), 'SDG 1: 60%');
+    assert.equal(label.formatter({ name: 'SDG 1', percent: 60, data: { rawValue: 60 } }), 'SDG 1: 60.00 (60%)');
   } finally {
     if (originalDocument === undefined) delete global.document;
     else global.document = originalDocument;
@@ -247,8 +290,8 @@ test('Studio tooltip retains the original numeric value after colorization in bo
   const elements = {
     canvas: { style: {} }, typeSelect: { value: 'bar' }, titleInput: { value: 'Sample', getAttribute: () => 'customized' },
     subtitle: { textContent: '' }, warning: { style: {}, textContent: '' }, emptyState: { style: {} }, emptyMsg: { textContent: '' },
-    categorySelect: { value: '0' }, valueSelect: { value: '1' }, valuePrecision: { value: '0' }, rankedYearSelect: null,
-    rankedReverseOrder: null, filterField: { value: 'all' }, filterOperator: { value: 'all' }, filterValue: { value: '' },
+    categorySelect: { value: '0' }, valueSelect: { value: '1' }, valuePrecision: { value: '0' }, yearSelect: null,
+    reverseOrder: null, filterField: { value: 'all' }, filterOperator: { value: 'all' }, filterValue: { value: '' },
     filterUpperValue: { value: '' }, sortOrder: { value: 'source' }, rowLimit: { value: '30' }, groupDuplicates: { checked: false }
   };
 
@@ -290,6 +333,104 @@ test('Studio color picker is local and exposes synced HEX, RGB, preset, and rese
   assert.match(studioColorCustomizerSource, /chartColorsOverrideShared: Array\.isArray\(overrides\)/);
 });
 
+test('Studio year filtering, stacked series grouping, duplicate aggregation, and reverse order use live rows', () => {
+  const originalWindow = global.window;
+  const originalDocument = global.document;
+  const options = [];
+  let initCount = 0;
+  const yearSelect = {
+    _value: '',
+    _html: '',
+    get options() { return [...this._html.matchAll(/<option value="([^"]+)"/g)]; },
+    get value() { return this._value; },
+    set value(value) { this._value = String(value); },
+    set innerHTML(html) { this._html = html; }
+  };
+  const rows = [
+    [2022, 'A', 'North', 100],
+    [2023, 'A', 'North', 10],
+    [2023, 'A', 'South', 5],
+    [2023, 'A', 'North', 20],
+    [2023, 'B', 'North', 20],
+    [2023, 'B', 'South', 30]
+  ];
+  global.window = {
+    IRISFieldColors: {},
+    ChartMapping: {
+      inferColumns: () => ({ labelColumn: 1, valueColumn: 3, numericColumns: [3] }),
+      isRankField: () => false,
+      parseNumericValue: value => Number(value),
+      parseYearValue: value => Number(value),
+      detectYearColumn: () => 0,
+      getYearOptions: sourceRows => ({ availableYears: [...new Set(sourceRows.map(row => Number(row[0])))].sort((a, b) => b - a) })
+    },
+    ChartData: { groupAndAggregate: sourceRows => sourceRows },
+    echarts: {
+      init: () => {
+        initCount += 1;
+        return { setOption: (option, replace) => options.push({ option, replace }) };
+      }
+    }
+  };
+  global.document = {
+    documentElement: { classList: { contains: () => false } },
+    getElementById: () => null
+  };
+  const record = { id: 'series-test' };
+  const state = { studioChartOverrides: null };
+  const ctx = {
+    state,
+    api: {
+      getStudioActiveSheet: () => ({ name: 'Sheet', data: { headers: ['Year', 'Category', 'Series', 'Value'], rows } }),
+      renderStudioColorCustomizer: () => {}
+    }
+  };
+  const elements = {
+    canvas: { style: {}, clientWidth: 800 },
+    typeSelect: { value: 'stackedArea' },
+    titleInput: { value: 'Value — Sheet', getAttribute: () => 'customized' },
+    subtitle: { textContent: '' },
+    warning: { style: {}, textContent: '' },
+    emptyState: { style: {} },
+    emptyMsg: { textContent: '' },
+    categorySelect: { value: '1' },
+    valueSelect: { value: '3' },
+    seriesFieldSelect: { value: '2' },
+    valuePrecision: { value: '0' },
+    yearSelect,
+    reverseOrder: { checked: true },
+    filterField: { value: 'all' },
+    filterOperator: { value: 'all' },
+    filterValue: { value: '' },
+    filterUpperValue: { value: '' },
+    sortOrder: { value: 'source' },
+    rowLimit: { value: '30' },
+    groupDuplicates: { checked: true }
+  };
+
+  try {
+    renderStudioChart(ctx, record, { elements });
+    yearSelect.value = '2023';
+    renderStudioChart(ctx, record, { elements });
+    const { option, replace } = options.at(-1);
+    assert.equal(replace, true);
+    assert.deepEqual(option.xAxis.data, ['B', 'A']);
+    assert.deepEqual(option.series.map(series => series.name), ['North', 'South']);
+    assert.deepEqual(option.series.map(series => series.data.map(point => point.value)), [[20, 15], [30, 5]]);
+    assert.equal(state.studioChartConfig.selectedYear, '2023');
+    elements.typeSelect.value = 'bar';
+    renderStudioChart(ctx, record, { elements });
+    assert.equal(initCount, 1);
+    assert.equal(options.at(-1).replace, true);
+    assert.equal(options.at(-1).option.series[0].type, 'bar');
+  } finally {
+    if (originalWindow === undefined) delete global.window;
+    else global.window = originalWindow;
+    if (originalDocument === undefined) delete global.document;
+    else global.document = originalDocument;
+  }
+});
+
 test('saved pie and doughnut charts restore stored per-slice colors', () => {
   const originalDocument = global.document;
   const originalWindow = global.window;
@@ -312,7 +453,7 @@ test('saved pie and doughnut charts restore stored per-slice colors', () => {
 test('public Observatory graph options use saved colors with safe defaults', () => {
   const option = buildSavedChartOption({ chart_type: 'pie', labels: ['North', 'South'], values_data: [6, 4], colors: ['#FDB900', 'bad'] });
   assert.equal(option.series[0].data[0].itemStyle.color, '#FDB900');
-  assert.equal(option.series[0].data[1].itemStyle.color, '#B7791F');
+  assert.match(option.series[0].data[1].itemStyle.color, /^#[0-9A-F]{6}$/);
   assert.match(publicGraphApiSource, /sg\.colors/);
 });
 
@@ -346,7 +487,7 @@ test('public Observatory receives the shared field-color map', () => {
   assert.match(chartEngineSource, /fieldColorUpdatedAt/);
 });
 
-test('admin pie previews show slice percentages without hovering', () => {
+test('admin pie previews show precision-formatted values and percentages without hovering', () => {
   let option;
   const originalWindow = global.window;
   const originalDocument = global.document;
@@ -355,7 +496,7 @@ test('admin pie previews show slice percentages without hovering', () => {
 
   try {
     createChart({}, 'pie', { labels: ['North'], datasets: [{ label: 'Share', data: [60] }] });
-    assert.equal(option.series[0].label.formatter, '{b}: {d}%');
+    assert.equal(option.series[0].label.formatter({ name: 'North', value: 60, percent: 100, data: { rawValue: 60 } }), 'North: 60.00 (100%)');
   } finally {
     if (originalWindow === undefined) delete global.window;
     else global.window = originalWindow;
@@ -374,7 +515,7 @@ test('deduplicates circular chart legend labels while grouping remains optional'
   const grouped = prepareCircularData(rows, true);
   assert.deepEqual(ungrouped.legendLabels, ['North', 'South']);
   assert.equal(ungrouped.rows.length, 3);
-  assert.deepEqual(grouped.rows, [{ label: 'North', value: 5 }, { label: 'South', value: 4 }]);
+  assert.deepEqual(grouped.rows, [{ label: 'North', value: 5, rawValue: 5 }, { label: 'South', value: 4, rawValue: 4 }]);
 });
 
 test('serializes the current edited chart series after an entity is removed', () => {
@@ -409,7 +550,7 @@ test('normalizes saved and draft graphs into a single export payload', () => {
   assert.deepEqual(payload.values_data, [120, 150]);
 });
 
-test('preserves the exact saved ECharts chart type when the type is nested inside chartData', () => {
+test('unsupported saved ECharts types fall back to Bar while preserving data', () => {
   const payload = normalizeGraphExportItem({
     title: 'Distribution',
     chartData: {
@@ -419,29 +560,60 @@ test('preserves the exact saved ECharts chart type when the type is nested insid
     }
   }, 'rec_456');
 
-  assert.equal(payload.chart_type, 'polarArea');
+  assert.equal(payload.chart_type, 'bar');
   assert.deepEqual(payload.labels, ['North', 'South']);
   assert.deepEqual(payload.values_data, [65, 35]);
 });
 
-test('ranked-bar exports keep raw ranks and horizontal orientation for the published dashboard', () => {
-  const option = buildSavedChartOption({
+test('circled information controls can be pinned and dismissed by click', () => {
+  assert.match(publicDashboardSource, /trigger\.addEventListener\('mouseenter', \(\) => \{ if \(!pinnedSummaryInfoControl\) open\(\); \}\)/);
+  assert.match(publicDashboardSource, /if \(pinnedSummaryInfoControl === wrapper\)[\s\S]*?pinnedSummaryInfoControl = wrapper;\s+open\(\);/);
+  assert.match(publicDashboardSource, /event\.key !== 'Escape'/);
+  assert.match(rankingHistoryControllerSource, /trigger\.addEventListener\('mouseenter', \(\) => \{ if \(!pinnedRankingInfoControl\) open\(\); \}\)/);
+  assert.match(rankingHistoryControllerSource, /if \(pinnedRankingInfoControl === control\)[\s\S]*?pinnedRankingInfoControl = control;\s+open\(\);/);
+  assert.match(rankingHistoryControllerSource, /event\.key !== 'Escape'/);
+});
+
+test('removed chart types fall back to Bar for saved graph rendering', () => {
+  const option = buildSavedGraphOption({
     title: 'SDG Rank',
-    chart_type: 'rankedBar',
+    chart_type: 'unsupported-chart',
     labels: ['SDG 1', 'SDG 2'],
     values_data: [12, 45],
     chart_data: {
-      rankedBar: { selectedYear: 2025, reverseOrder: true },
       series: [{ data: [{ name: 'SDG 1', value: 12, rawValue: 12 }, { name: 'SDG 2', value: 45, rawValue: 45 }] }]
     }
   });
 
-  assert.equal(option.xAxis.type, 'value');
-  assert.equal(option.yAxis.type, 'category');
-  assert.deepEqual(option.yAxis.data, ['SDG 2', 'SDG 1']);
-  assert.deepEqual(option.series[0].data.map(point => point.value), [45, 12]);
-  assert.deepEqual(option.series[0].data.map(point => point.rawValue), [45, 12]);
-  assert.equal(option.yAxis.inverse, false);
+  assert.equal(option.xAxis.type, 'category');
+  assert.deepEqual(option.xAxis.data, ['SDG 1', 'SDG 2']);
+  assert.deepEqual(option.series[0].data.map(point => point.value), [12, 45]);
+});
+
+test('saved stacked-area series use their configured field colors', () => {
+  const previousColors = globalThis.IRISFieldColors;
+  globalThis.IRISFieldColors = { north: '#112233', south: '#445566' };
+  try {
+    const option = buildSavedGraphOption({
+      chart_type: 'stackedArea',
+      labels: ['2024'],
+      values_data: [5],
+      chart_data: {
+        irisConfig: {
+          type: 'stackedArea',
+          series: [
+            { name: 'North', data: [2] },
+            { name: 'South', data: [3] }
+          ]
+        }
+      }
+    });
+
+    assert.deepEqual(option.series.map(series => series.itemStyle.color), ['#112233', '#445566']);
+  } finally {
+    if (previousColors === undefined) delete globalThis.IRISFieldColors;
+    else globalThis.IRISFieldColors = previousColors;
+  }
 });
 
 test('builds a printable graph sheet with row data and branding', () => {
@@ -548,12 +720,109 @@ test('public dashboard includes a manual summary card snapshot section and admin
   assert.doesNotMatch(adminSource, /0 decimals/);
 });
 
+test('public star ratings are enclosed in a matching standalone section container', () => {
+  assert.match(publicDashboardSource, /<section id="star-rating-cards-section" class="hidden space-y-4 rounded-2xl border border-gray-200 bg-white\/70 p-4 shadow-sm dark:border-gray-700 dark:bg-gray-800\/50 sm:p-5">/);
+  assert.match(publicDashboardSource, /Published institutional star ratings/);
+  assert.match(publicDashboardSource, /id="star-rating-cards-grid"/);
+});
+
+test('public dashboard cards share the CLSU gradient hover treatment', () => {
+  assert.match(publicDashboardSource, /\.iris-hover-card::after[\s\S]*?var\(--iris-green\)[\s\S]*?var\(--iris-gold\)/);
+  assert.match(publicDashboardSource, /\.iris-hover-card:hover[\s\S]*?translateY\(-3px\)/);
+  assert.match(publicDashboardSource, /class="iris-hover-card rounded-xl border border-gray-200 bg-white p-5/);
+  assert.match(publicDashboardSource, /class="iris-hover-card summary-card-shell/);
+  assert.match(publicDashboardSource, /className = 'iris-hover-card scanner-published-card/);
+  assert.match(rankingHistoryControllerSource, /className = 'iris-hover-card ranking-history-card/g);
+});
+
+test('Ranking History can switch to a year-by-year matrix with Philippine ranks', () => {
+  const rankingsApiSource = fs.readFileSync(path.join(__dirname, '..', '..', 'api', 'rankings.php'), 'utf8');
+  assert.match(publicDashboardSource, /id="rankingDisplayMode"[\s\S]*?<option value="matrix">Ranking Trend Matrix<\/option>/);
+  assert.match(rankingHistoryControllerSource, /selectedDisplayMode\(\) === 'matrix'/);
+  assert.match(rankingHistoryControllerSource, /function renderTrendMatrix\(\)/);
+  assert.match(rankingHistoryControllerSource, /Ranking Name/);
+  assert.match(rankingHistoryControllerSource, /Philippines: \$\{escapeHtml\(phRank\)\}/);
+  assert.match(rankingsApiSource, /\{\$phRankDisplayColumn\} AS ph_rank/);
+});
+
+test('Ranking History year selectors are tucked into an expandable range control', () => {
+  assert.match(publicDashboardSource, /<details id="rankingYearRangeControl" class="group min-w-0 sm:col-span-2 lg:col-span-3">[\s\S]*?<summary[^>]*>[\s\S]*?Year range[\s\S]*?<\/summary>[\s\S]*?<div class="mt-2 grid grid-cols-1 gap-3[\s\S]*?id="rankingYearFrom"[\s\S]*?id="rankingYearTo"[\s\S]*?<\/details>/);
+  const yearRangeMarkup = publicDashboardSource.match(/<details id="rankingYearRangeControl"[\s\S]*?<\/details>/)?.[0] || '';
+  assert.ok(yearRangeMarkup);
+  assert.match(publicDashboardSource, /<details id="rankingFiltersControl" class="group">[\s\S]*?<summary[^>]*>[\s\S]*?Filters[\s\S]*?<\/summary>[\s\S]*?<div id="rankingFiltersPopover" class="fixed z-\[100\] grid max-h-\[min\(75vh,560px\)\] w-\[min\(92vw,760px\)\][\s\S]*?id="rankingOrganizationFilter"[\s\S]*?id="rankingListFilter"[\s\S]*?id="rankingAllYears"[\s\S]*?id="rankingYearRangeControl"/);
+  assert.match(rankingHistoryControllerSource, /function positionFiltersPopover\(\)[\s\S]*?window\.innerWidth[\s\S]*?window\.innerHeight/);
+  assert.match(rankingHistoryControllerSource, /filtersControl\?\.addEventListener\('toggle'/);
+  assert.match(rankingHistoryControllerSource, /document\.addEventListener\('click', event => \{\s*if \(filtersControl\?\.open && !filtersControl\.contains\(event\.target\)\) filtersControl\.open = false/);
+  assert.match(rankingHistoryControllerSource, /event\.key === 'Escape' && filtersControl\?\.open\) filtersControl\.open = false/);
+  assert.match(rankingHistoryControllerSource, /yearRangeControl\.open = false/);
+});
+
+test('Ranking History All years button keeps a compact natural width inside the filter grid', () => {
+  const filterPopover = publicDashboardSource.match(/<div id="rankingFiltersPopover"[\s\S]*?<\/div>\s*<\/details>/)?.[0] || '';
+  assert.match(filterPopover, /id="rankingAllYears"[^>]*class="w-auto justify-self-start self-center/);
+  assert.doesNotMatch(filterPopover, /id="rankingAllYears"[^>]*class="[^"]*\bw-full\b/);
+  assert.match(rankingHistoryControllerSource, /allYearsButton\.className = `w-auto justify-self-start self-center rounded-lg border px-2\.5 py-1\.5 text-xs/);
+});
+
+test('Ranking History reset restores the initial highlighted display and all-years state', () => {
+  assert.match(publicDashboardSource, /id="rankingResetDefaults"[^>]*>Reset to default<\/button>/);
+  assert.match(rankingHistoryControllerSource, /defaultDisplayState = \{\s*mode: selectedDisplayMode\(\),\s*layout: selectedGraphLayout\(\),\s*organization: organizationSelect\.value \|\| 'all',\s*list: listSelect\.value \|\| 'all'/);
+  assert.match(rankingHistoryControllerSource, /resetDefaultsButton\?\.addEventListener\('click', \(\) => \{[\s\S]*?defaultDisplayState\.mode[\s\S]*?defaultDisplayState\.organization[\s\S]*?defaultDisplayState\.list[\s\S]*?allYearsActive = true/);
+});
+
+test('Ranking History graph layout switches between side-by-side and one-per-row', () => {
+  assert.match(publicDashboardSource, /id="rankingGraphLayout"[\s\S]*?<option value="one-per-row">One per row<\/option>[\s\S]*?<option value="side-by-side">Side by side<\/option>/);
+  assert.match(rankingHistoryControllerSource, /function rankingChartGridClass\(\)[\s\S]*?xl:grid-cols-2[\s\S]*?grid-cols-1 gap-4/);
+  assert.match(rankingHistoryControllerSource, /graphLayoutSelect\?\.addEventListener\('change', render\)/);
+  assert.match(rankingHistoryControllerSource, /const selectedGraphLayout = \(\) => graphLayoutSelect\?\.value === 'side-by-side' \? 'side-by-side' : 'one-per-row'/);
+  assert.match(rankingHistoryControllerSource, /layout: selectedGraphLayout\(\)/);
+});
+
+test('Ranking History chart cards avoid duplicating the ranking matrix and retain per-card matrix popouts', () => {
+  assert.match(rankingHistoryControllerSource, /content\.className = 'grid min-w-0 grid-cols-1 gap-3'/);
+  assert.doesNotMatch(rankingHistoryControllerSource, /function addRankingContextToggle|function rankingContextMarkup|Show ranking context|Latest global|Ranking context ·/);
+  assert.doesNotMatch(rankingHistoryControllerSource, /rankingContextMarkup\(|addRankingContextToggle\(/);
+  assert.match(rankingHistoryControllerSource, /function addRankingExplanation\(content, rows\)/);
+  assert.match(rankingHistoryControllerSource, /const section = document\.createElement\('details'\)/);
+  assert.match(rankingHistoryControllerSource, /const heading = document\.createElement\('summary'\)/);
+  assert.match(rankingHistoryControllerSource, /heading\.textContent = 'What this ranking means'/);
+  assert.match(rankingHistoryControllerSource, /function isRankingContextField\(key, field\)/);
+  assert.match(rankingHistoryControllerSource, /String\(key \|\| ''\)\.toLowerCase\(\) === 'ranking_context'/);
+  assert.match(rankingHistoryControllerSource, /description\.textContent = String\(rankingContext\.value\)\.trim\(\)/);
+  assert.match(rankingHistoryControllerSource, /!isRankingContextField\(key, field\) && String\(field\?\.value \|\| ''\)\.trim\(\)/);
+  assert.match(rankingHistoryControllerSource, /if \(isRankingContextField\(key, field\) \|\| !String\(field\?\.value \|\| ''\)\.trim\(\)\) continue/);
+  assert.match(rankingHistoryControllerSource, /addRankingExplanation\(content, rowsForChart\)/);
+  assert.match(rankingHistoryControllerSource, /addRankingExplanation\(content, selectedRows\)/);
+  assert.match(rankingHistoryControllerSource, /addInformationControl\(wrapper, rowsForChart\)/);
+  assert.match(rankingHistoryControllerSource, /addInformationControl\(wrapper, selectedRows\)/);
+  assert.match(rankingHistoryControllerSource, /chartCount === 1/);
+  assert.match(rankingHistoryControllerSource, /matrixButton\.textContent = 'Pop Ranking Trend Matrix'/);
+  assert.match(rankingHistoryControllerSource, /openTrendMatrixDialog\(title, rowsForChart\)/);
+  assert.match(rankingHistoryControllerSource, /chartCount > 1/);
+  assert.match(rankingHistoryControllerSource, /dialog\.showModal\(\)/);
+});
+
 test('public removal hides charts without deleting the saved graph record', () => {
   const dashboardSource = fs.readFileSync(path.join(__dirname, '..', '..', 'user', 'dashboard.php'), 'utf8');
   const apiSource = fs.readFileSync(path.join(__dirname, '..', '..', 'api', 'iris.php'), 'utf8');
   assert.match(dashboardSource, /Unpublish|Hide this published chart from the Observatory/);
   assert.match(dashboardSource, /action=unpublish/);
   assert.match(apiSource, /action\s*===\s*'unpublish'|action\s*===\s*"unpublish"/);
+});
+
+test('published graph layout can switch between full-width and side-by-side', () => {
+  assert.match(publicDashboardSource, /id="publishedGraphLayout"/);
+  assert.match(publicDashboardSource, /<option value="side-by-side">Side by side<\/option>/);
+  assert.match(publicDashboardSource, /<option value="one-per-row">One per row<\/option>/);
+  assert.match(publicDashboardSource, /scopeGrid\.classList\.toggle\('lg:grid-cols-2', publishedGraphLayout === 'side-by-side'\)/);
+  assert.match(publicDashboardSource, /chartInstances\.forEach\(chart => chart\?\.resize\?\.\(\)\)/);
+  assert.match(publicDashboardSource, /\$\{publishedGraphLayout === 'side-by-side' \? 'lg:grid-cols-2' : ''\}/);
+});
+
+test('each published graph container has its own bounded vertical scroll area', () => {
+  assert.match(publicDashboardSource, /\.scanner-published-scope\s*\{[\s\S]*?max-height:\s*min\(75vh,\s*620px\)[\s\S]*?overflow-y:\s*auto[\s\S]*?overscroll-behavior:\s*contain/);
+  assert.match(publicDashboardSource, /scopeCard\.className = 'scanner-published-scope/);
+  assert.match(publicDashboardSource, /\.scanner-published-scope > header\s*\{[\s\S]*?position:\s*sticky/);
 });
 
 test('record approval does not auto-publish every saved graph for that record', () => {
@@ -576,7 +845,7 @@ test('builds a printable pie chart preview before the data table', () => {
   assert.ok(html.indexOf('chart-preview') < html.indexOf('<table>'));
 });
 
-test('renders polar-area print sheets as a dedicated polar chart instead of a pie slice layout', () => {
+test('unsupported chart types render a Bar chart in printable sheets', () => {
   const html = buildPrintableGraphSheet({
     title: 'Regional spread',
     chart_type: 'polarArea',
@@ -584,8 +853,8 @@ test('renders polar-area print sheets as a dedicated polar chart instead of a pi
     values_data: [18, 42, 30]
   });
 
-  assert.match(html, /Chart Type: POLARAREA/);
-  assert.match(html, /aria-label="Polar Area chart"/);
+  assert.match(html, /Chart Type: BAR/);
+  assert.match(html, /aria-label="Bar chart"/);
   assert.doesNotMatch(html, /aria-label="pie chart"/);
 });
 
@@ -610,7 +879,7 @@ test('upload widgets use unique file input IDs so the browser chooses the correc
   assert.match(adminHeaderHtml, /id="adminWidgetFileInput"/);
 });
 
-test('chart engine does not redeclare yearColumn during ranked-bar rendering', () => {
+test('chart engine detects the year column once for the year filter', () => {
   const engineSource = fs.readFileSync(path.join(__dirname, '..', 'js', 'modules', 'chartEngine.js'), 'utf8');
   assert.equal((engineSource.match(/const yearColumn = /g) || []).length, 1);
 });
@@ -635,4 +904,5 @@ test('public Ranking History uses Organization and List chart filters without th
   assert.match(rankingHistoryControllerSource, /inverse: true/);
   assert.match(rankingHistoryControllerSource, /Improved \(up\)/);
   assert.match(rankingHistoryControllerSource, /Declined \(down\)/);
+  assert.match(rankingHistoryControllerSource, /addInformationControl\(wrapper, rowsForChart\)/);
 });

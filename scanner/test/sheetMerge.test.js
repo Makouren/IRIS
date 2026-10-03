@@ -241,7 +241,7 @@ test('isRecentMerge accepts seven days and rejects eight days or invalid dates',
   assert.equal(isRecentMerge({ merge: { merged_at: 'not-a-date' } }, now), false);
 });
 
-test('merged rows preserve inferred field indexes and add the new year to ranking helpers', () => {
+test('merged rows preserve inferred field indexes and expose the new year to chart filters', () => {
   const existing = makeSheet(['Year', 'Category', 'Rank'], [[2024, 'A', 5], [2025, 'B', 3]]);
   const incoming = makeSheet(['Rank', 'Year', 'Category'], [[4, 2024, 'A'], [3, 2025, 'B'], [1, 2026, 'C']]);
   const before = ChartMapping.inferColumns(existing.headers, existing.rows);
@@ -250,14 +250,9 @@ test('merged rows preserve inferred field indexes and add the new year to rankin
   assert.equal(after.labelColumn, before.labelColumn);
   assert.equal(after.valueColumn, before.valueColumn);
   assert.deepEqual(ChartMapping.getYearOptions(result.sheet.rows, 0).availableYears, [2026, 2025, 2024]);
-  const ranked = ChartMapping.buildRankedBarRows(result.sheet.rows, {
-    yearColumn: 0,
-    selectedYear: 2026,
-    labelColumn: after.labelColumn,
-    valueColumn: after.valueColumn
-  });
-  assert.deepEqual(ranked.rows.map(row => row.label), ['C']);
-  assert.equal(ranked.rows[0].value, 1);
+  const selectedYearRows = result.sheet.rows.filter(row => ChartMapping.parseYearValue(row[0]) === 2026);
+  assert.deepEqual(selectedYearRows.map(row => row[after.labelColumn]), ['C']);
+  assert.equal(ChartMapping.parseRankValue(selectedYearRows[0][after.valueColumn]), 1);
 });
 
 test('merged rows flow through chart aggregators and survive JSON serialization', () => {

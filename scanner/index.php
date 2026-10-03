@@ -416,12 +416,12 @@
                 <div class="studio-chart-type-group">
                   <label class="studio-field-mapping-label">Chart Type:</label>
                   <select id="studioChartTypeSelect" class="form-input studio-chart-type-select" style="font-size: 0.82rem; font-weight: 700; color: #0F172A;">
-                    <option value="bar"><i class="fa-solid fa-chart-column" aria-hidden="true"></i> Bar Chart</option>
-                    <option value="line"><i class="fa-solid fa-chart-line" aria-hidden="true"></i> Line Chart</option>
-                    <option value="pie"><i class="fa-solid fa-chart-pie" aria-hidden="true"></i> Pie Chart</option>
-                    <option value="doughnut"><i class="fa-solid fa-circle-half-stroke" aria-hidden="true"></i> Doughnut Chart</option>
-                    <option value="rankedBar"><i class="fa-solid fa-ranking-star" aria-hidden="true"></i> Ranked Bar Chart</option>
-                    <option value="nestedPie"><i class="fa-solid fa-chart-pie" aria-hidden="true"></i> Nested Pie</option>
+                    <option value="line">Line Chart</option>
+                    <option value="stackedArea">Stacked Area Chart</option>
+                    <option value="bar">Bar Chart</option>
+                    <option value="pie">Pie Chart</option>
+                    <option value="doughnut">Doughnut Chart</option>
+                    <option value="nestedPie">Nested Pie</option>
                   </select>
                 </div>
               </div>
@@ -432,6 +432,10 @@
                 <div class="studio-field-mapping-group">
                   <label class="studio-field-mapping-label" id="studioCategoryLabel">Category (X-axis):</label>
                   <select id="studioCategoryCol" class="form-input studio-field-mapping-select" aria-label="Category column"></select>
+                </div>
+                <div id="studioSeriesFieldWrapper" class="studio-field-mapping-group" style="display: none;">
+                  <label for="studioSeriesField" class="studio-field-mapping-label">Series (group by):</label>
+                  <select id="studioSeriesField" class="form-input studio-field-mapping-select"></select>
                 </div>
                 <div class="studio-field-mapping-group">
                   <label class="studio-field-mapping-label" id="studioValueLabel">Value (Y-axis):</label>
@@ -449,13 +453,13 @@
                     <option value="2" selected>2 decimals</option>
                   </select>
                 </div>
-                <div id="studioRankedYearWrapper" class="studio-field-mapping-group" style="display: none;">
-                  <label class="studio-field-mapping-label" id="studioRankedYearLabel">Year:</label>
-                  <select id="studioRankedYearSelect" class="form-input studio-field-mapping-select" aria-label="Year for Ranked Bar Chart"></select>
+                <div id="studioYearWrapper" class="studio-field-mapping-group" style="display: none;">
+                  <label class="studio-field-mapping-label" for="studioYearSelect">Year:</label>
+                  <select id="studioYearSelect" class="form-input studio-field-mapping-select" aria-label="Filter chart by year"></select>
                 </div>
-                <div id="studioRankedReverseOrderWrapper" class="studio-field-mapping-group" style="display: none;">
-                  <label class="studio-field-mapping-label" id="studioRankedReverseOrderLabel">
-                    <input id="studioRankedReverseOrder" type="checkbox" aria-label="Reverse ranked bar display order">Reverse order
+                <div id="studioReverseOrderWrapper" class="studio-field-mapping-group" style="display: none;">
+                  <label class="studio-field-mapping-label" for="studioReverseOrder">
+                    <input id="studioReverseOrder" type="checkbox" aria-label="Reverse chart order">Reverse order
                   </label>
                 </div>
                 <div id="studioFieldWarning" style="display:none; font-size: 0.75rem; color: #DC2626; font-weight: 700; background: #FEF2F2; border: 1px solid #FECACA; border-radius: 4px; padding: 0.2rem 0.6rem;"></div>

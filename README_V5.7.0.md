@@ -1,5 +1,7 @@
 # IRIS V5.7.0 Release Notes
 
+> Current release: [V6.7.0](README_V6.7.0.md). The V5.7.0 notes below are historical.
+
 V5.7.0 extends the PHP/MySQL observatory with Super Admin record merge and File History, expanded import mapping, and improvements to the Review Editor and public dashboards.
 
 ## File Archives and Record Merge
@@ -47,4 +49,4 @@ php scanner/test/recordFileHistory.test.php
 
 Also lint the changed PHP files with `php -l`. Authenticated XAMPP/MySQL checks should cover upload destinations and custom-field mappings, merge previews and direction, File History download and restore, Review Editor/Saved Graphs behavior, and the public dashboards. Browser and database smoke checks must be recorded separately from automated test results.
 
-See [README.md](README.md) for setup and architecture, [README_PHP.md](README_PHP.md) for deployment notes, and [README_V5.3.0.md](README_V5.3.0.md) for the earlier release.
+See [README_V6.7.0.md](README_V6.7.0.md) for the current release, [README.md](README.md) for setup and architecture, and [README_PHP.md](README_PHP.md) for deployment notes.

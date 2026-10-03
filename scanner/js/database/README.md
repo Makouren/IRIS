@@ -1,6 +1,8 @@
 # Database and Persistence
 
-V5.7.0 adds Super Admin record merge and File History snapshots, including private source-workbook copies for supported formats. Ranking and Summary Card source files remain separate from the general Review Editor record list. Custom mapped import fields, Summary Card history, saved graph configuration, and publication state persist through the PHP/MySQL pipeline. The authenticated `api/change_signal.php` endpoint lets active pages detect successful writes; Super Admin pages synchronize promptly and other roles poll every five seconds. See [`README_V5.7.0.md`](../../../README_V5.7.0.md) for required migrations and verification.
+> Current application release: [V6.7.0](../../../README_V6.7.0.md).
+
+IRIS supports Super Admin record merge and File History snapshots, including private source-workbook copies for supported formats. Ranking and Summary Card source files remain separate from the general Review Editor record list. Custom mapped import fields, Summary Card history, saved graph configuration, and publication state persist through the PHP/MySQL pipeline. The authenticated `api/change_signal.php` endpoint lets active pages detect successful writes; Super Admin pages synchronize promptly and other roles poll every five seconds. See [`README_V6.7.0.md`](../../../README_V6.7.0.md) for current migration guidance and verification.
 
 [`dbManager.js`](dbManager.js) is the Scanner's browser-side persistence adapter. It communicates with the PHP/PDO API in `api/iris.php`; there is no Express server.
 
@@ -11,11 +13,11 @@ V5.7.0 adds Super Admin record merge and File History snapshots, including priva
 - Saved graph snapshots are linked to records through `record_id`.
 - `records.status` tracks record review/approval. `saved_graphs.is_published` independently controls public visibility; approving a record does not publish every graph attached to it.
 
-The PHP runtime connects to the normalized `iris_db_3nf` schema through `config/db.php`; it does not create or alter tables. `database.sql` and historical migrations targeting `iris_db` describe a retired schema and must not be used to provision V5.7.0.
+The PHP runtime connects to the normalized `iris_db_3nf` schema through `config/db.php`; it does not create or alter tables. `database.sql` and historical migrations targeting `iris_db` describe a retired schema and must not be used to provision the current release.
 
 ## Saved Graph Data
 
-Saved graphs store chart type, labels, real values, chart configuration, rank and axis metadata, colors, publication state, and creation time. Supported types are Bar, Line, Pie, Doughnut, Ranked Bar, and Nested Pie. Publication is explicit and is not inferred from record status.
+Saved graphs store chart type, labels, real values, chart configuration, rank and axis metadata, colors, publication state, and creation time. Supported types are Line, Stacked Area, Bar, Pie, Doughnut, and Nested Pie. Unknown or retired chart types render as Bar. Publication is explicit and is not inferred from record status.
 
 ## PHP API Routes
 

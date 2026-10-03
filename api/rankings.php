@@ -9,14 +9,24 @@ header('Pragma: no-cache');
 try {
     $pdo = db();
     $customFieldsColumn = CustomImportFields::columnExists($pdo, 'rankings') ? 'r.custom_fields' : 'NULL AS custom_fields';
+    $phRankDisplayColumnQuery = $pdo->prepare('SELECT 1 FROM information_schema.COLUMNS
+        WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? AND COLUMN_NAME = ? LIMIT 1');
+    $phRankDisplayColumnQuery->execute(['rankings', 'ph_rank_display']);
+    $phRankDisplayColumn = $phRankDisplayColumnQuery->fetchColumn()
+        ? 'COALESCE(r.ph_rank_display, CAST(r.ph_rank AS CHAR))'
+        : 'CAST(r.ph_rank AS CHAR)';
+    $publishedColumnQuery = $pdo->prepare('SELECT 1 FROM information_schema.COLUMNS
+        WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? AND COLUMN_NAME = ? LIMIT 1');
+    $publishedColumnQuery->execute(['rankings', 'is_published']);
+    $publishedColumn = $publishedColumnQuery->fetchColumn() ? 'COALESCE(r.is_published, 1)' : '1';
     $rows = $pdo->query("SELECT r.ranking_id AS id, rb.name AS organization, rb.short_name AS organization_short_name,
                                 rb.sort_order AS organization_sort_order, rt.name AS ranking_type, r.year,
                                 COALESCE(r.global_rank_display, CAST(r.global_rank AS CHAR)) AS global_rank,
-                                r.rank_value, r.info_text, {$customFieldsColumn}
+                                {$phRankDisplayColumn} AS ph_rank, r.rank_value, r.info_text, {$customFieldsColumn}
                          FROM rankings r
                          INNER JOIN ranking_bodies rb ON rb.ranking_body_id = r.ranking_body_id
                          LEFT JOIN ranking_types rt ON rt.ranking_type_id = r.ranking_type_id
-                         WHERE rb.short_name <> 'DEMO'
+                         WHERE rb.short_name <> 'DEMO' AND {$publishedColumn} = 1
                          ORDER BY rb.sort_order ASC, CASE
                              WHEN UPPER(rb.short_name) = 'WURI' AND LOWER(rt.name) LIKE '%overall%' THEN 0
                              WHEN UPPER(rb.short_name) = 'QS' AND LOWER(rt.name) LIKE '%asia%' AND LOWER(rt.name) NOT LIKE '%south eastern%' THEN 1

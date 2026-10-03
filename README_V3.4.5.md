@@ -1,5 +1,7 @@
 # IRIS V3.4.5 Release Notes
 
+> Current release: [V6.7.0](README_V6.7.0.md). The V3.4.5 notes below are historical.
+
 V3.4.5 extends the Super Admin and office workflows with template-driven spreadsheet imports and cross-page data refresh signaling.
 
 ## Template Imports
@@ -41,4 +43,4 @@ The app also ensures `app_change_state` exists when connecting to the database.
 6. Open published history on the Observatory and confirm unpublished periods are hidden and viewing history leaves the current card unchanged.
 7. Revert an import batch and confirm complete period state and provenance are restored.
 
-See [README_V4.5.0.md](README_V4.5.0.md) for the current release, [README.md](README.md) for setup and architecture, and [README_PHP.md](README_PHP.md) for PHP deployment details.
+See [README_V6.7.0.md](README_V6.7.0.md) for the current release, [README.md](README.md) for setup and architecture, and [README_PHP.md](README_PHP.md) for PHP deployment details.

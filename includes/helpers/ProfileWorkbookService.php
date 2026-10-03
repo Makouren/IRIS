@@ -202,7 +202,7 @@ final class ProfileWorkbookService
         foreach (array_keys($profile['custom_fields'] ?? []) as $key) $targets[] = 'custom_fields.' . $key;
         $targets = array_values(array_unique($targets));
         if ($destination === 'ranking_history') {
-            $allowed = ['organization', 'ranking_type', 'year', 'global_rank', 'ph_rank', 'source'];
+            $allowed = ['organization', 'ranking_type', 'year', 'global_rank', 'ph_rank', 'info_text'];
             $targets = array_values(array_filter($targets, static fn(string $field): bool => in_array($field, $allowed, true) || preg_match('/^custom_fields\\.[a-z][a-z0-9_]{0,47}$/', $field) === 1));
         } else {
             $allowed = array_values(array_unique(array_merge(['import_key', 'card_title', 'period_key', 'main_value', 'main_label', 'year_date', 'secondary_label', 'secondary_value', 'description', 'secondary_description', 'info_text', 'source_info', 'category_names', 'display_precision'], $profile['identity_fields'] ?? [])));
@@ -301,6 +301,49 @@ final class ProfileWorkbookService
         $root = self::storageRoot();
         $path = realpath($root . DIRECTORY_SEPARATOR . $fileName);
         return $path && dirname($path) === $root && is_file($path) ? $path : null;
+    }
+
+    public static function savedWorkbookPreview(PDO $pdo, int $profileId, string $destination): ?array
+    {
+        if (!in_array($destination, self::DESTINATIONS, true)) throw new InvalidArgumentException('Choose a valid import destination.');
+        if (!self::metadataReady($pdo)) return null;
+        $profile = SummaryCardImportProfiles::get($pdo, $profileId, false, $destination);
+        $fileName = (string)($profile['workbook_file_path'] ?? '');
+        if ($fileName === '') return null;
+        $path = self::workbookPath($fileName);
+        if ($path === null) throw new RuntimeException('The saved profile workbook is unavailable.');
+        $originalName = (string)($profile['workbook_original_filename'] ?? 'Workbook');
+        $sheetName = trim((string)($profile['sheet_selector'] ?? ''));
+        $headerRow = filter_var($profile['workbook_header_row'] ?? null, FILTER_VALIDATE_INT);
+        if ($headerRow === false || $headerRow === null || $headerRow < 1) throw new RuntimeException('The saved workbook header row is invalid.');
+        $parsed = (new SpreadsheetReader())->parse(
+            $path,
+            strtolower(pathinfo($fileName, PATHINFO_EXTENSION)),
+            $originalName,
+            $sheetName !== '' ? $sheetName : null,
+            $headerRow
+        );
+        $sheet = $parsed['sheetsData'][$sheetName !== '' ? $sheetName : (array_key_first($parsed['sheetsData']) ?? '')] ?? null;
+        if ($sheet === null) throw new RuntimeException('The saved workbook worksheet is unavailable.');
+        $headers = array_slice($sheet['headers'], 0, 30);
+        $rows = [];
+        foreach ($sheet['rawRows'] as $row) {
+            if ((int)$row['row_number'] <= $headerRow) continue;
+            $rows[] = [
+                'row_number' => (int)$row['row_number'],
+                'values' => array_slice($row['values'], 0, 30)
+            ];
+            if (count($rows) >= 15) break;
+        }
+        return [
+            'filename' => $originalName,
+            'sheet' => (string)$sheet['name'],
+            'header_row' => $headerRow,
+            'headers' => $headers,
+            'rows' => $rows,
+            'total_columns' => (int)$sheet['colCount'],
+            'truncated_columns' => (int)$sheet['colCount'] > count($headers)
+        ];
     }
 
     public static function expectedHeaders(array $profile, string $destination = 'summary_cards'): array
