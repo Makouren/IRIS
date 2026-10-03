@@ -1,5 +1,6 @@
 <?php
 require_once __DIR__ . '/../includes/functions.php';
+require_once __DIR__ . '/../includes/upload_limits.php';
 requireRole(['super_admin', 'admin', 'user'], true);
 
 header('Content-Type: application/json; charset=utf-8');
@@ -9,6 +10,10 @@ function star_rating_bad(string $message, int $status = 400): never {
     http_response_code($status);
     echo json_encode(['error' => $message]);
     exit;
+}
+
+if (iris_upload_request_exceeded_post_limit()) {
+    star_rating_bad('The upload request exceeds the server request limit. Check PHP post_max_size and keep each file at or below ' . iris_upload_limit_label() . '.', 413);
 }
 
 function star_rating_require_admin(): void {

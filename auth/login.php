@@ -7,6 +7,7 @@ if (!empty($_SESSION['user_id'])) {
 }
 
 $error = flash('error');
+$success = flash('success');
 clear_old();
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
@@ -166,6 +167,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             <h1 class="text-2xl font-black text-gray-900 dark:text-white mb-1">Welcome back</h1>
             <p class="text-sm text-gray-500 dark:text-slate-400 mb-6">Sign in to continue to your observatory.</p>
 
+            <?php if ($success): ?>
+                <div class="mb-4 rounded-xl border border-emerald-200 bg-emerald-50 p-3.5 text-xs font-medium text-emerald-900 dark:border-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-200" role="status"><?= e($success) ?></div>
+            <?php endif; ?>
+
             <?php if ($error): ?>
                 <div class="flex items-center p-3.5 mb-4 text-xs text-red-800 rounded-xl bg-red-50 dark:bg-red-500/10 dark:text-red-400 border border-red-200 dark:border-red-500/30" role="alert">
                     <i class="fa-solid fa-circle-exclamation text-base mr-2"></i>
@@ -204,7 +209,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             </form>
 
             <p class="text-xs text-center text-gray-500 dark:text-slate-400 mt-6">
-                Accounts are provisioned by the Super Admin.
+                Need a normal user account? <a href="<?= e(base_url('auth/register.php')) ?>" class="font-semibold text-emerald-600 dark:text-emerald-400 hover:underline">Register</a>. New accounts require Super Admin activation.
             </p>
         </div>
     </div>

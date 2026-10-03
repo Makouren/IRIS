@@ -1,5 +1,6 @@
 <?php
 require_once __DIR__.'/../../includes/functions.php';
+require_once __DIR__.'/../../includes/upload_limits.php';
 require_admin();
 $activeNav = $activeNav ?? 'ingestion';
 $pageTitle = $pageTitle ?? 'IRIS Admin Control Panel';
@@ -75,6 +76,10 @@ $pageTitle = $pageTitle ?? 'IRIS Admin Control Panel';
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link rel="stylesheet" href="<?= e(base_url('scanner/css/tokens.css')) ?>">
     <link rel="stylesheet" href="<?= e(base_url('scanner/css/styles.css')) ?>?v=<?= (int) filemtime(__DIR__.'/../../scanner/css/styles.css') ?>">
+    <link rel="stylesheet" href="<?= e(base_url('scanner/css/portalNavigation.css')) ?>?v=<?= (int) filemtime(__DIR__.'/../../scanner/css/portalNavigation.css') ?>">
+    <?php if ($activeNav === 'review'): ?>
+        <script src="<?= e(base_url('scanner/js/dotBackground.js')) ?>?v=<?= (int) filemtime(__DIR__.'/../../scanner/js/dotBackground.js') ?>" defer></script>
+    <?php endif; ?>
     <link href="https://fonts.googleapis.com/css2?family=Libre+Franklin:wght@400;500;600;700;800&family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
     <style>
         /* TODO: Self-host Buttershine Serif for headings when the IAO provides the licensed font file. */
@@ -86,19 +91,6 @@ $pageTitle = $pageTitle ?? 'IRIS Admin Control Panel';
             max-width: var(--dashboard-container-max) !important;
             margin-inline: auto;
             padding-inline: var(--dashboard-container-gutter) !important;
-        }
-        @media (max-width: 760px) {
-            .admin-nav-inner { flex-wrap: wrap; gap: .5rem; }
-            .admin-nav-inner > .logo-refresh-trigger > div:first-child { width: clamp(8rem, 32vw, 13rem); }
-            .admin-nav-actions { gap: .25rem; margin-left: auto; }
-            .admin-nav-link { padding: .5rem; }
-            .admin-nav-link span { display: none; }
-            .admin-theme-btn { padding: .5rem !important; }
-            .admin-profile-btn { gap: .25rem !important; padding: .25rem !important; }
-        }
-        @media (max-width: 767px) {
-            .admin-nav-inner > .logo-refresh-trigger > div:last-child { display: none !important; }
-            #user-menu-button > span { display: none !important; }
         }
         html.dark .studio-shell, html.dark .studio-data-manager, html.dark .studio-panel, html.dark .studio-chart-panel, html.dark .studio-graph-controls, html.dark .table-container, html.dark .data-table, html.dark .studio-data-manager .form-input, html.dark .studio-data-manager textarea, html.dark .studio-data-manager select { color: #f8fafc !important; }
         html.dark .studio-data-manager .form-input, html.dark .studio-data-manager textarea, html.dark .studio-data-manager select, html.dark .header-rename-input, html.dark .studio-cell-input { background: #273449 !important; border-color: #475569 !important; color: #f8fafc !important; }
@@ -198,7 +190,8 @@ $pageTitle = $pageTitle ?? 'IRIS Admin Control Panel';
         }
     </style>
 </head>
-<body class="bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-gray-100 min-h-screen flex flex-col">
+<body class="<?= $activeNav === 'review' ? 'dot-grid-dashboard ' : '' ?>bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-gray-100 min-h-screen flex flex-col">
+    <?php if ($activeNav === 'review'): ?><div id="dashboard-dot-background" aria-hidden="true"></div><?php endif; ?>
 
     <style>
         .admin-nav{background:linear-gradient(180deg, rgba(15,23,42,.98), rgba(15,23,42,.92))!important;border-bottom:1px solid rgba(148,163,184,.22)!important;box-shadow:0 10px 30px rgba(2,6,23,.24)!important;}
@@ -257,70 +250,7 @@ $pageTitle = $pageTitle ?? 'IRIS Admin Control Panel';
         <div class="iris-loader" aria-hidden="true"></div>
     </div>
 
-    <!-- Navigation Bar -->
-    <nav class="admin-nav sticky top-0 z-50 backdrop-blur-md bg-opacity-95">
-        <div class="dashboard-container">
-            <div class="admin-nav-inner flex items-center justify-between gap-4">
-                <a href="<?= e(base_url('user/dashboard.php')) ?>" class="flex items-center gap-3 min-w-0" aria-label="Go to the public Observatory">
-                    <div class="w-52 h-11 flex items-center justify-center overflow-hidden shrink-0 rounded-lg bg-white px-3 py-1.5">
-                        <img src="<?= e(base_url('images/iris-panel-logo.svg')) ?>" alt="IRIS SielMetrics+ Logo" class="h-10 w-full object-contain object-left">
-                    </div>
-                    <div class="min-w-0 hidden sm:block">
-                        <div class="flex items-center gap-2">
-                            <span class="admin-brand-title text-xl font-extrabold tracking-tight">IRIS Admin</span>
-                            <span class="text-[10px] px-2 py-1 font-extrabold rounded-full bg-[#FFD700] text-[#1E6031] border border-[#E0A70D]">
-                                <?= $activeNav === 'ingestion' ? 'FILE INGESTION' : ($activeNav === 'review' ? 'REVIEW EDITOR' : ($activeNav === 'archives' ? 'FILE ARCHIVES' : 'SAVED GRAPHS')) ?>
-                            </span>
-                        </div>
-                        <p class="admin-brand-sub text-[11px] font-semibold uppercase tracking-wider">International Affairs Office Control Panel</p>
-                    </div>
-                </a>
-
-                <div class="admin-nav-actions flex items-center gap-2">
-                    <a href="<?= e(base_url('user/dashboard.php')) ?>" class="admin-nav-link public-link" aria-label="Open Observatory" title="Open Observatory">
-                        <i class="fa-solid fa-chart-pie" aria-hidden="true"></i><span>Observatory</span>
-                    </a>
-                    <button id="theme-toggle" type="button" class="admin-theme-btn rounded-lg text-sm p-2.5" aria-label="Toggle theme">
-                        <i id="theme-toggle-dark-icon" class="hidden fa-solid fa-moon text-base"></i>
-                        <i id="theme-toggle-light-icon" class="hidden fa-solid fa-sun text-base text-amber-400"></i>
-                    </button>
-                    <div class="relative">
-                        <button type="button" class="admin-profile-btn flex items-center gap-2 p-1.5 rounded-full focus:ring-2 focus:ring-emerald-500" id="user-menu-button" aria-expanded="false" data-dropdown-toggle="user-dropdown" data-dropdown-placement="bottom">
-                            <div class="w-8 h-8 rounded-full bg-gradient-to-tr from-emerald-500 to-amber-400 flex items-center justify-center text-white font-bold text-xs shadow">
-                                <?= strtoupper(substr(($_SESSION['username'] ?? 'A'), 0, 2)) ?>
-                            </div>
-                            <span class="hidden sm:inline-block font-semibold text-xs px-1"><?= htmlspecialchars(($_SESSION['username'] ?? 'A')) ?></span>
-                            <i class="fa-solid fa-chevron-down text-[10px] text-slate-400 mr-1"></i>
-                        </button>
-                            <div class="admin-dropdown z-50 hidden my-3 w-56 text-base list-none rounded-xl shadow-2xl" id="user-dropdown">
-                            <div class="px-4 py-3 border-b border-slate-700">
-                                <span class="dropdown-name block text-sm font-bold"><?= htmlspecialchars(($_SESSION['username'] ?? 'A')) ?></span>
-                                <span class="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold bg-amber-400 text-slate-900 mt-1">SUPER ADMIN</span>
-                            </div>
-                            <ul class="py-2" aria-labelledby="user-menu-button">
-                                <li><a href="<?= e(base_url('admin/review_editor.php')) ?>" class="block px-4 py-2 text-sm"><i class="fa-solid fa-pen-to-square mr-2"></i> Review Editor</a></li>
-                                <li><a href="<?= e(base_url('admin/file_archives.php')) ?>" class="block px-4 py-2 text-sm"><i class="fa-solid fa-box-archive mr-2"></i> File Archives</a></li>
-                                <li><a href="<?= e(base_url('admin/saved_graphs.php')) ?>" class="block px-4 py-2 text-sm"><i class="fa-solid fa-chart-line mr-2"></i> Saved Graphs</a></li>
-                                <li><a href="<?= e(base_url('user/dashboard.php')) ?>" class="block px-4 py-2 text-sm"><i class="fa-solid fa-globe mr-2"></i> Observatory View</a></li>
-                                <li><button type="button" data-account-manager-open class="block w-full px-4 py-2 text-left text-sm"><i class="fa-solid fa-users-gear mr-2"></i> Manage accounts</button></li>
-                                <li><button type="button" data-template-manager-open class="block w-full px-4 py-2 text-left text-sm"><i class="fa-solid fa-file-lines mr-2"></i> Manage Templates</button></li>
-                                <li><a href="<?= e(base_url('auth/change_password.php')) ?>" class="block px-4 py-2 text-sm"><i class="fa-solid fa-key mr-2"></i> Change password</a></li>
-                            </ul>
-                            <div class="py-1 border-t border-slate-700">
-                                <form method="POST" action="<?= e(base_url('auth/logout.php')) ?>" class="w-full">
-                                    <?= csrf_field() ?>
-                                    <button type="submit" class="signout w-full px-4 py-2 text-sm whitespace-nowrap">
-                                        <i class="fa-solid fa-right-from-bracket flex-shrink-0"></i>
-                                        <span class="whitespace-nowrap">Sign Out</span>
-                                    </button>
-                                </form>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </nav>
+    <?php $portalNavMode = 'admin'; require __DIR__ . '/../../includes/portal_nav.php'; ?>
 
     <!-- Main Shell -->
     <main class="admin-scanner-shell flex-1 w-full py-8">
@@ -359,7 +289,7 @@ $pageTitle = $pageTitle ?? 'IRIS Admin Control Panel';
                         <input type="file" id="adminWidgetFileInput" multiple accept=".xlsx,.xls,.csv" style="display: none;">
 
                         <div style="margin: 0.5rem auto 1.25rem; text-align: center; font-size: 0.8rem; color: var(--text-muted); font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase;">
-                            Files must be under 100 MB
+                            Files must be no larger than 10 MB
                         </div>
 
                         <div style="margin-bottom: 1.5rem;">

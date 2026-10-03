@@ -93,6 +93,7 @@ try {
     <!-- Google Fonts -->
     <link href="https://fonts.googleapis.com/css2?family=Libre+Franklin:wght@400;500;600;700;800&family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="<?= e(base_url('scanner/css/tokens.css')) ?>">
+    <link rel="stylesheet" href="<?= e(base_url('scanner/css/portalNavigation.css')) ?>?v=<?= (int) filemtime(__DIR__ . '/../scanner/css/portalNavigation.css') ?>">
     <script src="<?= e(base_url('scanner/js/dotBackground.js')) ?>?v=<?= (int) filemtime(__DIR__ . '/../scanner/js/dotBackground.js') ?>" defer></script>
     <style>
         .summary-card-grid {
@@ -153,19 +154,6 @@ try {
             .iris-hover-card,
             .iris-hover-card::after { transition: none; }
         }
-        @media (max-width: 767px) {
-            .admin-nav-inner > .logo-refresh-trigger > div:last-child { display: none !important; }
-            #user-menu-button > span { display: none !important; }
-        }
-        @media (max-width: 640px) {
-            .admin-nav-inner { gap: .5rem; }
-            .admin-nav-inner > .logo-refresh-trigger > div:first-child { width: clamp(8rem, 32vw, 13rem); }
-            .admin-nav-actions { gap: .25rem; }
-            .admin-nav-link { padding: .5rem; }
-            .admin-nav-link span { display: none; }
-            .admin-theme-btn { padding: .5rem !important; }
-            .admin-profile-btn { gap: .25rem !important; padding: .25rem !important; }
-        }
         body { font-family: 'Libre Franklin', 'Inter', sans-serif; }
         .admin-nav { background: linear-gradient(180deg, rgba(15,23,42,.98), rgba(15,23,42,.92)) !important; border-bottom: 1px solid rgba(148,163,184,.22) !important; box-shadow: 0 10px 30px rgba(2,6,23,.24) !important; }
         .admin-nav-inner { min-height: 76px; }
@@ -214,70 +202,7 @@ try {
         <div class="iris-loader" aria-hidden="true"></div>
     </div>
 
-    <!-- Top Navigation Bar -->
-    <nav class="admin-nav sticky top-0 z-50 backdrop-blur-md bg-opacity-95">
-        <div class="dashboard-container">
-            <div class="admin-nav-inner flex items-center justify-between gap-4">
-                <a href="<?= e(base_url('user/dashboard.php')) ?>" class="logo-refresh-trigger flex items-center gap-3 min-w-0" data-target="<?= e(base_url('user/dashboard.php')) ?>">
-                    <div class="w-52 h-11 flex items-center justify-center overflow-hidden shrink-0 rounded-lg bg-white px-3 py-1.5">
-                        <img src="<?= e(base_url('images/iris-panel-logo.svg')) ?>" alt="IRIS SielMetrics+ Logo" class="h-10 w-full object-contain object-left">
-                    </div>
-                    <div class="min-w-0 hidden sm:block">
-                        <div class="flex items-center gap-2">
-                            <span class="admin-brand-title text-xl font-extrabold tracking-tight">CLSU Observatory</span>
-                            <span class="text-[10px] px-2 py-1 font-extrabold rounded-full bg-[#FFD700] text-[#1E6031] border border-[#E0A70D]">PUBLIC ANALYTICS</span>
-                        </div>
-                        <p class="admin-brand-sub text-[11px] font-semibold uppercase tracking-wider">International Affairs Office &bull; IRIS</p>
-                    </div>
-                </a>
-
-                <div class="admin-nav-actions flex items-center gap-2">
-                    <?php if (($_SESSION['role'] ?? null) === 'super_admin'): ?>
-                        <a href="<?= e(base_url('admin/review_editor.php')) ?>" class="admin-nav-link public-link" aria-label="Edit Observatory data" title="Edit Observatory data">
-                            <i class="fa-solid fa-pen-to-square" aria-hidden="true"></i><span>Edit</span>
-                        </a>
-                    <?php elseif (($_SESSION['role'] ?? null) === 'admin'): ?>
-                        <a href="<?= e(base_url('admin/office_upload.php')) ?>" class="admin-nav-link public-link" aria-label="Back to IAO Uploads" title="Back to Uploads">
-                            <i class="fa-solid fa-cloud-arrow-up" aria-hidden="true"></i><span>Back to Uploads</span>
-                        </a>
-                    <?php endif; ?>
-                    <button id="theme-toggle" type="button" class="admin-theme-btn rounded-lg text-sm p-2.5" aria-label="Toggle theme">
-                        <i id="theme-toggle-dark-icon" class="hidden fa-solid fa-moon text-base"></i>
-                        <i id="theme-toggle-light-icon" class="hidden fa-solid fa-sun text-base text-amber-400"></i>
-                    </button>
-                    <div class="relative">
-                        <button type="button" class="admin-profile-btn flex items-center gap-2 p-1.5 rounded-full focus:ring-2 focus:ring-emerald-500" id="user-menu-button" aria-expanded="false" data-dropdown-toggle="user-dropdown" data-dropdown-placement="bottom">
-                            <div class="w-8 h-8 rounded-full bg-gradient-to-tr from-emerald-500 to-amber-400 flex items-center justify-center text-white font-bold text-xs shadow">
-                                <?= strtoupper(substr(($_SESSION['username'] ?? 'U'), 0, 2)) ?>
-                            </div>
-                            <span class="hidden sm:inline-block font-semibold text-xs px-1"><?= htmlspecialchars(($_SESSION['username'] ?? 'U')) ?></span>
-                            <i class="fa-solid fa-chevron-down text-[10px] text-slate-400 mr-1" aria-hidden="true"></i>
-                        </button>
-                        <div class="admin-dropdown z-50 hidden my-3 w-56 text-base list-none rounded-xl shadow-2xl" id="user-dropdown">
-                            <div class="px-4 py-3 border-b border-slate-700">
-                                <span class="dropdown-name block text-sm font-bold"><?= htmlspecialchars(($_SESSION['username'] ?? 'U')) ?></span>
-                                <span class="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold bg-amber-400 text-slate-900 mt-1">
-                                    <?= ($_SESSION['role'] ?? null) === 'super_admin' ? 'SUPER ADMIN' : (($_SESSION['role'] ?? null) === 'admin' ? 'OFFICE ADMIN' : 'VIEWER') ?>
-                                </span>
-                            </div>
-                            <ul class="py-2" aria-labelledby="user-menu-button">
-                                <li><a href="<?= e(base_url('auth/change_password.php')) ?>"><i class="fa-solid fa-key"></i> Change password</a></li>
-                            </ul>
-                            <div class="py-1 border-t border-slate-700">
-                                <form method="POST" action="<?= e(base_url('auth/logout.php')) ?>" class="w-full">
-                                    <?= csrf_field() ?>
-                                    <button type="submit" class="signout w-full px-4 py-2 text-sm whitespace-nowrap">
-                                        <i class="fa-solid fa-right-from-bracket flex-shrink-0" aria-hidden="true"></i>
-                                        <span class="whitespace-nowrap">Sign Out</span>
-                                    </button>
-                                </form>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </nav>
+    <?php $portalNavMode = 'public'; require __DIR__ . '/../includes/portal_nav.php'; ?>
 
     <!-- Main Container -->
     <style>

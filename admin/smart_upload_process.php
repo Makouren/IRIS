@@ -1,14 +1,28 @@
 <?php
 require_once __DIR__ . '/../includes/functions.php';
+require_once __DIR__ . '/../includes/upload_limits.php';
 require_once __DIR__ . '/../includes/extractors.php';
 
 require_admin();
 if (!ALLOW_SUPER_ADMIN_UPLOAD) flash_redirect('admin/review_editor.php', 'error', 'File uploads are handled by office accounts.');
+if (iris_upload_request_exceeded_post_limit()) {
+    flash_redirect('admin/smart_upload.php', 'error', 'The upload request exceeds the server request limit. Keep the file at or below ' . iris_upload_limit_label() . ' and configure PHP post_max_size to at least 12M.');
+}
 verify_csrf();
 
 $f = $_FILES['upload_file'] ?? null;
-if (!$f || $f['error'] !== UPLOAD_ERR_OK) {
+if (!$f) {
     flash_redirect('admin/smart_upload.php', 'error', 'Please choose a file.');
+}
+$uploadError = (int)($f['error'] ?? UPLOAD_ERR_NO_FILE);
+if ($uploadError !== UPLOAD_ERR_OK) {
+    flash_redirect('admin/smart_upload.php', 'error', iris_upload_error_message($uploadError));
+}
+if ((int)($f['size'] ?? 0) < 1 || (int)$f['size'] > IRIS_MAX_UPLOAD_BYTES) {
+    flash_redirect('admin/smart_upload.php', 'error', 'The file must be between 1 byte and ' . iris_upload_limit_label() . '.');
+}
+if (!isset($f['tmp_name']) || !is_uploaded_file($f['tmp_name'])) {
+    flash_redirect('admin/smart_upload.php', 'error', 'The uploaded file could not be read. Please try again.');
 }
 
 $ext = strtolower(pathinfo($f['name'], PATHINFO_EXTENSION));
@@ -33,4 +47,3 @@ try {
 } catch (Throwable $e) {
     flash_redirect('admin/smart_upload.php', 'error', $e->getMessage());
 }
-

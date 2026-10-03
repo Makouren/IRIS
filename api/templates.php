@@ -41,9 +41,13 @@ function templates_csv_has_null_byte(string $path): bool {
 
 try {
     require_once __DIR__ . '/../includes/functions.php';
+    require_once __DIR__ . '/../includes/upload_limits.php';
     require_once __DIR__ . '/../includes/helpers/SummaryCardImportProfiles.php';
     require_once __DIR__ . '/../includes/helpers/CustomImportFields.php';
     require_once __DIR__ . '/../includes/helpers/ProfileWorkbookService.php';
+    if (iris_upload_request_exceeded_post_limit()) {
+        templates_fail('The upload request exceeds the server request limit. Keep the file at or below ' . iris_upload_limit_label() . ' and configure PHP post_max_size to at least 12M.');
+    }
     $method = $_SERVER['REQUEST_METHOD'] ?? 'GET';
     if ($method === 'GET') {
         if (($_GET['resource'] ?? '') === 'profile_mapper_status') {
@@ -767,11 +771,16 @@ try {
         }
 
         $file = $_FILES['template_file'] ?? null;
-        if (!$file || $file['error'] !== UPLOAD_ERR_OK || !is_uploaded_file($file['tmp_name'])) templates_fail('Choose a template file.');
+        if (!$file) templates_fail('Choose a template file.');
+        if ((int)($file['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_OK) templates_fail(iris_upload_error_message((int)$file['error']));
+        if (!isset($file['tmp_name']) || !is_uploaded_file($file['tmp_name'])) templates_fail('The uploaded template could not be read. Please try again.');
         $extension = strtolower(pathinfo((string)$file['name'], PATHINFO_EXTENSION));
         $allowedExtensions = ['xlsx', 'xls', 'csv', 'docx'];
-        if (!in_array($extension, $allowedExtensions, true) || (int)$file['size'] < 1 || (int)$file['size'] > 100 * 1024 * 1024) {
-            templates_fail('Choose an XLSX, XLS, CSV, or DOCX file under 100 MB.');
+        if (!in_array($extension, $allowedExtensions, true)) {
+            templates_fail('Choose an XLSX, XLS, CSV, or DOCX file.');
+        }
+        if ((int)($file['size'] ?? 0) < 1 || (int)$file['size'] > IRIS_MAX_UPLOAD_BYTES) {
+            templates_fail('The template must be between 1 byte and ' . iris_upload_limit_label() . '.');
         }
 
         $mime = (new finfo(FILEINFO_MIME_TYPE))->file($file['tmp_name']) ?: '';

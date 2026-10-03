@@ -24,7 +24,7 @@ final class TemplateImportSupport
         if (!$root || !$path || dirname($path) !== $root || !is_file($path)) {
             throw new RuntimeException('The uploaded spreadsheet file is unavailable.');
         }
-        if (filesize($path) > 100 * 1024 * 1024) throw new RuntimeException('The uploaded file exceeds the 100 MB import limit.');
+        if (filesize($path) > 100 * 1024 * 1024) throw new RuntimeException('The stored legacy workbook exceeds the 100 MB import-processing limit.');
         $record['metadata'] = is_array($metadata) ? $metadata : [];
         $record['path'] = $path;
         $record['sha256'] = hash_file('sha256', $path);

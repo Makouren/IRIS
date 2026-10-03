@@ -23,11 +23,11 @@ The Super Admin header logo opens the public Observatory; use the explicit admin
 
 ## Roles and Access
 
-- **User:** registers with a CLSU email address, signs in, and reads the Observatory.
+- **User:** registers with a CLSU email address, waits for Super Admin activation, then signs in to read the Observatory.
 - **Admin:** has all user access plus office uploads and the File Ingestion dashboard.
 - **Super Admin:** manages accounts, templates, ranking bodies, review workflows, ranking history, summary cards, saved graphs, record merges, and File History.
 
-Registration creates a `user` role. An administrator must promote accounts explicitly. PHP session authentication protects the Observatory and APIs; mutations use role checks and CSRF tokens. Do not expose local database credentials in a deployed environment.
+Public registration creates only an inactive `user` account. The existing `users.is_active` flag and Super Admin account manager provide manual activation; there is no separate pending-approval state, so an inactive registration cannot be distinguished from a deactivated account. Registration does not grant office or Super Admin privileges. PHP session authentication protects the Observatory and APIs; mutations use role checks and CSRF tokens. Do not expose local database credentials in a deployed environment.
 
 ## Main Areas
 
@@ -55,8 +55,8 @@ Registration creates a `user` role. An administrator must promote accounts expli
 
 ### Scanner Record and Chart
 
-1. An admin uploads a CSV, XLS, or XLSX using the Scanner upload widget. The current upload validator allows these extensions and limits files to 100 MB.
-2. Browser JavaScript parses the workbook and creates an editable pending record. Upload handoff between admin pages uses IndexedDB; MySQL persistence is performed through the PHP API.
+1. An admin selects a CSV, XLS, or XLSX in the Scanner. The browser validates a 10 MB per-file limit and parses the workbook locally; raw Scanner files are not submitted to a PHP upload endpoint.
+2. The parsed content creates an editable pending record. Handoff between admin pages uses IndexedDB; record persistence is performed through the PHP API.
 3. The Review Editor can update record fields, extracted data, notes, and chart configuration. Save keeps the record in its selected review status and leaves the active graph unpublished.
 4. Studio Publish sets `records.status` to `Approved` and saves the active chart with `saved_graphs.is_published = 1`. It does not publish every saved graph belonging to that record.
 5. The archive can publish or unpublish selected records in bulk. File-level Unpublish returns the record to `Pending Review` and hides every saved graph linked by `record_id`; it does not delete either the record or its charts.
@@ -64,6 +64,10 @@ Registration creates a `user` role. An administrator must promote accounts expli
 ### Office Upload Destinations
 
 Office users choose **Data and Report Visualization**, **Summary Cards**, or **Ranking History** before uploading a spreadsheet. General visualization uploads require an active analytics template and enter the regular record-review and charting workflow. Summary Card and Ranking History uploads use their active import profiles and remain separated from the general Review Editor dataset.
+
+Office spreadsheets and Super Admin template/profile workbooks are multipart uploads. Their PHP endpoints enforce the shared 10 MB byte limit, check PHP upload error codes, whitelist file extensions, and validate MIME/signature content. Star-rating logos retain their stricter 1 MB limit. Scanner selections are browser-parsed and use the same configured client-side 10 MB threshold; the original selected file is not posted to PHP.
+
+The template-import processor retains a separate 100 MB ceiling only when reading already-stored legacy record workbooks. It does not permit new uploads above the shared 10 MB limit.
 
 Super Admin import profiles can define labeled custom fields and map additional workbook columns to them. Those values are preserved with supported Ranking History and Summary Card imports. Apply the custom-field storage migration before enabling these mappings.
 
@@ -215,8 +219,9 @@ Graph publish/unpublish requests send JSON such as `{ "published": true }` or `{
 3. Provision the supplied normalized schema and any required transformed data into `iris_db_3nf` before starting the application. Do not import [`database.sql`](database.sql) or run historical migrations that select `iris_db`; those describe the retired denormalized schema.
 4. Apply only reviewed migrations documented for `iris_db_3nf`. V6.7.0 schema changes are provided in [`20261003_create_record_file_history.sql`](migrations/20261003_create_record_file_history.sql), [`20261003_ranking_history_published_flag.sql`](migrations/20261003_ranking_history_published_flag.sql), [`20261003_template_destination.sql`](migrations/20261003_template_destination.sql), [`20261003_template_profile_workbooks.sql`](migrations/20261003_template_profile_workbooks.sql), [`20261005_custom_import_fields.sql`](migrations/20261005_custom_import_fields.sql), and [`20261006_expand_ranking_context_text.sql`](migrations/20261006_expand_ranking_context_text.sql). Review each migration against the deployed schema, back up the database, and apply only migrations not already reflected in it. The application bootstrap does not create or alter tables.
 5. Set `IRIS_DB_HOST`, `IRIS_DB_PORT`, `IRIS_DB_NAME`, `IRIS_DB_USER`, and `IRIS_DB_PASS` in [`config/db.php`](config/db.php) for the environment. The current defaults are intended for local XAMPP development, not production.
-6. Provision the initial active `super_admin` account through the deployment's secure account-bootstrap process. Self-registration is disabled. Super Admins can manage subsequent Admin and User accounts from the application.
-7. Open the application under its Apache document-root URL and sign in. The application root redirects signed-in users according to their normalized role.
+6. Configure PHP uploads to `upload_max_filesize = 10M` and `post_max_size = 12M`. The repository `.user.ini` supplies these values for CGI/FastCGI PHP; for Laragon/XAMPP Apache mod_php, set them in the active PHP `php.ini` instead and restart Apache. The office upload and template endpoints also enforce a 10 MB limit in application code.
+7. Provision the initial active `super_admin` account through the deployment's secure account-bootstrap process. Public registration is available for normal users only and remains inactive pending Super Admin activation. Super Admins can manage subsequent Admin and User accounts from the application.
+8. Open the application under its Apache document-root URL and sign in. The application root redirects signed-in users according to their normalized role.
 
 For production, configure a least-privilege MySQL account, a non-default password, HTTPS, and a reviewed migration process appropriate to the deployment. Runtime database credentials need no schema-creation or schema-alter privileges.
 

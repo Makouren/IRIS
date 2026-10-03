@@ -1,5 +1,6 @@
 <?php
 require_once __DIR__ . '/../includes/functions.php';
+require_once __DIR__ . '/../includes/upload_limits.php';
 requireRole(['admin']);
 $accountQuery = db()->prepare('SELECT offices.office_name
     FROM users LEFT JOIN offices ON offices.office_id = users.office_id
@@ -40,37 +41,18 @@ $error = flash('error');
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Office Upload - IRIS</title>
     <script>(function(){const t=localStorage.getItem('color-theme')||localStorage.getItem('iris-theme');document.documentElement.classList.toggle('dark',t?t==='dark':matchMedia('(prefers-color-scheme: dark)').matches)})();</script>
+    <script>window.tailwind = { config: { darkMode: 'class' } };</script>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/flowbite/2.3.0/flowbite.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link rel="stylesheet" href="<?= e(base_url('scanner/css/tokens.css')) ?>">
     <link rel="stylesheet" href="<?= e(base_url('scanner/css/styles.css')) ?>?v=<?= (int) filemtime(__DIR__ . '/../scanner/css/styles.css') ?>">
+    <link rel="stylesheet" href="<?= e(base_url('scanner/css/portalNavigation.css')) ?>?v=<?= (int) filemtime(__DIR__ . '/../scanner/css/portalNavigation.css') ?>">
     <script src="<?= e(base_url('scanner/js/dotBackground.js')) ?>?v=<?= (int) filemtime(__DIR__ . '/../scanner/js/dotBackground.js') ?>" defer></script>
 </head>
 <body class="dot-grid-dashboard min-h-screen text-gray-900 dark:text-gray-100">
     <div id="dashboard-dot-background" aria-hidden="true"></div>
-    <header class="app-header office-upload-header">
-        <div class="app-header-inner">
-            <div class="brand-container min-w-0">
-                <div class="brand-logo-seal w-52 h-11 flex items-center justify-center overflow-hidden shrink-0 rounded-lg bg-white px-3 py-1.5">
-                    <img src="<?= e(base_url('images/iris-panel-logo.svg')) ?>" alt="IRIS SielMetrics+ Logo" class="h-10 w-full object-contain object-left">
-                </div>
-                <div class="min-w-0">
-                    <h1 class="brand-title">Office Upload</h1>
-                    <p class="brand-subline">Central Luzon State University</p>
-                </div>
-            </div>
-            <nav class="header-nav office-header-nav" aria-label="Office portal navigation">
-                <a class="nav-btn" href="<?= e(base_url('user/dashboard.php')) ?>"><i class="fa-solid fa-chart-column" aria-hidden="true"></i><span>Public dashboards</span></a>
-                <button id="officeThemeToggle" class="nav-btn" type="button" aria-label="Switch to dark theme" title="Switch to dark theme" aria-pressed="false"><i class="fa-solid fa-moon" aria-hidden="true"></i><span>Theme</span></button>
-                <a class="nav-btn" href="<?= e(base_url('auth/change_password.php')) ?>"><i class="fa-solid fa-key" aria-hidden="true"></i><span>Change password</span></a>
-                <form method="POST" action="<?= e(base_url('auth/logout.php')) ?>" class="m-0">
-                    <?= csrf_field() ?>
-                    <button class="nav-btn" type="submit"><i class="fa-solid fa-right-from-bracket" aria-hidden="true"></i><span>Sign out</span></button>
-                </form>
-            </nav>
-        </div>
-    </header>
+    <?php $portalNavMode = 'office'; require __DIR__ . '/../includes/portal_nav.php'; ?>
     <main class="dashboard-container office-upload-layout">
         <section class="studio-left-card office-upload-form-card h-fit">
             <h2 class="mb-1 text-lg font-bold">Upload a file</h2>
@@ -99,8 +81,9 @@ $error = flash('error');
                 </div>
                 <p data-template-filter-help class="text-xs text-gray-500 dark:text-slate-400">Choose a purpose to see its upload requirements.</p>
                 <label for="officeFile" class="block text-sm font-semibold">Select document</label>
-                    <input id="officeFile" name="office_file" type="file" required accept=".xlsx,.csv,.tsv" class="form-input office-file-input block cursor-pointer">
-                    <p class="text-xs text-gray-500 dark:text-slate-400">XLSX, CSV, or TSV. Maximum 10 MB. Other file types cannot be read automatically yet.</p>
+                <input id="officeFile" name="office_file" type="file" required accept=".xlsx,.csv,.tsv" class="form-input office-file-input block cursor-pointer" aria-describedby="officeFileHelp officeFileError">
+                <p id="officeFileHelp" class="text-xs text-gray-500 dark:text-slate-400">Allowed: XLSX, CSV, or TSV. Maximum <?= e(iris_upload_limit_label()) ?>.</p>
+                <p id="officeFileError" class="hidden rounded-lg border border-red-200 bg-red-50 p-2 text-sm text-red-800 dark:border-red-900 dark:bg-red-950 dark:text-red-200" role="alert"></p>
                 <button class="btn-save-modal w-full justify-center" type="submit"><i class="fa-solid fa-cloud-arrow-up mr-2" aria-hidden="true"></i>Send for review</button>
             </form>
         </section>
@@ -140,6 +123,31 @@ $error = flash('error');
             </div>
         </section>
     </main>
+    <script>
+        (() => {
+            const form = document.querySelector('form[action*="upload_process.php"]');
+            const input = document.getElementById('officeFile');
+            const message = document.getElementById('officeFileError');
+            const maxBytes = <?= IRIS_MAX_UPLOAD_BYTES ?>;
+            const maxLabel = <?= json_encode(iris_upload_limit_label()) ?>;
+            if (!form || !input || !message) return;
+            const validateFileSize = () => {
+                const file = input.files?.[0];
+                const tooLarge = Boolean(file && file.size > maxBytes);
+                message.textContent = tooLarge ? `This file is too large. Choose a file no larger than ${maxLabel}.` : '';
+                message.classList.toggle('hidden', !tooLarge);
+                input.setCustomValidity(tooLarge ? `Choose a file no larger than ${maxLabel}.` : '');
+                return !tooLarge;
+            };
+            input.addEventListener('change', validateFileSize);
+            form.addEventListener('submit', event => {
+                if (!validateFileSize()) {
+                    event.preventDefault();
+                    input.focus();
+                }
+            });
+        })();
+    </script>
     <script src="<?= e(base_url('admin/js/officeTemplates.js')) ?>?v=<?= (int) filemtime(__DIR__ . '/js/officeTemplates.js') ?>" defer></script>
     <?php require __DIR__ . '/../includes/change_refresh_script.php'; ?>
 </body>

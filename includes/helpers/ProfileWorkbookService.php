@@ -2,13 +2,13 @@
 declare(strict_types=1);
 
 require_once __DIR__ . '/../SpreadsheetReader.php';
+require_once __DIR__ . '/../upload_limits.php';
 require_once __DIR__ . '/SummaryCardImportProfiles.php';
 require_once __DIR__ . '/TemplateImportSupport.php';
 
 final class ProfileWorkbookService
 {
     private const DESTINATIONS = ['summary_cards', 'ranking_history'];
-    private const MAX_BYTES = 10 * 1024 * 1024;
 
     public static function metadataReady(PDO $pdo): bool
     {
@@ -63,13 +63,17 @@ final class ProfileWorkbookService
 
     private static function validateUpload(array $file): array
     {
-        if (($file['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_OK || !isset($file['tmp_name']) || !is_uploaded_file((string)$file['tmp_name'])) {
-            throw new InvalidArgumentException('Choose an Excel or CSV file to map.');
+        $uploadError = (int)($file['error'] ?? UPLOAD_ERR_NO_FILE);
+        if ($uploadError !== UPLOAD_ERR_OK) {
+            throw new InvalidArgumentException(iris_upload_error_message($uploadError));
+        }
+        if (!isset($file['tmp_name']) || !is_uploaded_file((string)$file['tmp_name'])) {
+            throw new InvalidArgumentException('The uploaded workbook could not be read. Please try again.');
         }
         $extension = strtolower(pathinfo((string)($file['name'] ?? ''), PATHINFO_EXTENSION));
         if (!in_array($extension, ['xlsx', 'xls', 'csv'], true)) throw new InvalidArgumentException('Choose an XLSX, XLS, or CSV file.');
         $size = (int)($file['size'] ?? 0);
-        if ($size < 1 || $size > self::MAX_BYTES) throw new InvalidArgumentException('The workbook must be between 1 byte and 10 MB.');
+        if ($size < 1 || $size > IRIS_MAX_UPLOAD_BYTES) throw new InvalidArgumentException('The workbook must be between 1 byte and ' . iris_upload_limit_label() . '.');
         $mime = (new finfo(FILEINFO_MIME_TYPE))->file((string)$file['tmp_name']) ?: '';
         $signature = file_get_contents((string)$file['tmp_name'], false, null, 0, 8) ?: '';
         $valid = match ($extension) {

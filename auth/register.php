@@ -1,6 +1,73 @@
 <?php
 require_once __DIR__.'/../includes/functions.php';
-redirect_to('auth/login.php');
+if (!empty($_SESSION['user_id'])) {
+    $role = strtolower((string)($_SESSION['role'] ?? 'user'));
+    redirect_to($role === 'super_admin' ? 'admin/review_editor.php' : ($role === 'admin' ? 'admin/office_upload.php' : 'user/dashboard.php'));
+}
+
+$error = '';
+$username = '';
+$email = '';
+$attemptWindowSeconds = 900;
+$maxAttemptsPerWindow = 5;
+$attempts = $_SESSION['_registration_attempts'] ?? ['started_at' => time(), 'count' => 0];
+if (!is_array($attempts) || time() - (int)($attempts['started_at'] ?? 0) >= $attemptWindowSeconds) {
+    $attempts = ['started_at' => time(), 'count' => 0];
+}
+
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    verify_csrf();
+    $attempts['count'] = (int)($attempts['count'] ?? 0) + 1;
+    $_SESSION['_registration_attempts'] = $attempts;
+
+    $username = trim((string)($_POST['username'] ?? ''));
+    $email = strtolower(trim((string)($_POST['email'] ?? '')));
+    $password = (string)($_POST['password'] ?? '');
+    $confirmPassword = (string)($_POST['confirm_password'] ?? '');
+
+    if ((int)$attempts['count'] > $maxAttemptsPerWindow) {
+        $error = 'Too many registration attempts. Please try again in 15 minutes.';
+    } elseif (!preg_match('/\A[A-Za-z0-9_.-]{3,40}\z/', $username)) {
+        $error = 'Username must be 3–40 characters and use only letters, numbers, dots, underscores, or hyphens.';
+    } elseif (!filter_var($email, FILTER_VALIDATE_EMAIL) || !preg_match('/\A[A-Za-z0-9._%+-]+@clsu2\.edu\.ph\z/i', $email)) {
+        $error = 'Use a valid CLSU email address in the format name@clsu2.edu.ph.';
+    } elseif (strlen($password) < 8 || strlen($password) > 72) {
+        $error = 'Password must be between 8 and 72 bytes.';
+    } elseif (!hash_equals($password, $confirmPassword)) {
+        $error = 'The passwords do not match.';
+    } else {
+        try {
+            $pdo = db();
+            $duplicate = $pdo->prepare('SELECT 1 FROM users WHERE username = ? OR email = ? LIMIT 1');
+            $duplicate->execute([$username, $email]);
+            if ($duplicate->fetchColumn()) {
+                $error = 'That username or email is already registered.';
+            } else {
+                $role = $pdo->prepare("SELECT role_id FROM roles WHERE role_name = 'user' LIMIT 1");
+                $role->execute();
+                $roleId = $role->fetchColumn();
+                if (!$roleId) {
+                    throw new RuntimeException('The normal user role is not configured.');
+                }
+
+                $insert = $pdo->prepare('INSERT INTO users (username, email, password, role_id, office_id, is_active) VALUES (?, ?, ?, ?, NULL, 0)');
+                $insert->execute([$username, $email, password_hash($password, PASSWORD_DEFAULT), $roleId]);
+                unset($_SESSION['_registration_attempts']);
+                flash_redirect('auth/login.php', 'success', 'Registration submitted. A Super Admin must activate your account before you can sign in.');
+            }
+        } catch (PDOException $exception) {
+            if ($exception->getCode() === '23000') {
+                $error = 'That username or email is already registered.';
+            } else {
+                error_log('IRIS registration failed: ' . $exception->getMessage());
+                $error = 'Registration could not be completed because of a database error. Please contact the administrator.';
+            }
+        } catch (RuntimeException $exception) {
+            error_log('IRIS registration configuration error: ' . $exception->getMessage());
+            $error = 'Registration is temporarily unavailable because the normal user role is not configured.';
+        }
+    }
+}
 ?>
 
 <!DOCTYPE html>
@@ -93,7 +160,7 @@ redirect_to('auth/login.php');
             <?php if ($error): ?>
                 <div class="flex items-center p-3.5 mb-4 text-xs text-red-800 rounded-xl bg-red-50 dark:bg-red-500/10 dark:text-red-400 border border-red-200 dark:border-red-500/30" role="alert">
                     <i class="fa-solid fa-circle-exclamation text-base mr-2"></i>
-                    <div class="font-medium"><?= htmlspecialchars($error) ?></div>
+                    <div class="font-medium"><?= e($error) ?></div>
                 </div>
             <?php endif; ?>
 
@@ -101,19 +168,19 @@ redirect_to('auth/login.php');
                 <?= csrf_field() ?>
                 <div>
                     <label for="username" class="block mb-1.5 text-xs font-semibold uppercase tracking-wider text-gray-700 dark:text-slate-300">Username</label>
-                    <input type="text" id="username" name="username" class="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-xl focus:ring-emerald-500 focus:border-emerald-500 block w-full p-2.5 dark:bg-slate-800 dark:border-slate-700 dark:placeholder-slate-500 dark:text-white transition-colors" placeholder="faculty_user" required autofocus>
+                    <input type="text" id="username" name="username" value="<?= e($username) ?>" minlength="3" maxlength="40" pattern="[A-Za-z0-9_.-]+" autocomplete="username" class="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-xl focus:ring-emerald-500 focus:border-emerald-500 block w-full p-2.5 dark:bg-slate-800 dark:border-slate-700 dark:placeholder-slate-500 dark:text-white transition-colors" placeholder="faculty_user" required autofocus>
                 </div>
 
                 <div>
                     <label for="email" class="block mb-1.5 text-xs font-semibold uppercase tracking-wider text-gray-700 dark:text-slate-300">Email</label>
-                    <input type="email" id="email" name="email" class="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-xl focus:ring-emerald-500 focus:border-emerald-500 block w-full p-2.5 dark:bg-slate-800 dark:border-slate-700 dark:placeholder-slate-500 dark:text-white transition-colors" placeholder="name@clsu2.edu.ph" pattern="[A-Za-z0-9._%+-]+@clsu2\.edu\.ph" title="Use the format name@clsu2.edu.ph" required>
+                    <input type="email" id="email" name="email" value="<?= e($email) ?>" class="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-xl focus:ring-emerald-500 focus:border-emerald-500 block w-full p-2.5 dark:bg-slate-800 dark:border-slate-700 dark:placeholder-slate-500 dark:text-white transition-colors" placeholder="name@clsu2.edu.ph" pattern="[A-Za-z0-9._%+-]+@clsu2\.edu\.ph" title="Use the format name@clsu2.edu.ph" autocomplete="email" required>
                     <p id="email-hint" class="mt-1.5 text-[11px] text-gray-500 dark:text-slate-400">Accepted format: <span class="font-semibold text-emerald-600 dark:text-emerald-400">name@clsu2.edu.ph</span></p>
                 </div>
 
                 <div>
                     <label for="password" class="block mb-1.5 text-xs font-semibold uppercase tracking-wider text-gray-700 dark:text-slate-300">Password</label>
                     <div class="relative">
-                        <input type="password" id="password" name="password" class="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-xl focus:ring-emerald-500 focus:border-emerald-500 block w-full pr-10 p-2.5 dark:bg-slate-800 dark:border-slate-700 dark:placeholder-slate-500 dark:text-white transition-colors" placeholder="At least 8 characters" minlength="8" required autocomplete="new-password">
+                        <input type="password" id="password" name="password" class="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-xl focus:ring-emerald-500 focus:border-emerald-500 block w-full pr-10 p-2.5 dark:bg-slate-800 dark:border-slate-700 dark:placeholder-slate-500 dark:text-white transition-colors" placeholder="8–72 bytes" minlength="8" maxlength="72" required autocomplete="new-password">
                         <button type="button" id="togglePassword" class="absolute inset-y-0 right-0 flex items-center px-3 text-gray-400 hover:text-gray-700 dark:text-slate-500 dark:hover:text-slate-200 focus:outline-none focus:ring-2 focus:ring-emerald-500 rounded-r-xl" aria-label="Show password" aria-pressed="false">
                             <i class="fa-solid fa-eye text-sm" aria-hidden="true"></i>
                         </button>

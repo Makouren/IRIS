@@ -1,6 +1,9 @@
 import { $, all } from '../utils/helpers.js';
 
-const MAX_UPLOAD_SIZE_BYTES = 100 * 1024 * 1024;
+const MAX_UPLOAD_SIZE_BYTES = Number(window.IRIS_MAX_UPLOAD_BYTES);
+if (!Number.isSafeInteger(MAX_UPLOAD_SIZE_BYTES) || MAX_UPLOAD_SIZE_BYTES <= 0) {
+  throw new Error('The configured upload size limit is unavailable.');
+}
 const ALLOWED_EXTENSIONS = ['xlsx', 'xls', 'csv'];
 
 const PENDING_DB_NAME = 'IRIS_Pending_Uploads';
@@ -184,7 +187,8 @@ export function initFileIngestion(ctx) {
       }
       if (tooLarge.length) {
         const names = tooLarge.map(f => f.name).join(', ');
-        messages.push(`File size exceeds 100 MB limit for: ${names}.\nPlease choose a file under 100 MB.`);
+        const limitMb = MAX_UPLOAD_SIZE_BYTES / (1024 * 1024);
+        messages.push(`File size exceeds the ${limitMb} MB limit for: ${names}.\nPlease choose a file no larger than ${limitMb} MB.`);
       }
       showWarning(messages.join('\n\n'));
       return [];

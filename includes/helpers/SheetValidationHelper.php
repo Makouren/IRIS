@@ -1,6 +1,8 @@
 <?php
 declare(strict_types=1);
 
+require_once __DIR__ . '/../upload_limits.php';
+
 final class SheetValidationHelper
 {
     public static function assertFile(string $path, string $extension): void
@@ -10,8 +12,8 @@ final class SheetValidationHelper
         }
         if (!is_file($path) || !is_readable($path)) throw new RuntimeException('The uploaded spreadsheet file is unavailable.');
         $size = filesize($path);
-        if ($size === false || $size < 1 || $size > 100 * 1024 * 1024) {
-            throw new RuntimeException('The uploaded file is empty or exceeds the 100 MB import limit.');
+        if ($size === false || $size < 1 || $size > IRIS_MAX_UPLOAD_BYTES) {
+            throw new RuntimeException('The uploaded file is empty or exceeds the ' . iris_upload_limit_label() . ' import limit.');
         }
     }
 

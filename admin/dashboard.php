@@ -26,7 +26,7 @@ require_once __DIR__.'/includes/header.php';
         </div>
 
         <div class="text-xs font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500 mb-5">
-            Files must be under 100 MB
+            Files must be no larger than 10 MB
         </div>
 
         <div class="mb-6">

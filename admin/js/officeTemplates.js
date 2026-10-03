@@ -1,26 +1,4 @@
 (() => {
-  const themeToggle = document.getElementById('officeThemeToggle');
-  if (themeToggle) {
-    const themeIcon = themeToggle.querySelector('i');
-    const updateThemeControl = () => {
-      const isDark = document.documentElement.classList.contains('dark');
-      themeIcon?.classList.toggle('fa-moon', !isDark);
-      themeIcon?.classList.toggle('fa-sun', isDark);
-      themeToggle.setAttribute('aria-pressed', String(isDark));
-      const label = isDark ? 'Switch to light theme' : 'Switch to dark theme';
-      themeToggle.setAttribute('aria-label', label);
-      themeToggle.title = label;
-    };
-    updateThemeControl();
-    themeToggle.addEventListener('click', () => {
-      const nextTheme = document.documentElement.classList.contains('dark') ? 'light' : 'dark';
-      document.documentElement.classList.toggle('dark', nextTheme === 'dark');
-      localStorage.setItem('color-theme', nextTheme);
-      localStorage.setItem('iris-theme', nextTheme);
-      updateThemeControl();
-    });
-  }
-
   const purposeSelect = document.getElementById('officeUploadPurpose');
   const templateSelect = document.getElementById('officeTemplateSelect');
   const templateControl = document.querySelector('[data-template-control]');

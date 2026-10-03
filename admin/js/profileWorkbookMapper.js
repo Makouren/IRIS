@@ -3,6 +3,7 @@
   if (!modal) return;
   const api = modal.dataset.api;
   const token = modal.dataset.csrf || '';
+  const maxUploadBytes = Number(window.IRIS_MAX_UPLOAD_BYTES);
   const panels = [...modal.querySelectorAll('[data-profile-mapper]')];
   const states = new Map();
   const labels = {
@@ -116,8 +117,12 @@
   }
 
   function excelFile(file) {
+    if (!Number.isSafeInteger(maxUploadBytes) || maxUploadBytes <= 0) return Promise.reject(new Error('The configured upload size limit is unavailable.'));
+    if (file.size < 1 || file.size > maxUploadBytes) {
+      const limitMb = maxUploadBytes / (1024 * 1024);
+      return Promise.reject(new Error(`The workbook must be between 1 byte and ${limitMb} MB.`));
+    }
     if (!/\.xls$/i.test(file.name)) return Promise.resolve({ file, originalName: file.name });
-    if (file.size < 1 || file.size > 10 * 1024 * 1024) return Promise.reject(new Error('The workbook must be between 1 byte and 10 MB.'));
     if (typeof XLSX === 'undefined') return Promise.reject(new Error('Excel legacy workbook support is unavailable on this page. Save the file as XLSX.'));
     return file.arrayBuffer().then(buffer => {
       const signature = new Uint8Array(buffer.slice(0, 8));

@@ -5,6 +5,7 @@
             <button type="button" data-account-manager-close class="rounded-lg px-3 py-1 text-2xl leading-none text-gray-500 hover:bg-gray-100 dark:hover:bg-slate-800" aria-label="Close">&times;</button>
         </header>
         <div id="accountManagerNotice" class="mb-4 hidden rounded-lg p-3 text-sm" role="status"></div>
+        <p class="mb-4 rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900 dark:border-amber-900 dark:bg-amber-950/30 dark:text-amber-200">Self-registered user accounts are inactive until reviewed and activated. The database uses one inactive flag for both pending registrations and accounts that were later deactivated, so verify the account before activating it.</p>
         <div class="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(300px,0.9fr)]">
             <section>
                 <h3 class="mb-3 text-sm font-bold uppercase tracking-wide text-gray-500 dark:text-slate-400">Accounts</h3>

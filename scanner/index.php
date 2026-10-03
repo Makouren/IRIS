@@ -1,4 +1,4 @@
-<?php require_once __DIR__ . '/../includes/functions.php'; require_admin(); ?>
+<?php require_once __DIR__ . '/../includes/functions.php'; require_once __DIR__ . '/../includes/upload_limits.php'; require_admin(); ?>
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -12,6 +12,7 @@
     tailwind.config = { corePlugins: { preflight: false } };
   </script>
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flowbite@2.5.2/dist/flowbite.min.css">
+  <script>window.IRIS_MAX_UPLOAD_BYTES = <?= IRIS_MAX_UPLOAD_BYTES ?>;</script>
   
   <!-- CSS Stylesheet -->
   <link rel="stylesheet" href="css/styles.css?v=<?= (int) filemtime(__DIR__.'/css/styles.css') ?>">
@@ -87,7 +88,8 @@
           <span class="format-chip excel"><i class="fa-solid fa-chart-column" aria-hidden="true"></i> Spreadsheets (XLSX, XLS, CSV)</span>
         </div>
 
-        <input type="file" id="scannerUploadFileInput" multiple accept=".xlsx,.xls,.csv" style="display: none;">
+        <p id="scannerUploadFileHelp" class="text-xs text-slate-500 dark:text-slate-400">Allowed: XLSX, XLS, or CSV. Maximum <?= e(iris_upload_limit_label()) ?> per file.</p>
+        <input type="file" id="scannerUploadFileInput" multiple accept=".xlsx,.xls,.csv" aria-describedby="scannerUploadFileHelp" style="display: none;">
 
         <div style="margin-bottom: 1.5rem;">
           <button id="scannerUploadBrowseBtn" class="btn-icon" style="padding: 0.75rem 2rem; font-size: 0.95rem; margin: 0 auto;">

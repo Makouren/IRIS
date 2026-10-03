@@ -12,6 +12,81 @@ export function initAdminPortal(ctx) {
 
   const escape = value => String(value ?? '').replace(/[&<>"']/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[ch]));
   const projectBase = ctx.dbManager.config.endpoints.records.split('/api/iris.php')[0];
+  let openedRecordMenu = null;
+  const closeRecordMenu = (restoreFocus = false) => {
+    const menu = openedRecordMenu;
+    if (!menu) return;
+    const trigger = menu._trigger;
+    const placeholder = menu._placeholder;
+    menu.classList.remove('is-open', 'is-above');
+    menu.hidden = true;
+    menu.removeAttribute('style');
+    placeholder?.append(menu);
+    trigger?.setAttribute('aria-expanded', 'false');
+    if (restoreFocus) trigger?.focus();
+    menu._trigger = null;
+    menu._placeholder = null;
+    openedRecordMenu = null;
+  };
+  const openRecordMenu = trigger => {
+    closeRecordMenu();
+    const menu = trigger.parentElement?.querySelector('.record-actions-menu');
+    const placeholder = menu?.parentElement;
+    if (!menu || !placeholder) return;
+    menu._trigger = trigger;
+    menu._placeholder = placeholder;
+    openedRecordMenu = menu;
+    document.body.append(menu);
+    menu.hidden = false;
+    trigger.setAttribute('aria-expanded', 'true');
+    const triggerRect = trigger.getBoundingClientRect();
+    const menuRect = menu.getBoundingClientRect();
+    const table = trigger.closest('.table-container');
+    const tableBottom = table?.getBoundingClientRect().bottom ?? window.innerHeight;
+    const lowerBoundary = Math.min(window.innerHeight, tableBottom);
+    const spaceBelow = lowerBoundary - triggerRect.bottom;
+    const spaceAbove = triggerRect.top;
+    const openAbove = menuRect.height + 8 > spaceBelow && spaceAbove > spaceBelow;
+    let top = openAbove ? triggerRect.top - menuRect.height - 4 : triggerRect.bottom + 4;
+    if (top + menuRect.height > lowerBoundary) top = Math.max(8, lowerBoundary - menuRect.height - 8);
+    top = Math.max(8, top);
+    const left = Math.min(Math.max(8, triggerRect.right - menuRect.width), window.innerWidth - menuRect.width - 8);
+    menu.style.top = `${top}px`;
+    menu.style.left = `${left}px`;
+    menu.classList.toggle('is-above', openAbove);
+    requestAnimationFrame(() => menu.classList.add('is-open'));
+    menu.querySelector('[role="menuitem"]')?.focus();
+  };
+  document.addEventListener('pointerdown', event => {
+    if (openedRecordMenu && !openedRecordMenu.contains(event.target) && event.target !== openedRecordMenu._trigger) closeRecordMenu();
+  });
+  document.addEventListener('keydown', event => {
+    if (!openedRecordMenu) return;
+    if (event.key === 'Escape') {
+      event.preventDefault();
+      closeRecordMenu(true);
+    } else if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+      event.preventDefault();
+      const items = [...openedRecordMenu.querySelectorAll('[role="menuitem"]:not([disabled])')];
+      if (!items.length) return;
+      const current = items.indexOf(document.activeElement);
+      const offset = event.key === 'ArrowDown' ? 1 : -1;
+      items[(current + offset + items.length) % items.length].focus();
+    } else if (event.key === 'Home' || event.key === 'End') {
+      event.preventDefault();
+      const items = [...openedRecordMenu.querySelectorAll('[role="menuitem"]:not([disabled])')];
+      items[event.key === 'Home' ? 0 : items.length - 1]?.focus();
+    } else if (event.key === 'Tab') {
+      setTimeout(() => {
+        if (openedRecordMenu && !openedRecordMenu.contains(document.activeElement)) closeRecordMenu();
+      });
+    }
+  });
+  document.addEventListener('focusin', event => {
+    if (openedRecordMenu && !openedRecordMenu.contains(event.target) && event.target !== openedRecordMenu._trigger) closeRecordMenu();
+  });
+  window.addEventListener('resize', () => closeRecordMenu());
+  window.addEventListener('scroll', () => closeRecordMenu(), true);
   const showToast = message => {
     const toast = document.createElement('div');
     toast.className = 'pdf-copy-toast visible';
@@ -322,6 +397,7 @@ export function initAdminPortal(ctx) {
   const renderRows = filtered => {
     const body = $('fileArchivesTableBody');
     if (!body) return;
+    closeRecordMenu();
     const html = filtered.map(record => {
       const scannedDate = record.scannedAt || (() => {
         const match = String(record.id || '').match(/^scan_(\d+)_/);
@@ -334,6 +410,7 @@ export function initAdminPortal(ctx) {
       const uploader = officeName || (record.uploaded_by ? 'Office' : 'Legacy / Super Admin');
       const templateLabel = record.template_name ? ` · via ${record.template_name}` : '';
       const isNew = Boolean(record.uploaded_at && !record.opened_at);
+        const recordId = escape(record.id);
         const merge = record.metadata?.merge;
         const recentMerge = window.SheetMerge?.isRecentMerge(record.metadata, new Date()) === true;
         const mergeBadgeTitle = recentMerge
@@ -348,16 +425,41 @@ export function initAdminPortal(ctx) {
         <td><span class="badge">${escape(displayStatus)}</span></td>
         <td>${scannedDate ? escape(new Date(scannedDate).toLocaleString()) : 'N/A'}</td>
         <td><div class="admin-record-actions">
-          <button class="archive-load-button btn-table-load-studio" data-id="${escape(record.id)}"><i class="fa-solid fa-palette" aria-hidden="true"></i> Review</button>
-          <button class="archive-load-button btn-table-history" type="button" data-id="${escape(record.id)}"><i class="fa-solid fa-clock-rotate-left" aria-hidden="true"></i> File History</button>
-          ${record.metadata?.stored_file ? `<a class="archive-load-button" href="${escape(projectBase)}/admin/upload_source.php?id=${encodeURIComponent(record.id)}" target="_blank" rel="noopener"><i class="fa-solid fa-file-arrow-up" aria-hidden="true"></i> Source</a>` : ''}
-          ${record.metadata?.stored_file && status !== 'Approved' && (!record.template_id || !['xlsx', 'csv', 'tsv'].includes(String(record.fileType || '').toLowerCase())) ? `<button class="archive-load-button" type="button" data-template-review-record="${escape(record.id)}"><i class="fa-solid fa-code-compare" aria-hidden="true"></i> Diff &amp; approve</button>` : ''}
-          ${approved ? `<button class="archive-load-button btn-table-unpublish" data-id="${escape(record.id)}" title="Unpublish this record and its saved charts"><i class="fa-solid fa-eye-slash" aria-hidden="true"></i> Unpublish</button>` : `<button class="archive-load-button btn-table-approve" data-id="${escape(record.id)}"><i class="fa-solid fa-circle-check" aria-hidden="true"></i> Publish</button>`}
-          <button class="archive-delete-button btn-table-delete" data-id="${escape(record.id)}" title="Delete record"><i class="fa-solid fa-trash" aria-hidden="true"></i> Delete</button>
+          <button class="record-actions-trigger" type="button" aria-label="File actions" aria-haspopup="menu" aria-expanded="false" data-record-menu-trigger>
+            <svg aria-hidden="true" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14.7 6.3a5 5 0 0 0-6.6 6.6L3 18v3h3l5.1-5.1a5 5 0 0 0 6.6-6.6l-3 3-3-3 3-3Z"/><path d="m18 6 2-2"/></svg>
+          </button>
+          <div class="record-actions-menu-placeholder">
+            <div class="record-actions-menu" role="menu" aria-label="File actions" hidden>
+              <div class="record-actions-menu-group">Workflow</div>
+              <button class="record-actions-menu-item btn-table-load-studio" type="button" role="menuitem" data-id="${recordId}"><i class="fa-solid fa-palette" aria-hidden="true"></i><span>Review</span></button>
+              ${record.metadata?.stored_file && status !== 'Approved' && (!record.template_id || !['xlsx', 'csv', 'tsv'].includes(String(record.fileType || '').toLowerCase())) ? `<button class="record-actions-menu-item" type="button" role="menuitem" data-template-review-record="${recordId}"><i class="fa-solid fa-code-compare" aria-hidden="true"></i><span>Diff &amp; Approve</span></button>` : ''}
+              ${approved ? `<button class="record-actions-menu-item btn-table-unpublish" type="button" role="menuitem" data-id="${recordId}" title="Unpublish this record and its saved charts"><i class="fa-solid fa-eye-slash" aria-hidden="true"></i><span>Unpublish</span></button>` : `<button class="record-actions-menu-item btn-table-approve" type="button" role="menuitem" data-id="${recordId}"><i class="fa-solid fa-circle-check" aria-hidden="true"></i><span>Publish</span></button>`}
+              <div class="record-actions-menu-divider" role="separator"></div>
+              <div class="record-actions-menu-group">Information</div>
+              <button class="record-actions-menu-item btn-table-history" type="button" role="menuitem" data-id="${recordId}"><i class="fa-solid fa-clock-rotate-left" aria-hidden="true"></i><span>File History</span></button>
+              ${record.metadata?.stored_file ? `<a class="record-actions-menu-item" role="menuitem" href="${escape(projectBase)}/admin/upload_source.php?id=${encodeURIComponent(record.id)}" target="_blank" rel="noopener"><i class="fa-solid fa-file-arrow-up" aria-hidden="true"></i><span>Source</span></a>` : ''}
+              <div class="record-actions-menu-divider" role="separator"></div>
+              <div class="record-actions-menu-group">Danger zone</div>
+              <button class="record-actions-menu-item record-actions-menu-danger btn-table-delete" type="button" role="menuitem" data-id="${recordId}" title="Delete record"><i class="fa-solid fa-trash" aria-hidden="true"></i><span>Delete</span></button>
+            </div>
+          </div>
         </div></td>
       </tr>`;
     }).join('');
     body.innerHTML = html || '<tr><td colspan="8">No files match these archive filters.</td></tr>';
+
+    body.querySelectorAll('[data-record-menu-trigger]').forEach(trigger => {
+      trigger.onclick = () => {
+        const expanded = trigger.getAttribute('aria-expanded') === 'true';
+        if (expanded) closeRecordMenu();
+        else openRecordMenu(trigger);
+      };
+    });
+    body.querySelectorAll('.record-actions-menu').forEach(menu => {
+      menu.onclick = event => {
+        if (event.target.closest('[role="menuitem"]')) closeRecordMenu();
+      };
+    });
 
     all('.btn-table-load-studio').forEach(button => button.onclick = async () => {
       const record = filtered.find(item => String(item.id) === String(button.dataset.id));

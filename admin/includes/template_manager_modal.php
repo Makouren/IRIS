@@ -1,4 +1,4 @@
-<div id="templateManagerModal" data-api="<?= e(base_url('api/templates.php')) ?>" data-csrf="<?= e(csrf_token()) ?>" data-download-base="<?= e(base_url('admin/template_download.php')) ?>" class="fixed inset-0 z-[1100] hidden items-center justify-center bg-slate-950/60 p-4" aria-hidden="true">
+<div id="templateManagerModal" data-api="<?= e(base_url('api/templates.php')) ?>" data-csrf="<?= e(csrf_token()) ?>" data-download-base="<?= e(base_url('admin/template_download.php')) ?>" data-max-upload-bytes="<?= IRIS_MAX_UPLOAD_BYTES ?>" data-max-upload-label="<?= e(iris_upload_limit_label()) ?>" class="fixed inset-0 z-[1100] hidden items-center justify-center bg-slate-950/60 p-4" aria-hidden="true">
     <section class="max-h-[90vh] w-full max-w-4xl overflow-y-auto rounded-xl border border-gray-200 bg-white p-5 shadow-2xl dark:border-slate-700 dark:bg-slate-900" role="dialog" aria-modal="true" aria-labelledby="templateManagerTitle">
         <header class="mb-5 flex items-start justify-between gap-4 border-b border-gray-200 pb-4 dark:border-slate-700">
             <div><h2 id="templateManagerTitle" class="text-lg font-extrabold">Manage Templates</h2><p class="mt-1 text-sm text-gray-500 dark:text-slate-400">Office templates available during file submission.</p></div>
@@ -26,6 +26,7 @@
                     <div data-profile-mapper="summary_cards" class="mt-3 rounded-lg border border-emerald-200 p-3 dark:border-emerald-900">
                         <p data-mapper-status class="mb-2 text-xs text-gray-600 dark:text-slate-300" role="status"></p>
                         <label data-mapper-upload-label class="inline-flex cursor-pointer items-center gap-2 rounded-md border border-emerald-700 px-3 py-2 text-sm font-bold text-emerald-900 hover:bg-emerald-100 dark:text-emerald-200 dark:hover:bg-emerald-950"><i class="fa-solid fa-file-arrow-up" aria-hidden="true"></i> Upload Excel to map columns<input data-mapper-file type="file" accept=".xlsx,.xls,.csv" disabled class="sr-only"></label>
+                        <p class="mt-1 text-xs text-gray-500 dark:text-slate-400">Allowed: XLSX, XLS, or CSV. Maximum <?= e(iris_upload_limit_label()) ?>.</p>
                         <div data-mapper-controls class="mt-3 hidden flex-wrap items-end gap-2">
                             <label class="min-w-48 flex-1 text-xs font-semibold">Worksheet<select data-mapper-sheet class="mt-1 block w-full rounded-md border border-gray-300 bg-white p-2 text-sm dark:border-slate-700 dark:bg-slate-800"></select></label>
                             <label class="text-xs font-semibold">Header row<input data-mapper-header-row type="number" min="1" max="10000" step="1" class="mt-1 block w-28 rounded-md border border-gray-300 bg-white p-2 text-sm dark:border-slate-700 dark:bg-slate-800"></label>
@@ -63,6 +64,7 @@
                     <div data-profile-mapper="ranking_history" class="mt-3 rounded-lg border border-sky-200 p-3 dark:border-sky-900">
                         <p data-mapper-status class="mb-2 text-xs text-gray-600 dark:text-slate-300" role="status"></p>
                         <label data-mapper-upload-label class="inline-flex cursor-pointer items-center gap-2 rounded-md border border-sky-700 px-3 py-2 text-sm font-bold text-sky-900 hover:bg-sky-100 dark:text-sky-200 dark:hover:bg-sky-950"><i class="fa-solid fa-file-arrow-up" aria-hidden="true"></i> Upload Excel to map columns<input data-mapper-file type="file" accept=".xlsx,.xls,.csv" disabled class="sr-only"></label>
+                        <p class="mt-1 text-xs text-gray-500 dark:text-slate-400">Allowed: XLSX, XLS, or CSV. Maximum <?= e(iris_upload_limit_label()) ?>.</p>
                         <div data-mapper-controls class="mt-3 hidden flex-wrap items-end gap-2">
                             <label class="min-w-48 flex-1 text-xs font-semibold">Worksheet<select data-mapper-sheet class="mt-1 block w-full rounded-md border border-gray-300 bg-white p-2 text-sm dark:border-slate-700 dark:bg-slate-800"></select></label>
                             <label class="text-xs font-semibold">Header row<input data-mapper-header-row type="number" min="1" max="10000" step="1" class="mt-1 block w-28 rounded-md border border-gray-300 bg-white p-2 text-sm dark:border-slate-700 dark:bg-slate-800"></label>
@@ -90,7 +92,7 @@
                 <label class="block text-sm font-semibold">Template category<select name="destination" required class="mt-1 block w-full rounded-lg border border-gray-300 bg-gray-50 p-2.5 dark:border-slate-700 dark:bg-slate-800"><option value="analytics">Data &amp; Report Visualization</option><option value="summary_cards">Summary Cards</option><option value="ranking_history">Ranking History</option></select></label>
                 <label class="block text-sm font-semibold">Ranking body (optional)<select id="templateRankingBodySelect" name="ranking_body_id" class="mt-1 block w-full rounded-lg border border-gray-300 bg-gray-50 p-2.5 dark:border-slate-700 dark:bg-slate-800"><option value="">Not linked</option></select></label>
                 <label class="block text-sm font-semibold">File<input name="template_file" type="file" required accept=".xlsx,.xls,.csv,.docx" class="mt-1 block w-full rounded-lg border border-gray-300 bg-gray-50 p-2.5 text-sm dark:border-slate-700 dark:bg-slate-800"></label>
-                <p class="text-xs text-gray-500 dark:text-slate-400">XLSX, XLS, CSV, or DOCX. Maximum 100 MB.</p>
+                <p class="text-xs text-gray-500 dark:text-slate-400">XLSX, XLS, CSV, or DOCX. Maximum <?= e(iris_upload_limit_label()) ?>.</p>
                 <button type="submit" class="rounded-lg bg-emerald-700 px-4 py-2 text-sm font-bold text-white hover:bg-emerald-800"><i class="fa-solid fa-cloud-arrow-up mr-1" aria-hidden="true"></i>Upload template</button>
             </form>
         </div>

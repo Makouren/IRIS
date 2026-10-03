@@ -3,7 +3,8 @@ ini_set('display_errors', '0');
 ini_set('html_errors', '0');
 try {
 require_once __DIR__ . '/../includes/functions.php';
-require_once __DIR__ . '/../includes/SpreadsheetReader.php';
+require_once __DIR__.'/../includes/upload_limits.php';
+require_once __DIR__.'/../includes/SpreadsheetReader.php';
 require_once __DIR__ . '/../includes/helpers/SummaryCardImportProfiles.php';
 require_once __DIR__ . '/../includes/helpers/ProfileWorkbookService.php';
 $currentRole = (string)($_SESSION['role'] ?? '');
@@ -11,6 +12,9 @@ if ($currentRole === 'super_admin' && !ALLOW_SUPER_ADMIN_UPLOAD) {
 	requireRole(['admin']);
 } else {
 	requireRole(['super_admin', 'admin']);
+}
+if (iris_upload_request_exceeded_post_limit()) {
+	flash_redirect('admin/office_upload.php', 'error', 'The upload request exceeds the server request limit. Keep the file at or below ' . iris_upload_limit_label() . ' and configure PHP post_max_size to at least 12M.');
 }
 verify_csrf();
 $uploadPurpose = trim((string)($_POST['upload_purpose'] ?? ''));
@@ -62,19 +66,25 @@ if ($templateId === null && in_array($uploadPurpose, ['summary_cards', 'ranking_
 }
 
 $file = $_FILES['office_file'] ?? null;
-if (!$file || $file['error'] !== UPLOAD_ERR_OK || !is_uploaded_file($file['tmp_name'])) {
+if (!$file) {
 	flash_redirect('admin/office_upload.php', 'error', 'Choose a file to upload.');
+}
+$uploadError = (int)($file['error'] ?? UPLOAD_ERR_NO_FILE);
+if ($uploadError !== UPLOAD_ERR_OK) {
+	flash_redirect('admin/office_upload.php', 'error', iris_upload_error_message($uploadError));
+}
+if (!isset($file['tmp_name']) || !is_uploaded_file($file['tmp_name'])) {
+	flash_redirect('admin/office_upload.php', 'error', 'The uploaded file could not be read. Please try again.');
 }
 
 $extension = strtolower(pathinfo((string)$file['name'], PATHINFO_EXTENSION));
 $allowedExtensions = ['xlsx', 'csv', 'tsv'];
-$maxBytes = 10 * 1024 * 1024;
 if (!in_array($extension, $allowedExtensions, true)) {
 	error_log('IRIS rejected unsupported office upload: ' . basename((string)$file['name']) . ' (.' . $extension . ')');
 	flash_redirect('admin/office_upload.php', 'error', "This file type can't be read automatically yet. Please upload .xlsx, .csv, or .tsv.");
 }
-if ((int)$file['size'] < 1 || (int)$file['size'] > $maxBytes) {
-	flash_redirect('admin/office_upload.php', 'error', 'Spreadsheet files must be smaller than 10 MB.');
+if ((int)($file['size'] ?? 0) < 1 || (int)$file['size'] > IRIS_MAX_UPLOAD_BYTES) {
+	flash_redirect('admin/office_upload.php', 'error', 'The spreadsheet must be between 1 byte and ' . iris_upload_limit_label() . '.');
 }
 
 $mime = (new finfo(FILEINFO_MIME_TYPE))->file($file['tmp_name']) ?: '';

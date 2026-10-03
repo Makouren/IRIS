@@ -7,6 +7,8 @@
   const api = modal.dataset.api;
   const token = modal.dataset.csrf || '';
   const downloadBase = modal.dataset.downloadBase;
+  const maxUploadBytes = Number(modal.dataset.maxUploadBytes);
+  const maxUploadLabel = modal.dataset.maxUploadLabel;
   const notice = document.getElementById('templateManagerNotice');
   const rankingBodySelect = document.getElementById('templateRankingBodySelect');
   const destinationLabels = {
@@ -641,6 +643,15 @@
   form.addEventListener('submit', async event => {
     event.preventDefault();
     if (!form.reportValidity()) return;
+    const selectedFile = form.querySelector('input[type="file"]')?.files?.[0];
+    if (selectedFile && (!Number.isSafeInteger(maxUploadBytes) || maxUploadBytes <= 0 || !maxUploadLabel)) {
+      showNotice('The configured upload size limit is unavailable. Contact the administrator.', true);
+      return;
+    }
+    if (selectedFile && selectedFile.size > maxUploadBytes) {
+      showNotice(`The selected file exceeds the ${maxUploadLabel} limit. Choose a smaller file.`, true);
+      return;
+    }
     const submitButton = form.querySelector('button[type="submit"]');
     if (submitButton?.disabled) return;
     if (submitButton) submitButton.disabled = true;
