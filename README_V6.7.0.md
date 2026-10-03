@@ -17,6 +17,7 @@ V6.7.0 improves office workbook management, Ranking History imports, and the pub
 - Keeps the ⓘ Information popup separate from Ranking Context and excludes it from the popup's content checks.
 - Retains chart filtering and matrix popouts while avoiding duplicate matrix-style context panels.
 - Removes the published-graph count badge from the Observatory graph header.
+- Changes the Super Admin header logo to open the public Observatory rather than the retired admin landing page.
 
 ## Database and Deployment
 

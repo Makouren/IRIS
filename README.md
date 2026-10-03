@@ -8,6 +8,8 @@ IRIS is a plain-PHP application. Apache serves PHP pages and PDO-backed APIs; br
 
 V6.7.0 improves template-driven office uploads and Ranking History: Super Admins can preview saved workbooks, custom ranking context is preserved, empty import rows are skipped, and blocked mappings identify the source column. The Observatory separates explanatory ranking context from information details and removes the published-graph count badge. See [README_V6.7.0.md](README_V6.7.0.md) for changes, required migrations, and verification.
 
+The Super Admin header logo opens the public Observatory; use the explicit admin navigation and menu for management pages.
+
 ## What the System Does
 
 - Presents institutional rankings, ranking breakdowns, college contributions, program results, and accreditation data.

@@ -261,7 +261,7 @@ $pageTitle = $pageTitle ?? 'IRIS Admin Control Panel';
     <nav class="admin-nav sticky top-0 z-50 backdrop-blur-md bg-opacity-95">
         <div class="dashboard-container">
             <div class="admin-nav-inner flex items-center justify-between gap-4">
-                <a href="<?= e(base_url('admin/dashboard.php')) ?>" class="logo-refresh-trigger flex items-center gap-3 min-w-0" data-target="<?= e(base_url('admin/dashboard.php')) ?>">
+                <a href="<?= e(base_url('user/dashboard.php')) ?>" class="flex items-center gap-3 min-w-0" aria-label="Go to the public Observatory">
                     <div class="w-52 h-11 flex items-center justify-center overflow-hidden shrink-0 rounded-lg bg-white px-3 py-1.5">
                         <img src="<?= e(base_url('images/iris-panel-logo.svg')) ?>" alt="IRIS SielMetrics+ Logo" class="h-10 w-full object-contain object-left">
                     </div>

@@ -4,6 +4,8 @@ This repository is the framework-free PHP application. Pages and APIs are served
 
 For the current V6.7.0 release changes and required schema migrations, see [`README_V6.7.0.md`](README_V6.7.0.md).
 
+The Super Admin header logo links to the public Observatory, not the legacy admin landing page.
+
 ## Local XAMPP
 
 Follow the full setup in [`README.md`](README.md). In brief: provision the supplied normalized `iris_db_3nf` database, configure `config/db.php`, start Apache/MySQL, and open the application under its document-root URL. Do not import the legacy `database.sql` or run historical migrations targeting `iris_db` against the normalized database.

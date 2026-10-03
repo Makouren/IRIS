@@ -97,6 +97,11 @@ test('Super Admin menu opens File Archives in the active admin interface', () =>
   assert.doesNotMatch(adminEditor, /Scanned Records Archive &amp;? Ingestion Logs|adminRecordsTableBody|adminSearchInput/);
 });
 
+test('Super Admin logo navigates to the public Observatory, not the retired admin landing page', () => {
+  assert.match(adminHeader, /<a href="<\?= e\(base_url\('user\/dashboard\.php'\)\) \?>" class="flex items-center gap-3 min-w-0" aria-label="Go to the public Observatory">/);
+  assert.doesNotMatch(adminHeader, /<a href="<\?= e\(base_url\('admin\/dashboard\.php'\)\) \?>" class="logo-refresh-trigger/);
+});
+
 test('Manage account and template dropdown buttons have link-matched hover feedback', () => {
   const dashboardMenuStyles = publicDashboard.slice(publicDashboard.indexOf('<style>'), publicDashboard.indexOf('</style>'));
   for (const menuStyles of [adminHeader, dashboardMenuStyles]) {

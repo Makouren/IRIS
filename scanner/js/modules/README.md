@@ -2,6 +2,8 @@
 
 > Current application release: [V6.7.0](../../../README_V6.7.0.md).
 
+The Super Admin header logo opens the public Observatory; admin tools remain available through the management navigation.
+
 V5.7.0 adds explicit saved-graph editing, independent chart-color persistence, Summary Card category/default management, and Super Admin record merge/File History workflows. `changeRefresh.js` provides role-aware refresh signaling across open IRIS pages.
 
 [`../app.js`](../app.js) initializes the browser application and creates a shared context with scanner, database manager, state, and module APIs. Modules exchange callbacks through `ctx.api`; DOM queries stay with the module that owns the UI.
