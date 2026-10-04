@@ -263,5 +263,4 @@ The suite covers graph/chart mapping, record merge/File History behavior, table 
 - [`scanner/js/ai/README.md`](scanner/js/ai/README.md): chart suggestions and shared chart utilities.
 - [`scanner/js/database/README.md`](scanner/js/database/README.md): persistence and API routes.
 - [`scanner/js/modules/README.md`](scanner/js/modules/README.md): browser module responsibilities.
-- [`scanner/js/parsers/README.md`](scanner/js/parsers/README.md): parser/viewer modules and data contract.
 - [`scanner/test/README.md`](scanner/test/README.md): automated test commands and coverage.
