@@ -37,10 +37,30 @@ const stylesheetBundle = [
 const savedGraphsSource = fs.readFileSync(path.join(__dirname, '..', 'js', 'modules', 'savedGraphsTab.js'), 'utf8');
 const studioColorCustomizerSource = fs.readFileSync(path.join(__dirname, '..', 'js', 'modules', 'studioColorCustomizer.js'), 'utf8');
 const studioWorkbenchSource = fs.readFileSync(path.join(__dirname, '..', 'js', 'modules', 'studioWorkbench.js'), 'utf8');
-const publicDashboardSource = fs.readFileSync(path.join(__dirname, '..', '..', 'user', 'dashboard.php'), 'utf8');
+const publicDashboardSource = [
+  fs.readFileSync(path.join(__dirname, '..', '..', 'user', 'dashboard.php'), 'utf8'),
+  fs.readFileSync(path.join(__dirname, '..', '..', 'user', 'css', 'dashboard.css'), 'utf8'),
+  fs.readFileSync(path.join(__dirname, '..', '..', 'user', 'js', 'dashboard', 'main.js'), 'utf8'),
+  fs.readFileSync(path.join(__dirname, '..', '..', 'user', 'js', 'dashboard', 'chartBuilder.js'), 'utf8')
+].join('\n');
 const graphApiSource = readIrisApiSource();
 const publicGraphApiSource = fs.readFileSync(path.join(__dirname, '..', '..', 'api', 'dashboard_graphs.php'), 'utf8');
-const reviewEditorSource = fs.readFileSync(path.join(__dirname, '..', '..', 'admin', 'review_editor.php'), 'utf8');
+const reviewEditorSource = [
+  fs.readFileSync(path.join(__dirname, '..', '..', 'admin', 'review_editor.php'), 'utf8'),
+  ...[
+    'summaryCards.php',
+    'starRatingCards.php',
+    'rankingHistory.php',
+    'studioFieldColors.php',
+    'manualDataset.php',
+    'recordEdit.php'
+  ].map(file => fs.readFileSync(path.join(__dirname, '..', '..', 'admin', 'includes', 'reviewEditor', file), 'utf8')),
+  ...[
+    'summaryCards.js',
+    'starRatingCards.js',
+    'rankingHistory.js'
+  ].map(file => fs.readFileSync(path.join(__dirname, '..', '..', 'admin', 'js', 'reviewEditor', file), 'utf8'))
+].join('\n');
 const chartEngineSource = fs.readFileSync(path.join(__dirname, '..', 'js', 'modules', 'chartEngine.js'), 'utf8');
 const rankingHistoryControllerSource = fs.readFileSync(path.join(__dirname, '..', '..', 'user', 'js', 'rankingHistory.js'), 'utf8');
 

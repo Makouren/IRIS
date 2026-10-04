@@ -18,6 +18,7 @@ const readIrisApiSource = () => [
 
 
 const html = fs.readFileSync(path.join(__dirname, '..', 'index.php'), 'utf8');
+const dashboardStyles = fs.readFileSync(path.join(__dirname, '..', '..', 'user', 'css', 'dashboard.css'), 'utf8');
 const styles = [
   'base.css',
   'ingestion.css',
@@ -31,7 +32,22 @@ const styles = [
   'docx-viewer.css',
   'dark-overrides.css'
 ].map(file => fs.readFileSync(path.join(__dirname, '..', 'css', file), 'utf8')).join('\n');
-const adminEditor = fs.readFileSync(path.join(__dirname, '..', '..', 'admin', 'review_editor.php'), 'utf8');
+const adminEditor = [
+  fs.readFileSync(path.join(__dirname, '..', '..', 'admin', 'review_editor.php'), 'utf8'),
+  ...[
+    'summaryCards.php',
+    'starRatingCards.php',
+    'rankingHistory.php',
+    'studioFieldColors.php',
+    'manualDataset.php',
+    'recordEdit.php'
+  ].map(file => fs.readFileSync(path.join(__dirname, '..', '..', 'admin', 'includes', 'reviewEditor', file), 'utf8')),
+  ...[
+    'summaryCards.js',
+    'starRatingCards.js',
+    'rankingHistory.js'
+  ].map(file => fs.readFileSync(path.join(__dirname, '..', '..', 'admin', 'js', 'reviewEditor', file), 'utf8'))
+].join('\n');
 const adminHeader = fs.readFileSync(path.join(__dirname, '..', '..', 'admin', 'includes', 'header.php'), 'utf8');
 const rankingHistoryAdmin = fs.readFileSync(path.join(__dirname, '..', '..', 'admin', 'js', 'rankingHistoryAdmin.js'), 'utf8');
 const adminRankingsApi = fs.readFileSync(path.join(__dirname, '..', '..', 'api', 'admin_rankings.php'), 'utf8');
@@ -45,7 +61,12 @@ const dbManager = fs.readFileSync(path.join(__dirname, '..', 'js', 'database', '
 const studioAppend = fs.readFileSync(path.join(__dirname, '..', 'js', 'modules', 'studioAppend.js'), 'utf8');
 const irisApi = readIrisApiSource();
 const publicDashboardApi = fs.readFileSync(path.join(__dirname, '..', '..', 'api', 'dashboard_graphs.php'), 'utf8');
-const publicDashboard = fs.readFileSync(path.join(__dirname, '..', '..', 'user', 'dashboard.php'), 'utf8');
+const publicDashboard = [
+  fs.readFileSync(path.join(__dirname, '..', '..', 'user', 'dashboard.php'), 'utf8'),
+  dashboardStyles,
+  fs.readFileSync(path.join(__dirname, '..', '..', 'user', 'js', 'dashboard', 'main.js'), 'utf8'),
+  fs.readFileSync(path.join(__dirname, '..', '..', 'user', 'js', 'dashboard', 'chartBuilder.js'), 'utf8')
+].join('\n');
 const colorCustomizer = fs.readFileSync(path.join(__dirname, '..', 'js', 'modules', 'studioColorCustomizer.js'), 'utf8');
 const importPreviewModal = fs.readFileSync(path.join(__dirname, '..', 'js', 'modules', 'import', 'importPreviewModal.js'), 'utf8');
 const templateManager = fs.readFileSync(path.join(__dirname, '..', '..', 'admin', 'js', 'templateManager.js'), 'utf8');
@@ -129,8 +150,7 @@ test('Super Admin logo navigates to the public Observatory, not the retired admi
 });
 
 test('Manage account and template dropdown buttons have link-matched hover feedback', () => {
-  const dashboardMenuStyles = publicDashboard.slice(publicDashboard.indexOf('<style>'), publicDashboard.indexOf('</style>'));
-  for (const menuStyles of [adminHeader, dashboardMenuStyles]) {
+  for (const menuStyles of [adminHeader, dashboardStyles]) {
     assert.match(menuStyles, /\.admin-dropdown li > button:hover[\s\S]*?background/);
     assert.match(menuStyles, /\.admin-dropdown li > button:not\(:disabled\):hover[\s\S]*?translateY\(-1px\)/);
   }
