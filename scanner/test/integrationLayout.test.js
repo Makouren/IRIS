@@ -2,6 +2,20 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
+const readIrisApiSource = () => [
+  path.join(__dirname, '..', '..', 'api', 'iris.php'),
+  path.join(__dirname, '..', '..', 'includes', 'api', 'common.php'),
+  ...[
+    'record_file_history',
+    'field_colors',
+    'summary_card_categories',
+    'summary_card_history',
+    'summary_cards',
+    'records',
+    'graphs'
+  ].map(handler => path.join(__dirname, '..', '..', 'includes', 'api', 'handlers', `${handler}.php`))
+].map(file => fs.readFileSync(file, 'utf8')).join('\n');
+
 
 const html = fs.readFileSync(path.join(__dirname, '..', 'index.php'), 'utf8');
 const styles = [
@@ -29,7 +43,7 @@ const savedGraphsTab = fs.readFileSync(path.join(__dirname, '..', 'js', 'modules
 const studioWorkbench = fs.readFileSync(path.join(__dirname, '..', 'js', 'modules', 'studioWorkbench.js'), 'utf8');
 const dbManager = fs.readFileSync(path.join(__dirname, '..', 'js', 'database', 'dbManager.js'), 'utf8');
 const studioAppend = fs.readFileSync(path.join(__dirname, '..', 'js', 'modules', 'studioAppend.js'), 'utf8');
-const irisApi = fs.readFileSync(path.join(__dirname, '..', '..', 'api', 'iris.php'), 'utf8');
+const irisApi = readIrisApiSource();
 const publicDashboardApi = fs.readFileSync(path.join(__dirname, '..', '..', 'api', 'dashboard_graphs.php'), 'utf8');
 const publicDashboard = fs.readFileSync(path.join(__dirname, '..', '..', 'user', 'dashboard.php'), 'utf8');
 const colorCustomizer = fs.readFileSync(path.join(__dirname, '..', 'js', 'modules', 'studioColorCustomizer.js'), 'utf8');

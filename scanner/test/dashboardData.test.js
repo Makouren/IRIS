@@ -2,6 +2,20 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
+const readIrisApiSource = () => [
+  path.join(__dirname, '..', '..', 'api', 'iris.php'),
+  path.join(__dirname, '..', '..', 'includes', 'api', 'common.php'),
+  ...[
+    'record_file_history',
+    'field_colors',
+    'summary_card_categories',
+    'summary_card_history',
+    'summary_cards',
+    'records',
+    'graphs'
+  ].map(handler => path.join(__dirname, '..', '..', 'includes', 'api', 'handlers', `${handler}.php`))
+].map(file => fs.readFileSync(file, 'utf8')).join('\n');
+
 const { prepareCircularData, serializeChartState } = require('../js/chartData');
 const { pairSelectedText } = require('../js/sourceIngestion');
 const { normalizeGraphExportItem, buildPrintableGraphSheet, buildSavedChartOption } = require('../js/graphExport');
@@ -24,7 +38,7 @@ const savedGraphsSource = fs.readFileSync(path.join(__dirname, '..', 'js', 'modu
 const studioColorCustomizerSource = fs.readFileSync(path.join(__dirname, '..', 'js', 'modules', 'studioColorCustomizer.js'), 'utf8');
 const studioWorkbenchSource = fs.readFileSync(path.join(__dirname, '..', 'js', 'modules', 'studioWorkbench.js'), 'utf8');
 const publicDashboardSource = fs.readFileSync(path.join(__dirname, '..', '..', 'user', 'dashboard.php'), 'utf8');
-const graphApiSource = fs.readFileSync(path.join(__dirname, '..', '..', 'api', 'iris.php'), 'utf8');
+const graphApiSource = readIrisApiSource();
 const publicGraphApiSource = fs.readFileSync(path.join(__dirname, '..', '..', 'api', 'dashboard_graphs.php'), 'utf8');
 const reviewEditorSource = fs.readFileSync(path.join(__dirname, '..', '..', 'admin', 'review_editor.php'), 'utf8');
 const chartEngineSource = fs.readFileSync(path.join(__dirname, '..', 'js', 'modules', 'chartEngine.js'), 'utf8');
@@ -675,7 +689,7 @@ test('saved graph publish controls work for individual and bulk actions', () => 
 
 test('public scanner graphs are gated by explicit graph publication only', () => {
   const dashboardApi = fs.readFileSync(path.join(__dirname, '..', '..', 'api', 'dashboard_graphs.php'), 'utf8');
-  const graphApi = fs.readFileSync(path.join(__dirname, '..', '..', 'api', 'iris.php'), 'utf8');
+  const graphApi = readIrisApiSource();
   const publicDashboard = fs.readFileSync(path.join(__dirname, '..', '..', 'user', 'dashboard.php'), 'utf8');
   assert.match(dashboardApi, /WHERE sg\.is_published = 1/);
   assert.match(dashboardApi, /Cache-Control: no-store/);
@@ -692,7 +706,7 @@ test('Studio Publish approves the record and publishes only its active chart', (
 });
 
 test('archive unpublish resets a record and unpublishes its associated charts', () => {
-  const apiSource = fs.readFileSync(path.join(__dirname, '..', '..', 'api', 'iris.php'), 'utf8');
+  const apiSource = readIrisApiSource();
   const adminPortalSource = fs.readFileSync(path.join(__dirname, '..', 'js', 'modules', 'adminPortal.js'), 'utf8');
   const dbManagerSource = fs.readFileSync(path.join(__dirname, '..', 'js', 'database', 'dbManager.js'), 'utf8');
   const appSource = fs.readFileSync(path.join(__dirname, '..', 'js', 'app.js'), 'utf8');
@@ -817,7 +831,7 @@ test('Ranking History chart cards avoid duplicating the ranking matrix and retai
 
 test('public removal hides charts without deleting the saved graph record', () => {
   const dashboardSource = fs.readFileSync(path.join(__dirname, '..', '..', 'user', 'dashboard.php'), 'utf8');
-  const apiSource = fs.readFileSync(path.join(__dirname, '..', '..', 'api', 'iris.php'), 'utf8');
+  const apiSource = readIrisApiSource();
   assert.match(dashboardSource, /Unpublish|Hide this published chart from the Observatory/);
   assert.match(dashboardSource, /action=unpublish/);
   assert.match(apiSource, /action\s*===\s*'unpublish'|action\s*===\s*"unpublish"/);
@@ -840,7 +854,7 @@ test('each published graph container has its own bounded vertical scroll area', 
 });
 
 test('record approval does not auto-publish every saved graph for that record', () => {
-  const apiSource = fs.readFileSync(path.join(__dirname, '..', '..', 'api', 'iris.php'), 'utf8');
+  const apiSource = readIrisApiSource();
   const dbSource = fs.readFileSync(path.join(__dirname, '..', '..', 'config', 'db.php'), 'utf8');
   assert.doesNotMatch(apiSource, /UPDATE saved_graphs SET is_published = 1 WHERE record_id IN/);
   assert.doesNotMatch(apiSource, /UPDATE saved_graphs SET is_published = \? WHERE record_id = \?/);
