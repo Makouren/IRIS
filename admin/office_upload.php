@@ -1,6 +1,7 @@
 <?php
 require_once __DIR__ . '/../includes/functions.php';
 require_once __DIR__ . '/../includes/upload_limits.php';
+require_once __DIR__ . '/../includes/asset_bundles.php';
 requireRole(['admin']);
 $accountQuery = db()->prepare('SELECT offices.office_name
     FROM users LEFT JOIN offices ON offices.office_id = users.office_id
@@ -46,7 +47,7 @@ $error = flash('error');
     <link href="https://cdnjs.cloudflare.com/ajax/libs/flowbite/2.3.0/flowbite.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link rel="stylesheet" href="<?= e(base_url('scanner/css/tokens.css')) ?>">
-    <link rel="stylesheet" href="<?= e(base_url('scanner/css/styles.css')) ?>?v=<?= (int) filemtime(__DIR__ . '/../scanner/css/styles.css') ?>">
+    <?php render_iris_stylesheet_bundle(); ?>
     <link rel="stylesheet" href="<?= e(base_url('scanner/css/portalNavigation.css')) ?>?v=<?= (int) filemtime(__DIR__ . '/../scanner/css/portalNavigation.css') ?>">
     <script src="<?= e(base_url('scanner/js/dotBackground.js')) ?>?v=<?= (int) filemtime(__DIR__ . '/../scanner/js/dotBackground.js') ?>" defer></script>
 </head>

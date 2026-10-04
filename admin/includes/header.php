@@ -1,6 +1,7 @@
 <?php
 require_once __DIR__.'/../../includes/functions.php';
 require_once __DIR__.'/../../includes/upload_limits.php';
+require_once __DIR__.'/../../includes/asset_bundles.php';
 require_admin();
 $activeNav = $activeNav ?? 'ingestion';
 $pageTitle = $pageTitle ?? 'IRIS Admin Control Panel';
@@ -75,7 +76,7 @@ $pageTitle = $pageTitle ?? 'IRIS Admin Control Panel';
     <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link rel="stylesheet" href="<?= e(base_url('scanner/css/tokens.css')) ?>">
-    <link rel="stylesheet" href="<?= e(base_url('scanner/css/styles.css')) ?>?v=<?= (int) filemtime(__DIR__.'/../../scanner/css/styles.css') ?>">
+    <?php render_iris_stylesheet_bundle(); ?>
     <link rel="stylesheet" href="<?= e(base_url('scanner/css/portalNavigation.css')) ?>?v=<?= (int) filemtime(__DIR__.'/../../scanner/css/portalNavigation.css') ?>">
     <?php if ($activeNav === 'review'): ?>
         <script src="<?= e(base_url('scanner/js/dotBackground.js')) ?>?v=<?= (int) filemtime(__DIR__.'/../../scanner/js/dotBackground.js') ?>" defer></script>

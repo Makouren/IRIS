@@ -1,4 +1,4 @@
-<?php require_once __DIR__ . '/../includes/functions.php'; require_once __DIR__ . '/../includes/upload_limits.php'; require_admin(); ?>
+<?php require_once __DIR__ . '/../includes/functions.php'; require_once __DIR__ . '/../includes/upload_limits.php'; require_once __DIR__ . '/../includes/asset_bundles.php'; require_admin(); ?>
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -15,7 +15,7 @@
   <script>window.IRIS_MAX_UPLOAD_BYTES = <?= IRIS_MAX_UPLOAD_BYTES ?>;</script>
   
   <!-- CSS Stylesheet -->
-  <link rel="stylesheet" href="css/styles.css?v=<?= (int) filemtime(__DIR__.'/css/styles.css') ?>">
+  <?php render_iris_stylesheet_bundle(); ?>
   <link rel="stylesheet" href="css/tokens.css">
 
   <!-- External Parsing & Charting CDN Libraries -->

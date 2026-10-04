@@ -85,7 +85,7 @@ The Super Admin Manage Templates page can show “Unable to process template req
 - `admin/office_upload.php`
 - `includes/portal_nav.php`
 - `scanner/css/portalNavigation.css`
-- `scanner/css/styles.css`
+- `scanner/css/` ordered stylesheet bundle, rendered through `includes/asset_bundles.php`
 - `scanner/js/portalNavigation.js`
 - `user/dashboard.php`
 

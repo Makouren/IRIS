@@ -4,7 +4,19 @@ const fs = require('node:fs');
 const path = require('node:path');
 
 const html = fs.readFileSync(path.join(__dirname, '..', 'index.php'), 'utf8');
-const styles = fs.readFileSync(path.join(__dirname, '..', 'css', 'styles.css'), 'utf8');
+const styles = [
+  'base.css',
+  'ingestion.css',
+  'layout.css',
+  'studio.css',
+  'viewer.css',
+  'charts.css',
+  'tables.css',
+  'form-controls.css',
+  'modals.css',
+  'docx-viewer.css',
+  'dark-overrides.css'
+].map(file => fs.readFileSync(path.join(__dirname, '..', 'css', file), 'utf8')).join('\n');
 const adminEditor = fs.readFileSync(path.join(__dirname, '..', '..', 'admin', 'review_editor.php'), 'utf8');
 const adminHeader = fs.readFileSync(path.join(__dirname, '..', '..', 'admin', 'includes', 'header.php'), 'utf8');
 const rankingHistoryAdmin = fs.readFileSync(path.join(__dirname, '..', '..', 'admin', 'js', 'rankingHistoryAdmin.js'), 'utf8');
@@ -146,7 +158,7 @@ test('File Archives exposes merge history view, comparison, download, and append
   assert.match(adminPortal, /data-compare disabled>Compare/);
   assert.match(adminPortal, /getFileHistoryVersion/);
   assert.match(adminPortal, /restoreFileHistoryVersion/);
-  assert.match(fs.readFileSync(path.join(__dirname, '..', 'css', 'styles.css'), 'utf8'), /\.file-history-actions[\s\S]*?display: flex/);
+  assert.match(styles, /\.file-history-actions[\s\S]*?display: flex/);
   assert.match(dbManager, /fileHistoryDownload/);
   assert.match(irisApi, /'restore-result'/);
   assert.match(irisApi, /'pre-restore'/);

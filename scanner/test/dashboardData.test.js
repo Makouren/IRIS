@@ -7,6 +7,19 @@ const { pairSelectedText } = require('../js/sourceIngestion');
 const { normalizeGraphExportItem, buildPrintableGraphSheet, buildSavedChartOption } = require('../js/graphExport');
 const { buildChartOption, buildSavedGraphOption, createChart, renderStudioChart } = require('../js/modules/chartEngine');
 const { buildColoredSeriesData, getChartColors, isValidChartColor, normalizeFieldKey, resolveFieldColors } = require('../js/chartColors');
+const stylesheetBundle = [
+  'base.css',
+  'ingestion.css',
+  'layout.css',
+  'studio.css',
+  'viewer.css',
+  'charts.css',
+  'tables.css',
+  'form-controls.css',
+  'modals.css',
+  'docx-viewer.css',
+  'dark-overrides.css'
+].map(file => fs.readFileSync(path.join(__dirname, '..', 'css', file), 'utf8')).join('\n');
 const savedGraphsSource = fs.readFileSync(path.join(__dirname, '..', 'js', 'modules', 'savedGraphsTab.js'), 'utf8');
 const studioColorCustomizerSource = fs.readFileSync(path.join(__dirname, '..', 'js', 'modules', 'studioColorCustomizer.js'), 'utf8');
 const studioWorkbenchSource = fs.readFileSync(path.join(__dirname, '..', 'js', 'modules', 'studioWorkbench.js'), 'utf8');
@@ -683,7 +696,7 @@ test('archive unpublish resets a record and unpublishes its associated charts', 
   const adminPortalSource = fs.readFileSync(path.join(__dirname, '..', 'js', 'modules', 'adminPortal.js'), 'utf8');
   const dbManagerSource = fs.readFileSync(path.join(__dirname, '..', 'js', 'database', 'dbManager.js'), 'utf8');
   const appSource = fs.readFileSync(path.join(__dirname, '..', 'js', 'app.js'), 'utf8');
-  const stylesSource = fs.readFileSync(path.join(__dirname, '..', 'css', 'styles.css'), 'utf8');
+  const stylesSource = stylesheetBundle;
   assert.match(apiSource, /\$action === 'unpublish'[\s\S]*?UPDATE records SET status='Pending Review'[\s\S]*?UPDATE saved_graphs SET is_published=0 WHERE record_id=\?/);
   assert.match(adminPortalSource, /btn-table-unpublish/);
   assert.match(adminPortalSource, /class="admin-record-actions"/);

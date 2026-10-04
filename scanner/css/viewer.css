@@ -1,0 +1,630 @@
+/* ====================================================================
+   Authentic Adobe Acrobat Style Document Viewer Component
+   ==================================================================== */
+.doc-viewer-container {
+  display: flex;
+  flex-direction: column;
+  border-radius: var(--radius-md, 8px);
+  overflow: hidden;
+  background: #323639;
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.22);
+  border: 1px solid #282B2E;
+}
+
+.acrobat-toolbar {
+  background: #2B2E31;
+  color: #E2E8F0;
+  padding: 0.45rem 0.75rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid #1E2124;
+  font-family: var(--font-sans);
+  gap: 0.5rem;
+  user-select: none;
+  flex-wrap: wrap;
+}
+
+.acrobat-title-group {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  overflow: hidden;
+  max-width: 42%;
+}
+
+.acrobat-badge-icon {
+  background: #E5252A; /* Adobe Red */
+  color: #FFFFFF;
+  font-size: 0.62rem;
+  font-weight: 800;
+  padding: 0.15rem 0.38rem;
+  border-radius: 3px;
+  letter-spacing: 0.04em;
+  line-height: 1.2;
+}
+
+.acrobat-filename {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: #F8FAFC;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.acrobat-controls-center {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  background: #202225;
+  padding: 0.15rem 0.45rem;
+  border-radius: 4px;
+  border: 1px solid #3A3E42;
+}
+
+.acrobat-tool-btn {
+  background: transparent;
+  border: none;
+  color: #CBD5E1;
+  cursor: pointer;
+  padding: 0.15rem 0.35rem;
+  border-radius: 3px;
+  font-size: 0.72rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.15s ease;
+  line-height: 1;
+}
+
+.acrobat-tool-btn:hover {
+  background: #40444B;
+  color: #FFFFFF;
+}
+
+.acrobat-page-input {
+  width: 34px;
+  text-align: center;
+  background: #141618;
+  border: 1px solid #4A4E53;
+  color: #FFFFFF;
+  font-size: 0.72rem;
+  padding: 0.1rem 0.2rem;
+  border-radius: 3px;
+  font-weight: 600;
+}
+
+.acrobat-zoom-label {
+  font-size: 0.72rem;
+  color: #CBD5E1;
+  min-width: 38px;
+  text-align: center;
+  font-weight: 600;
+}
+
+.acrobat-controls-right {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+}
+
+.doc-sheet-select {
+  padding: 0.2rem 0.5rem !important;
+  font-size: 0.74rem !important;
+  font-weight: 600 !important;
+  width: auto !important;
+  max-width: 140px !important;
+  border-radius: 4px !important;
+}
+
+/* Authentic Acrobat PDF Viewport Canvas (Slate Background) */
+.acrobat-viewer-body {
+  height: 520px;
+  overflow-y: auto;
+  overflow-x: auto;
+  background: #525659; /* Authentic Adobe Acrobat Slate Background */
+  padding: 1.5rem 1rem;
+  position: relative;
+  scrollbar-width: thin;
+  scrollbar-color: #767A7E #323639;
+}
+
+/* When viewing a spreadsheet, make table fill viewport so bottom horizontal scrollbar is permanently pinned to the bottom of the viewer window */
+.acrobat-viewer-body.sheet-mode {
+  padding: 0 !important;
+  background: #FFFFFF !important;
+  overflow: auto !important; /* Both X and Y scrollbars stay pinned to the 520px viewer edges! */
+  scrollbar-color: #64748B #F1F5F9;
+}
+
+.acrobat-viewer-body::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+.acrobat-viewer-body::-webkit-scrollbar-track {
+  background: #2D3033;
+}
+
+.acrobat-viewer-body.sheet-mode::-webkit-scrollbar-track {
+  background: #F1F5F9;
+}
+
+.acrobat-viewer-body::-webkit-scrollbar-thumb {
+  background: #767A7E;
+  border-radius: 5px;
+}
+
+.acrobat-viewer-body.sheet-mode::-webkit-scrollbar-thumb {
+  background: #64748B;
+  border-radius: 5px;
+  border: 2px solid #F1F5F9;
+}
+
+.acrobat-viewer-body::-webkit-scrollbar-thumb:hover {
+  background: #9AA0A6;
+}
+
+.acrobat-viewer-body.sheet-mode::-webkit-scrollbar-thumb:hover {
+  background: #334155;
+}
+
+/* Acrobat Multi-Pages Stack */
+.acrobat-pages-container {
+  display: flex;
+  flex-direction: column;
+  gap: 1.75rem; /* Gap between PDF pages */
+  width: 100%;
+  align-items: center;
+  transition: transform 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  transform-origin: top center;
+}
+
+/* Authentic White Acrobat Paper Page Card */
+.acrobat-page-card {
+  background: #FFFFFF;
+  color: #111827;
+  width: 100%;
+  max-width: 480px;
+  min-height: 580px;
+  margin: 0 auto;
+  padding: 2.25rem 2rem 2.75rem 2rem;
+  box-shadow: 0 4px 18px rgba(0, 0, 0, 0.45), 0 0 2px rgba(0, 0, 0, 0.3);
+  border-radius: 2px;
+  font-family: 'Cambria', 'Georgia', 'Times New Roman', serif;
+  font-size: 0.88rem;
+  line-height: 1.68;
+  user-select: text;
+  position: relative;
+  box-sizing: border-box;
+}
+
+.acrobat-page-number-tag {
+  position: absolute;
+  bottom: 0.85rem;
+  left: 50%;
+  transform: translateX(-50%);
+  font-family: var(--font-sans);
+  font-size: 0.65rem;
+  color: #94A3B8;
+  letter-spacing: 0.05em;
+  font-weight: 600;
+}
+
+.acrobat-page-card h3, .acrobat-page-card h4 {
+  font-family: var(--font-sans);
+  font-weight: 800;
+  color: #0F172A;
+  margin-top: 1.1rem;
+  margin-bottom: 0.4rem;
+  line-height: 1.35;
+}
+
+.acrobat-page-card p {
+  margin-bottom: 0.8rem;
+  text-align: justify;
+  text-justify: inter-word;
+  color: #1F2937;
+}
+
+.acrobat-page-card strong {
+  color: #000000;
+  font-weight: 700;
+}
+
+.acrobat-page-card ul, .acrobat-page-card ol {
+  margin-bottom: 0.8rem;
+  padding-left: 1.25rem;
+}
+
+/* ====================================================================
+   Mozilla PDF.js Component Styling (PdfViewerComponent)
+   ==================================================================== */
+.pdf-viewer-root {
+  display: flex;
+  flex-direction: column;
+  border-radius: var(--radius-md, 8px);
+  overflow: hidden;
+  background: #323639;
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.22);
+  border: 1px solid #282B2E;
+  width: 100%;
+}
+
+.pdf-viewer-toolbar {
+  background: #2B2E31;
+  color: #E2E8F0;
+  padding: 0.45rem 0.75rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid #1E2124;
+  font-family: var(--font-sans);
+  gap: 0.5rem;
+  user-select: none;
+  flex-wrap: wrap;
+}
+
+.pdf-tb-left {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  overflow: hidden;
+  max-width: 38%;
+}
+
+.pdf-brand-badge {
+  background: #E5252A;
+  color: #FFFFFF;
+  font-size: 0.62rem;
+  font-weight: 800;
+  padding: 0.15rem 0.38rem;
+  border-radius: 3px;
+  letter-spacing: 0.04em;
+}
+
+.pdf-tb-filename {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: #F8FAFC;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pdf-tb-center {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  background: #202225;
+  padding: 0.15rem 0.45rem;
+  border-radius: 4px;
+  border: 1px solid #3A3E42;
+}
+
+.pdf-page-indicator {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  font-size: 0.72rem;
+  color: #CBD5E1;
+  font-weight: 600;
+}
+
+.pdf-page-num-input {
+  width: 34px;
+  text-align: center;
+  background: #141618;
+  border: 1px solid #4A4E53;
+  color: #FFFFFF;
+  font-size: 0.72rem;
+  padding: 0.1rem 0.2rem;
+  border-radius: 3px;
+  font-weight: 600;
+}
+
+.pdf-tb-right {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.pdf-btn {
+  background: transparent;
+  border: none;
+  color: #CBD5E1;
+  cursor: pointer;
+  padding: 0.2rem 0.4rem;
+  border-radius: 3px;
+  font-size: 0.72rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.15s ease;
+  line-height: 1;
+}
+
+.pdf-btn:hover {
+  background: #40444B;
+  color: #FFFFFF;
+}
+
+.pdf-btn.active {
+  background: #047857;
+  color: #FFFFFF;
+}
+
+.pdf-zoom-val {
+  font-size: 0.72rem;
+  color: #CBD5E1;
+  min-width: 36px;
+  text-align: center;
+  font-weight: 600;
+}
+
+.pdf-tb-sep {
+  color: #4A4E53;
+  font-size: 0.75rem;
+  margin: 0 0.2rem;
+}
+
+.pdf-copy-toast {
+  display: none;
+  font-size: 0.68rem;
+  background: #10B981;
+  color: #FFFFFF;
+  padding: 0.15rem 0.45rem;
+  border-radius: 3px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.pdf-copy-toast.visible {
+  display: inline-block;
+  animation: fadeInToast 0.2s ease;
+}
+
+@keyframes fadeInToast {
+  from { opacity: 0; transform: translateY(-3px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* Scrollable Viewport Canvas Area */
+.pdf-viewer-viewport {
+  height: 520px;
+  overflow-y: auto;
+  overflow-x: auto;
+  background: #525659;
+  padding: 1.5rem 1rem;
+  position: relative;
+  scrollbar-width: thin;
+  scrollbar-color: #767A7E #323639;
+}
+
+.pdf-viewer-viewport::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+.pdf-viewer-viewport::-webkit-scrollbar-track {
+  background: #2D3033;
+}
+
+.pdf-viewer-viewport::-webkit-scrollbar-thumb {
+  background: #767A7E;
+  border-radius: 5px;
+}
+
+.pdf-viewer-viewport::-webkit-scrollbar-thumb:hover {
+  background: #9AA0A6;
+}
+
+/* Page Stack */
+.pdf-pages-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 1.75rem;
+  width: 100%;
+  align-items: center;
+}
+
+.pdf-pages-stack.single-mode {
+  gap: 0;
+}
+
+/* Individual PDF Page Wrapper (Canvas + TextLayer) */
+.pdf-page-card {
+  position: relative;
+  background: #FFFFFF;
+  box-shadow: 0 4px 18px rgba(0, 0, 0, 0.45), 0 0 2px rgba(0, 0, 0, 0.3);
+  margin: 0 auto;
+  user-select: text;
+}
+
+.pdf-canvas {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+/* Text Layer for native selection & clicking */
+.pdf-page-card .textLayer {
+  position: absolute;
+  left: 0;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  overflow: hidden;
+  opacity: 1;
+  line-height: 1.0;
+  pointer-events: auto;
+}
+
+.pdf-page-card .textLayer ::selection {
+  background: rgba(16, 185, 129, 0.35);
+  color: transparent;
+}
+
+.pdf-page-card .textLayer span {
+  color: transparent;
+  position: absolute;
+  white-space: pre;
+  cursor: text;
+  transform-origin: 0% 0%;
+}
+
+.pdf-page-footer-tag {
+  position: absolute;
+  bottom: -1.25rem;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 0.65rem;
+  color: #CBD5E1;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+}
+
+.pdf-loading-state, .pdf-error-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 4rem 2rem;
+  color: #CBD5E1;
+  font-size: 0.85rem;
+  text-align: center;
+}
+
+.pdf-spinner {
+  width: 32px;
+  height: 32px;
+  border: 3px solid rgba(255, 255, 255, 0.2);
+  border-top-color: #10B981;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+  margin-bottom: 1rem;
+}
+
+/* Spreadsheet Horizontal Scroll Container */
+.doc-sheet-wrapper {
+  background: #FFFFFF;
+  border-radius: 0;
+  width: max-content;
+  min-width: 100%;
+}
+
+/* Mini Spreadsheet Table View */
+.mini-sheet-table {
+  width: max-content;
+  min-width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  font-family: var(--font-sans);
+  font-size: 0.76rem;
+  color: #0F172A;
+}
+
+.mini-sheet-table thead th {
+  background: #F1F5F9;
+  color: #1E293B;
+  font-weight: 800;
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  padding: 0.45rem 0.65rem;
+  border-bottom: 2px solid #CBD5E1;
+  border-right: 1px solid #E2E8F0;
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  white-space: nowrap;
+  letter-spacing: 0.02em;
+}
+
+.mini-sheet-table thead th:first-child {
+  position: sticky;
+  left: 0;
+  top: 0;
+  z-index: 15;
+  background: #E2E8F0;
+  border-right: 2px solid #CBD5E1;
+}
+
+.mini-sheet-table tbody tr {
+  background: #FFFFFF;
+  transition: background 0.1s ease;
+}
+
+.mini-sheet-table tbody tr:nth-child(even) {
+  background: #F8FAF8;
+}
+
+.mini-sheet-table tbody tr:hover {
+  background: #EFF6FF !important;
+}
+
+.mini-sheet-table td {
+  border-bottom: 1px solid #E2E8F0;
+  border-right: 1px solid #E2E8F0;
+  padding: 0.35rem 0.55rem;
+  white-space: nowrap;
+  color: #0F172A;
+  font-size: 0.76rem;
+  user-select: text;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.mini-sheet-table td.row-num {
+  background: #F1F5F9;
+  color: #64748B;
+  font-weight: 700;
+  font-size: 0.7rem;
+  text-align: center;
+  width: 38px;
+  min-width: 38px;
+  cursor: default;
+  position: sticky;
+  left: 0;
+  z-index: 5;
+  border-right: 2px solid #CBD5E1;
+}
+
+.mini-sheet-table td:not(.row-num):hover {
+  background: #DCFCE7;
+  color: #065F46;
+  font-weight: 700;
+}
+
+.mini-sheet-table td.copied-flash {
+  background: #10B981 !important;
+  color: #FFFFFF !important;
+  font-weight: 800;
+}
+
+.studio-chart-box {
+  background: var(--bg-card);
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-md);
+  padding: 1.25rem;
+  margin-bottom: 1.5rem;
+}
+
+.btn-studio-action {
+  padding: 0.45rem 0.95rem;
+  font-size: 0.82rem;
+  font-weight: 700;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  font-family: var(--font-sans);
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  transition: all 0.2s ease;
+}
+
+.btn-studio-action:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 2px 6px rgba(0,0,0,0.06);
+}
