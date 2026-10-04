@@ -1,3 +1,6 @@
+/**
+ * Purpose: Scanner browser logic for app; loaded by the Scanner page.
+ */
 import { createState } from './modules/state.js';
 import { initNavigation } from './modules/navigation.js';
 import { initFileIngestion } from './modules/fileIngestion.js';

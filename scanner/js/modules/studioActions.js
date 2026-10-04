@@ -1,3 +1,6 @@
+/**
+ * Purpose: Scanner interface module for studio actions; loaded by the Scanner application.
+ */
 export function initStudioActions(ctx) {
   let pending = false;
   ['studioBtnSave', 'studioBtnApprove'].forEach(id => {

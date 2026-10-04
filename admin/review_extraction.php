@@ -1,4 +1,8 @@
-<?php require_once __DIR__.'/../includes/functions.php'; require_admin();
+<?php
+/**
+ * Purpose: Admin page for review extraction; uses the shared admin layout and server-side access checks.
+ */
+ require_once __DIR__.'/../includes/functions.php'; require_admin();
 if(empty($_SESSION['pending_extraction'])){flash_redirect('admin/smart_upload.php','error','There is no extracted file waiting for review.');}
 $reviewError = flash('error');
 $data=$_SESSION['pending_extraction'];$filename=$_SESSION['pending_extraction_filename']??'uploaded file';$fileType=$_SESSION['pending_extraction_file_type']??'';$rankings=$data['rankings']??[];$breakdowns=$data['ranking_breakdowns']??[];$colleges=$data['colleges']??[];$programs=$data['programs']??[];$accreditations=$data['accreditations']??[];$totalRows=count($rankings)+count($breakdowns)+count($colleges)+count($programs)+count($accreditations);$firstActiveTab='rankings';if(!$rankings){if($breakdowns)$firstActiveTab='breakdowns';elseif($colleges)$firstActiveTab='colleges';elseif($programs)$firstActiveTab='programs';elseif($accreditations)$firstActiveTab='accreditations';}

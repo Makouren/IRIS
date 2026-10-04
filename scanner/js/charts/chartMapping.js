@@ -1,5 +1,5 @@
 /**
- * Purpose: Infer semantic spreadsheet columns and parse ranking/year values for charts.
+ * Purpose: Shared chart utility for chart mapping; used by Scanner chart views and exports.
  * Loaded by: scanner/index.php before sheet merging and chart modules; required by Node tests.
  * Inputs/outputs: Accepts headers and row arrays; exports ChartMapping in browser/CommonJS.
  * Dependencies: None.

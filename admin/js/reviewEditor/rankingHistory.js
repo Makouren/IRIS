@@ -1,3 +1,6 @@
+/**
+ * Purpose: Review Editor browser logic for ranking history; loaded by the Review Editor page.
+ */
         (function () {
             if (false) {
             const apiUrl = window.IRIS_REVIEW_EDITOR_CONFIG.rankingApiUrl;

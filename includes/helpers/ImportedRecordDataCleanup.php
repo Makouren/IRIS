@@ -1,4 +1,8 @@
 <?php
+/**
+ * Purpose: Shared PHP helper for imported record data cleanup operations used by application workflows.
+ */
+
 declare(strict_types=1);
 
 require_once __DIR__ . '/CustomImportFields.php';

@@ -1,3 +1,6 @@
+/**
+ * Purpose: Scanner interface module for state; loaded by the Scanner application.
+ */
 export function createState() {
   return {
     queue: [],

@@ -1,4 +1,8 @@
 <?php
+/**
+ * Purpose: Admin page for smart upload; uses the shared admin layout and server-side access checks.
+ */
+
 require_once __DIR__ . '/../includes/functions.php';
 require_admin();
 if (!ALLOW_SUPER_ADMIN_UPLOAD) redirect_to('admin/review_editor.php');

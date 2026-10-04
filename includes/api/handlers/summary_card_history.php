@@ -1,4 +1,8 @@
 <?php
+/**
+ * Purpose: API handler for summary card history operations; dispatched through the shared API router.
+ */
+
 
         if ($id === null || trim((string)$id) === '') bad('Summary Card id is required.');
         $cardQuery = $pdo->prepare('SELECT summary_cards.*, card_id AS id FROM summary_cards WHERE card_id = ?');

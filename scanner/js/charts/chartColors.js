@@ -1,5 +1,5 @@
 /**
- * Purpose: Resolve stable chart and series colors from saved, shared, and fallback palettes.
+ * Purpose: Shared chart utility for chart colors; used by Scanner chart views and exports.
  * Loaded by: Shared admin/Observatory footers and ES-module chart consumers.
  * Inputs/outputs: Accepts chart/field color metadata; exposes color helpers on globalThis.
  * Dependencies: None.

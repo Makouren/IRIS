@@ -1,4 +1,8 @@
 <?php
+/**
+ * Purpose: Admin page for file archives; uses the shared admin layout and server-side access checks.
+ */
+
 $activeNav = 'archives';
 $pageTitle = 'File Archives - IRIS Admin';
 require_once __DIR__ . '/includes/header.php';

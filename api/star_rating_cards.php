@@ -1,4 +1,8 @@
 <?php
+/**
+ * Purpose: API endpoint for star rating cards operations; serves the corresponding application data or action.
+ */
+
 require_once __DIR__ . '/../includes/functions.php';
 require_once __DIR__ . '/../includes/config/upload_limits.php';
 requireRole(['super_admin', 'admin', 'user'], true);

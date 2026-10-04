@@ -1,6 +1,6 @@
 <?php
 /**
- * Purpose: Render the shared portal header navigation and account controls.
+ * Purpose: Shared PHP include for portal nav application behavior.
  * Included by: Admin header, office upload, and public dashboard pages.
  * Inputs/outputs: Reads session identity/role and portalNavMode; emits navigation markup.
  * Dependencies: includes/functions.php helpers and the portal navigation assets.
@@ -64,6 +64,7 @@ $portalAdminLinks = [
                 <button id="<?= $portalIsOffice ? 'officeThemeToggle' : 'theme-toggle' ?>" type="button" class="<?= e($portalThemeClass) ?>" aria-label="Toggle theme" title="Toggle theme" aria-pressed="false">
                     <i id="<?= $portalIsOffice ? 'office-theme-dark-icon' : 'theme-toggle-dark-icon' ?>" class="hidden fa-solid fa-moon text-base" aria-hidden="true"></i>
                     <i id="<?= $portalIsOffice ? 'office-theme-light-icon' : 'theme-toggle-light-icon' ?>" class="hidden fa-solid fa-sun text-base text-amber-400" aria-hidden="true"></i>
+                    <span class="portal-nav-theme-label">Toggle theme</span>
                 </button>
             </div>
 

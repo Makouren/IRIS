@@ -1,4 +1,8 @@
 <?php
+/**
+ * Purpose: API handler for graphs operations; dispatched through the shared API router.
+ */
+
 
         if ($_SERVER['REQUEST_METHOD']==='GET') {
             if($id!==null){$g=load_saved_graph($pdo,(int)$id);if(!$g)bad('Graph not found',404);echo json_encode($g);exit;}

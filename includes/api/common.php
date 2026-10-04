@@ -1,4 +1,8 @@
 <?php
+/**
+ * Purpose: Shared API support for common; used by the resource handlers.
+ */
+
 function ensure_admin_for_mutation(): void {
     if (($_SESSION['role'] ?? '') !== 'super_admin') {
         http_response_code(403);

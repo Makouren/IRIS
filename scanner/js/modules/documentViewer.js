@@ -1,3 +1,6 @@
+/**
+ * Purpose: Scanner interface module for document viewer; loaded by the Scanner application.
+ */
 import { $, escapeHtml } from '../utils/helpers.js';
 
 export function initDocumentViewer(ctx) {

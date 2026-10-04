@@ -806,9 +806,26 @@ test('public dashboard includes a manual summary card snapshot section and admin
 });
 
 test('public star ratings are enclosed in a matching standalone section container', () => {
-  assert.match(publicDashboardSource, /<section id="star-rating-cards-section" class="hidden space-y-4 rounded-2xl border border-gray-200 bg-white\/70 p-4 shadow-sm dark:border-gray-700 dark:bg-gray-800\/50 sm:p-5">/);
+  assert.match(publicDashboardSource, /<section id="star-rating-cards-section" class="scanner-public-scroll-container hidden space-y-4 rounded-2xl border border-gray-200 bg-white\/70 p-4 shadow-sm dark:border-gray-700 dark:bg-gray-800\/50 sm:p-5">/);
   assert.match(publicDashboardSource, /Published institutional star ratings/);
   assert.match(publicDashboardSource, /id="star-rating-cards-grid"/);
+});
+
+test('public dashboard sections use bounded internal scrolling with sticky section headers', () => {
+  assert.match(publicDashboardSource, /<section id="summary-card-section" class="scanner-public-scroll-container/);
+  assert.match(publicDashboardSource, /<section id="ranking-history" class="scanner-public-scroll-container/);
+  assert.match(publicDashboardSource, /<section id="star-rating-cards-section" class="scanner-public-scroll-container/);
+  assert.match(publicDashboardSource, /class="scanner-public-scroll-header">[\s\S]*?id="summaryCardCategoryFilter"/);
+  assert.match(publicDashboardSource, /class="scanner-public-scroll-header">[\s\S]*?id="rankingFiltersControl"/);
+  assert.match(publicDashboardSource, /class="scanner-public-scroll-header">[\s\S]*?id="star-rating-category-filter"/);
+  assert.match(publicDashboardSource, /class="scanner-public-scroll-header">[\s\S]*?aria-label="Ranking History controls"[\s\S]*?id="rankingChart"/);
+  assert.match(publicDashboardSource, /\.scanner-published-scope,\s*\.scanner-public-scroll-container\s*\{[\s\S]*?max-height:\s*min\(75vh,\s*620px\)[\s\S]*?overflow-y:\s*auto[\s\S]*?overscroll-behavior:\s*contain/);
+  assert.match(publicDashboardSource, /\.scanner-public-scroll-header\s*\{[\s\S]*?position:\s*sticky[\s\S]*?top:\s*-1rem[\s\S]*?margin:\s*-1rem -1rem 0[\s\S]*?padding:\s*1rem 1\.5rem \.65rem[\s\S]*?border-bottom:\s*1px solid #B8CCBD[\s\S]*?background-color:\s*#E8F2EA/);
+  assert.match(publicDashboardSource, /html\.dark \.scanner-public-scroll-header\s*\{[\s\S]*?border-bottom-color:\s*#475569[\s\S]*?background-color:\s*#1E293B/);
+  assert.match(publicDashboardSource, /\.scanner-public-scroll-container::-webkit-scrollbar-track\s*\{\s*background-color:\s*#E8F2EA/);
+  assert.match(publicDashboardSource, /\.scanner-public-scroll-container\s*\{\s*scrollbar-color:\s*var\(--iris-green\) #E8F2EA/);
+  assert.match(publicDashboardSource, /html\.dark \.scanner-public-scroll-container::-webkit-scrollbar-track\s*\{\s*background-color:\s*#1E293B/);
+  assert.match(publicDashboardSource, /html\.dark \.scanner-public-scroll-container\s*\{\s*scrollbar-color:\s*var\(--iris-green\) #1E293B/);
 });
 
 test('public dashboard cards share the CLSU gradient hover treatment', () => {
@@ -863,6 +880,11 @@ test('Ranking History graph layout switches between side-by-side and one-per-row
   assert.match(rankingHistoryControllerSource, /layout: selectedGraphLayout\(\)/);
 });
 
+test('Ranking History chart titles do not repeat an organization name already in the ranking type', () => {
+  assert.match(rankingHistoryControllerSource, /function rankingChartTitle\(organization, rankingType\) \{[\s\S]*?normalizedType === normalizedOrganization \|\| normalizedType\.startsWith\(`\$\{normalizedOrganization\} `\)/);
+  assert.match(rankingHistoryControllerSource, /selectedOrganization\(\) === 'all' \? rankingChartTitle\(family\.organization, family\.type\) : family\.type/);
+});
+
 test('Ranking History chart cards avoid duplicating the ranking matrix and retain per-card matrix popouts', () => {
   assert.match(rankingHistoryControllerSource, /content\.className = 'grid min-w-0 grid-cols-1 gap-3'/);
   assert.doesNotMatch(rankingHistoryControllerSource, /function addRankingContextToggle|function rankingContextMarkup|Show ranking context|Latest global|Ranking context ·/);
@@ -906,9 +928,11 @@ test('published graph layout can switch between full-width and side-by-side', ()
 });
 
 test('each published graph container has its own bounded vertical scroll area', () => {
-  assert.match(publicDashboardSource, /\.scanner-published-scope\s*\{[\s\S]*?max-height:\s*min\(75vh,\s*620px\)[\s\S]*?overflow-y:\s*auto[\s\S]*?overscroll-behavior:\s*contain/);
+  assert.match(publicDashboardSource, /\.scanner-published-scope,\s*\.scanner-public-scroll-container\s*\{[\s\S]*?max-height:\s*min\(75vh,\s*620px\)[\s\S]*?overflow-y:\s*auto[\s\S]*?overscroll-behavior:\s*contain/);
   assert.match(publicDashboardSource, /scopeCard\.className = 'scanner-published-scope/);
-  assert.match(publicDashboardSource, /\.scanner-published-scope > header\s*\{[\s\S]*?position:\s*sticky/);
+  assert.match(publicDashboardSource, /\.scanner-published-scope > header,\s*\.scanner-public-scroll-header\s*\{[\s\S]*?position:\s*sticky[\s\S]*?top:\s*-1rem[\s\S]*?margin:\s*-1rem -1rem 0[\s\S]*?padding:\s*1rem 1\.5rem \.65rem[\s\S]*?border-bottom:\s*1px solid #B8CCBD[\s\S]*?background-color:\s*#E8F2EA/);
+  assert.match(publicDashboardSource, /html\.dark \.scanner-published-scope > header,[\s\S]*?html\.dark \.scanner-public-scroll-header\s*\{[\s\S]*?background-color:\s*#1E293B/);
+  assert.match(publicDashboardSource, /@media \(min-width:\s*640px\)\s*\{[\s\S]*?\.scanner-public-scroll-header\s*\{[\s\S]*?top:\s*-1\.25rem[\s\S]*?margin:\s*-1\.25rem -1\.25rem 0/);
 });
 
 test('record approval does not auto-publish every saved graph for that record', () => {

@@ -1,3 +1,6 @@
+/**
+ * Purpose: Scanner interface module for graphs tab; loaded by the Scanner application.
+ */
 import { $, all, escapeHtml } from '../utils/helpers.js';
 import { buildSavedGraphOption, createChart } from './chartEngine.js?v=rank-axis-render-sync-20261004';
 import { downloadText, showExportChoice } from './savedGraphsTab.js';

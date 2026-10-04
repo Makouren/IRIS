@@ -1,4 +1,8 @@
-<?php require_once __DIR__ . '/../includes/functions.php'; require_once __DIR__ . '/../includes/config/upload_limits.php'; require_once __DIR__ . '/../includes/assets/asset_bundles.php'; require_admin(); ?>
+<?php
+/**
+ * Purpose: Renders the Scanner application shell and loads its ordered browser assets.
+ */
+ require_once __DIR__ . '/../includes/functions.php'; require_once __DIR__ . '/../includes/config/upload_limits.php'; require_once __DIR__ . '/../includes/assets/asset_bundles.php'; require_admin(); ?>
 <!DOCTYPE html>
 <html lang="en">
 <head>

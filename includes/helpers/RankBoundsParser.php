@@ -1,4 +1,8 @@
 <?php
+/**
+ * Purpose: Shared PHP helper for rank bounds parser operations used by application workflows.
+ */
+
 declare(strict_types=1);
 
 final class RankBoundsParser

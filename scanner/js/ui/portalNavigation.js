@@ -1,5 +1,5 @@
 /**
- * Purpose: Control shared portal menus, theme switching, and password-change modal behavior.
+ * Purpose: Scanner browser logic for portal navigation; loaded by the Scanner page.
  * Loaded by: Shared portal header/footer on admin, office, and Observatory pages.
  * Inputs/outputs: Reads portal DOM hooks and form data; updates menus and submits password changes.
  * Dependencies: api/change_password.php and server-provided CSRF/form data attributes.
@@ -15,6 +15,16 @@
   const passwordStatus = passwordModal?.querySelector('[data-password-change-status]');
   const officeThemeToggle = document.getElementById('officeThemeToggle');
   const officeIsDark = () => document.documentElement.classList.contains('dark');
+  const themeObserver = new MutationObserver(() => {
+    requestAnimationFrame(() => requestAnimationFrame(() => {
+      document.querySelectorAll('[_echarts_instance_]').forEach(element => {
+        const bounds = element.getBoundingClientRect();
+        if (bounds.width <= 0 || bounds.height <= 0) return;
+        window.echarts?.getInstanceByDom(element)?.resize?.();
+      });
+    }));
+  });
+  themeObserver.observe(document.documentElement, { attributes: true, attributeFilter: ['class'] });
   const setOfficeTheme = dark => {
     document.documentElement.classList.toggle('dark', dark);
     const mode = dark ? 'dark' : 'light';
@@ -123,6 +133,12 @@
     toggle.setAttribute('aria-expanded', String(open));
     toggle.setAttribute('aria-label', open ? 'Close navigation menu' : 'Open navigation menu');
     menu.classList.toggle('is-open', open);
+    if (profileToggle && profileMenu && window.matchMedia('(max-width: 1024px)').matches) {
+      const hasProfileActions = Boolean(profileMenu.querySelector('ul a, ul button, form'));
+      const showProfileActions = open && hasProfileActions;
+      profileToggle.setAttribute('aria-expanded', String(showProfileActions));
+      profileMenu.classList.toggle('hidden', !showProfileActions);
+    }
   };
 
   toggle.addEventListener('click', () => {

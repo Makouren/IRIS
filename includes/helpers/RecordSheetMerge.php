@@ -1,4 +1,8 @@
 <?php
+/**
+ * Purpose: Shared PHP helper for record sheet merge operations used by application workflows.
+ */
+
 
 declare(strict_types=1);
 

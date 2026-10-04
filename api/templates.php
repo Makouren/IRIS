@@ -1,4 +1,8 @@
 <?php
+/**
+ * Purpose: API endpoint for templates operations; serves the corresponding application data or action.
+ */
+
 ini_set('display_errors', '0');
 ini_set('html_errors', '0');
 ob_start();

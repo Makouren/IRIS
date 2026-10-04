@@ -1,4 +1,8 @@
 <?php
+/**
+ * Purpose: API endpoint for summary card import import operations; validates the request before changing imported data.
+ */
+
 require_once __DIR__ . '/../../includes/functions.php';
 require_once __DIR__ . '/../../includes/helpers/LatestYearResolver.php';
 require_once __DIR__ . '/../../includes/helpers/TemplateImportSupport.php';

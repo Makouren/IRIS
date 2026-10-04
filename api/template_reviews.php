@@ -1,4 +1,8 @@
 <?php
+/**
+ * Purpose: API endpoint for template reviews operations; serves the corresponding application data or action.
+ */
+
 require_once __DIR__ . '/../includes/functions.php';
 require_once __DIR__ . '/../includes/helpers/RankBoundsParser.php';
 header('Content-Type: application/json; charset=utf-8');

@@ -1,3 +1,6 @@
+/**
+ * Purpose: Admin browser behavior for account manager; loaded by the related admin page.
+ */
 (() => {
   const modal = document.getElementById('accountManagerModal');
   const list = document.getElementById('accountManagerList');

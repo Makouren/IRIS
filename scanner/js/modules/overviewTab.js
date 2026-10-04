@@ -1,3 +1,6 @@
+/**
+ * Purpose: Scanner interface module for overview tab; loaded by the Scanner application.
+ */
 import { $, formatFileSize } from '../utils/helpers.js';
 
 function extractKeyFields(scan) {

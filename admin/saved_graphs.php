@@ -1,4 +1,8 @@
 <?php
+/**
+ * Purpose: Admin page for saved graphs; uses the shared admin layout and server-side access checks.
+ */
+
 $activeNav = 'saved_graphs';
 $pageTitle = 'Saved Dashboard Graphs - IRIS Admin';
 require_once __DIR__.'/includes/header.php';

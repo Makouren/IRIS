@@ -1,5 +1,5 @@
 /**
- * Purpose: Publish chart palette constants used by the Scanner.
+ * Purpose: Shared chart utility for chart config; used by Scanner chart views and exports.
  * Loaded by: scanner/index.php as a classic script.
  * Inputs/outputs: No inputs; assigns IRISChartConfig to window.
  * Dependencies: None.

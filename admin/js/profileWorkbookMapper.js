@@ -1,3 +1,6 @@
+/**
+ * Purpose: Admin browser behavior for profile workbook mapper; loaded by the related admin page.
+ */
 (() => {
   const modal = document.getElementById('templateManagerModal');
   if (!modal) return;

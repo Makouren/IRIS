@@ -1,6 +1,6 @@
 <?php
 /**
- * Purpose: Render the Super Admin Review Editor and Records Studio.
+ * Purpose: Admin page for review editor; uses the shared admin layout and server-side access checks.
  * Inputs/outputs: Supplies review markup, modal partials, and page-specific API configuration.
  * Dependencies: Admin header/footer and admin/js/reviewEditor modules.
  * Load order: Emit the configuration before scripts that consume its URLs and CSRF token.

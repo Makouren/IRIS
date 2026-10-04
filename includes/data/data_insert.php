@@ -1,6 +1,6 @@
 <?php
 /**
- * Purpose: Insert or update selected Smart Upload rows in the institutional tables.
+ * Purpose: Shared PHP include for data insert application behavior.
  * Included by: admin/smart_upload_confirm.php after the user confirms staged rows.
  * Inputs/outputs: Accepts validated row arrays; writes through PDO and returns success flags.
  * Dependencies: includes/functions.php and helpers/RankBoundsParser.php.

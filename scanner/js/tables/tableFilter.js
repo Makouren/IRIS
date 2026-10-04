@@ -1,7 +1,7 @@
 /**
  * Search spreadsheet rows using headers and cell values.
  * The optional previous result set lets callers progressively narrow results.
- * Purpose: Search spreadsheet rows using headers and cell values with OCR-tolerant matching.
+ * Purpose: Scanner browser logic for table filter; loaded by the Scanner page.
  * Loaded by: scanner/index.php before sheet merging and document viewer consumers.
  * Inputs/outputs: Accepts headers, rows, query, and optional previous results; exports TableFilter.
  * Dependencies: None.

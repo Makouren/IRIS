@@ -1,3 +1,4 @@
+-- Purpose: Applies the dated schema or data change identified by this migration filename; review the target database before running it.
 ALTER TABLE ranking_bodies
     ADD COLUMN sort_order INT NOT NULL DEFAULT 100 AFTER short_name;
 

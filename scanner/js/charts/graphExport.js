@@ -1,5 +1,5 @@
   /**
-   * Purpose: Normalize saved chart data and produce consistent view/export/print options.
+   * Purpose: Shared chart utility for graph export; used by Scanner chart views and exports.
    * Loaded by: scanner/index.php as a classic script before database and export consumers.
    * Inputs/outputs: Accepts saved graph objects and render context; exposes GraphExport globally.
    * Dependencies: IRISChartBuilder and ChartMapping for saved chart rendering.

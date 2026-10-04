@@ -1,4 +1,8 @@
 <?php
+/**
+ * Purpose: API handler for record file history operations; dispatched through the shared API router.
+ */
+
 
         ensure_admin_for_mutation();
         if ($_SERVER['REQUEST_METHOD'] === 'GET' && $action === 'list') {

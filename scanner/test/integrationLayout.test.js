@@ -93,6 +93,13 @@ test('template downloads do not leave the page loader covering the current page'
   assert.match(adminFooter, /if \(templateDownloadPending\)[\s\S]*?return;[\s\S]*?if \(window\.IRIS_STUDIO_DIRTY\)/);
 });
 
+test('Office active-template download actions retain readable contrast in both themes', () => {
+  assert.match(officeTemplates, /download\.className = 'office-template-download/);
+  assert.match(styles, /\.office-template-download\s*\{[\s\S]*?background-color:\s*#FFFFFF[\s\S]*?color:\s*#1F2A24 !important/);
+  assert.match(styles, /html\.dark \.office-template-download\s*\{[\s\S]*?background-color:\s*#273449[\s\S]*?color:\s*#F8FAFC !important/);
+  assert.match(styles, /\.office-template-download:focus-visible\s*\{[\s\S]*?outline:\s*3px solid/);
+});
+
 test('Studio chart play area is larger and charts keep legends clear of titles', () => {
   assert.match(html, /class="studio-chart-play-area"/);
   assert.match(adminEditor, /class="studio-chart-play-area"/);
@@ -563,7 +570,7 @@ test('summary-card editing uses a modal instead of expanding the admin page', ()
 test('Summary Card Edit resolves API IDs consistently and opens the populated edit form', () => {
   assert.match(adminEditor, /editorList\.querySelectorAll\('\.summary-card-editor-edit'\)\.forEach\(button => \{/);
   assert.match(adminEditor, /const id = String\(button\.dataset\.id \|\| ''\);[\s\S]*?cards\.find\(item => String\(item\.id \?\? item\.card_id \?\? ''\) === id\)/);
-  assert.match(adminEditor, /summaryCardEditorId'\)\.value = String\(card\.id \?\? card\.card_id \?\? ''\)/);
+  assert.match(adminEditor, /summaryCardEditorId'\)\.value = summaryCardId\(card\)/);
   assert.match(adminEditor, /summaryCardEditorTitle'\)\.value = card\.title \|\| ''/);
   assert.match(adminEditor, /showCardForm\(true\);[\s\S]*?openEditor\(\);/);
   assert.match(adminEditor, /This summary card could not be found\. Refresh the list and try again\./);
@@ -576,4 +583,31 @@ test('Summary Card categories are selectable independently with checkboxes', () 
   assert.match(adminEditor, /function setSelectedSummaryCategoryIds\(ids\)/);
   assert.match(adminEditor, /payload\.category_ids = selectedSummaryCategoryIds\(\)\.map\(Number\)/);
   assert.match(adminEditor, /setSelectedSummaryCategoryIds\(selectedIds\)/);
+});
+
+test('Summary Card manager groups cards by category and normalizes bulk selection IDs', () => {
+  assert.match(adminEditor, /const categoryGroups = new Map\(\)/);
+  assert.match(adminEditor, /<details class="summary-card-category-group" data-summary-category-group=/);
+  assert.match(adminEditor, /group\.cards\.slice\(\)\.sort/);
+  assert.match(adminEditor, /const summaryCategoryOpenState = new Map\(\)/);
+  assert.match(adminEditor, /summaryCategoryOpenState\.set\(group\.dataset\.summaryCategoryGroup, group\.open\)/);
+  assert.match(adminEditor, /summaryCategoryOpenState\.get\(String\(group\.category\.id\)\) \?\? true/);
+  assert.match(adminEditor, /function summaryCardId\(card\) \{\s*return String\(card\.id \?\? card\.card_id \?\? ''\)/);
+  assert.match(adminEditor, /selectedIds\.has\(summaryCardId\(card\)\)/);
+  assert.match(adminEditor, /const selectedPublished = selectedCards\.filter\(isSummaryCardPublished\)/);
+  assert.match(adminEditor, /const selectedIds = new Set\(selected\.map\(cb => cb\.dataset\.id\)\)/);
+  assert.match(adminEditor, /<summary class="summary-card-category-heading">/);
+  assert.match(styles, /\.summary-card-category-heading::after/);
+});
+
+test('Star Rating Card manager groups cards into collapsible categories with safe bulk selection', () => {
+  assert.match(adminEditor, /const starCategoryOpenState = new Map\(\)/);
+  assert.match(adminEditor, /<details class="star-rating-category-group" data-star-category-group=/);
+  assert.match(adminEditor, /starCategoryOpenState\.set\(group\.dataset\.starCategoryGroup, group\.open\)/);
+  assert.match(adminEditor, /starCategoryOpenState\.get\(String\(group\.category\.id\)\) \?\? true/);
+  assert.match(adminEditor, /const categoryGroups = new Map\(\)/);
+  assert.match(adminEditor, /const selectedIds = new Set\(selected\.map\(cb => cb\.dataset\.id\)\)/);
+  assert.match(adminEditor, /const selectedIds = \[\.\.\.new Set\(Array\.from\(cardList\.querySelectorAll\('\.bulk-delete-star-checkbox:checked'\)\)/);
+  assert.match(styles, /\.star-rating-category-heading::after/);
+  assert.match(styles, /html\.dark #starRatingCardList \.star-rating-card/);
 });

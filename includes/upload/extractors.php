@@ -1,6 +1,6 @@
 <?php
 /**
- * Purpose: Read CSV and DOCX content and map supported CSV headers for Smart Upload.
+ * Purpose: Shared PHP include for extractors application behavior.
  * Included by: admin/smart_upload_process.php.
  * Inputs/outputs: Accepts validated temporary file paths; returns rows, text, or mapped datasets.
  * Dependencies: includes/functions.php and the ZipArchive extension for DOCX parsing.

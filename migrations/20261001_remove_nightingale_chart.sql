@@ -1,3 +1,4 @@
+-- Purpose: Applies the dated schema or data change identified by this migration filename; review the target database before running it.
 UPDATE `saved_graphs`
 SET `chart_data` = JSON_SET(
         COALESCE(`chart_data`, JSON_OBJECT()),

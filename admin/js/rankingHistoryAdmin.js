@@ -1,3 +1,6 @@
+/**
+ * Purpose: Admin browser behavior for ranking history admin; loaded by the related admin page.
+ */
 (() => {
   const script = document.currentScript;
   const api = script?.dataset.api;

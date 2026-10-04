@@ -1,3 +1,4 @@
+-- Purpose: Applies the dated schema or data change identified by this migration filename; review the target database before running it.
 CREATE TABLE record_file_history (
     version_id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
     merge_group_id CHAR(36) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,

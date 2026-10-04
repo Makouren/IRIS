@@ -1,5 +1,5 @@
 /**
- * Purpose: Validate and merge incoming worksheet rows with an existing worksheet.
+ * Purpose: Scanner browser logic for sheet merge; loaded by the Scanner page.
  * Loaded by: Shared admin footer as a classic script; required by Node tests.
  * Inputs/outputs: Accepts worksheet objects and merge options; exports SheetMerge.
  * Dependencies: ChartMapping and TableFilter globals, or their relative CommonJS modules.

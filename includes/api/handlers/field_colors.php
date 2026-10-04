@@ -1,4 +1,8 @@
 <?php
+/**
+ * Purpose: API handler for field colors operations; dispatched through the shared API router.
+ */
+
 
         if ($_SERVER['REQUEST_METHOD'] === 'GET') {
             $rows = $pdo->query('SELECT field_name AS field_key, field_name AS label, color, updated_at FROM field_colors ORDER BY field_name ASC')->fetchAll(PDO::FETCH_ASSOC);

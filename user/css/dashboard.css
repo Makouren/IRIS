@@ -1,3 +1,6 @@
+/**
+ * Purpose: Observatory dashboard styles for dashboard; loaded by the user dashboard.
+ */
         .summary-card-grid {
             display: grid;
             grid-template-columns: repeat(auto-fit, minmax(min(270px, 100%), 1fr));
@@ -22,25 +25,54 @@
             -webkit-mask-composite: xor;
             mask-composite: exclude;
         }
-        .scanner-published-scope {
+        .scanner-published-scope,
+        .scanner-public-scroll-container {
             max-height: min(75vh, 620px);
             overflow-y: auto;
             overscroll-behavior: contain;
             scrollbar-gutter: stable;
         }
-        .scanner-published-scope::-webkit-scrollbar { width: 8px; }
-        .scanner-published-scope::-webkit-scrollbar-thumb {
+        .scanner-published-scope::-webkit-scrollbar,
+        .scanner-public-scroll-container::-webkit-scrollbar { width: 8px; }
+        .scanner-published-scope::-webkit-scrollbar-thumb,
+        .scanner-public-scroll-container::-webkit-scrollbar-thumb {
             border: 2px solid transparent;
             border-radius: 999px;
             background: linear-gradient(var(--iris-green), var(--iris-gold)) padding-box;
             background-clip: padding-box;
         }
         .scanner-published-scope { scrollbar-color: var(--iris-green) transparent; scrollbar-width: thin; }
-        .scanner-published-scope > header {
+        .scanner-public-scroll-container {
+            scrollbar-color: var(--iris-green) #E8F2EA;
+            scrollbar-width: thin;
+        }
+        .scanner-public-scroll-container::-webkit-scrollbar-track { background-color: #E8F2EA; }
+        html.dark .scanner-public-scroll-container { scrollbar-color: var(--iris-green) #1E293B; }
+        html.dark .scanner-public-scroll-container::-webkit-scrollbar-track { background-color: #1E293B; }
+        .scanner-published-scope > header,
+        .scanner-public-scroll-header {
             position: sticky;
             top: -1rem;
-            z-index: 4;
-            background: var(--iris-surface);
+            z-index: 5;
+            margin: -1rem -1rem 0;
+            padding: 1rem 1.5rem .65rem;
+            border-bottom: 1px solid #B8CCBD;
+            border-radius: var(--radius-sm);
+            background-color: #E8F2EA;
+            box-shadow: 0 8px 16px -12px rgba(15, 23, 42, .5);
+        }
+        html.dark .scanner-published-scope > header,
+        html.dark .scanner-public-scroll-header {
+            border-bottom-color: #475569;
+            background-color: #1E293B;
+        }
+        @media (min-width: 640px) {
+            .scanner-published-scope > header,
+            .scanner-public-scroll-header {
+                top: -1.25rem;
+                margin: -1.25rem -1.25rem 0;
+                padding: 1.25rem 1.75rem .65rem;
+            }
         }
         @media (hover: hover) {
             .iris-hover-card:hover,

@@ -1,3 +1,6 @@
+/**
+ * Purpose: Review Editor browser logic for star rating cards; loaded by the Review Editor page.
+ */
         (function () {
             const apiUrl = window.IRIS_REVIEW_EDITOR_CONFIG.starRatingApiUrl;
             const categoryApiUrl = apiUrl + '?resource=categories';
@@ -22,6 +25,7 @@
             let localLogoPreviewUrl = '';
             let cards = [];
             let categories = [];
+            const starCategoryOpenState = new Map();
 
             function clearLocalLogoPreview() {
                 if (localLogoPreviewUrl) URL.revokeObjectURL(localLogoPreviewUrl);
@@ -182,6 +186,9 @@
             }
 
             async function refreshCards() {
+                cardList.querySelectorAll('[data-star-category-group]').forEach(group => {
+                    starCategoryOpenState.set(group.dataset.starCategoryGroup, group.open);
+                });
                 const [response, categoryResponse] = await Promise.all([
                     fetch(apiUrl, { headers: { Accept: 'application/json' } }),
                     fetch(categoryApiUrl, { headers: { Accept: 'application/json' } })
@@ -209,8 +216,49 @@
                     if (selectAllLabel) selectAllLabel.style.display = 'none';
                     return;
                 }
-                cardList.innerHTML = visibleCards.map(card => `<article class="rounded-xl border border-gray-200 bg-gray-50 p-3"><div class="flex items-start gap-3"><input type="checkbox" class="bulk-delete-star-checkbox mt-1 cursor-pointer" data-id="${Number(card.id)}" aria-label="Select for bulk delete" style="width:1rem;height:1rem;"> <div class="flex-1 flex flex-wrap items-start justify-between gap-3"><div><h4 class="font-bold text-sm text-slate-900">${escapeHtml(card.title)}</h4><p class="text-xs text-slate-500">${escapeHtml(card.year || 'No year')} · ${rowSummary(card.rows || [])}</p><span class="mt-1 inline-flex rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold text-emerald-800">${escapeHtml((card.category_names || []).join(', ') || 'Uncategorized')}</span></div><span class="rounded-full px-2 py-1 text-[10px] font-bold uppercase ${card.is_published ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-200 text-slate-700'}">${card.is_published ? 'Published' : 'Draft'}</span></div></div><div class="mt-3 flex flex-wrap gap-2 pl-7"><button type="button" class="btn-studio-action" data-edit="${card.id}">Edit</button><button type="button" class="btn-studio-action" data-toggle="${card.id}">${card.is_published ? 'Unpublish' : 'Publish'}</button><button type="button" class="archive-delete-button" data-delete="${card.id}">Delete</button></div></article>`).join('');
-                                                                const selectAllStar = document.getElementById('selectAllStarCards');
+                const categoryById = new Map(categories.map(category => [String(category.id), category]));
+                const categoryGroups = new Map();
+                visibleCards.forEach(card => {
+                    const categoryIds = [...new Set((card.category_ids || []).map(String))];
+                    const memberships = selectedCategory === 'all'
+                        ? categoryIds.map(id => categoryById.get(id)).filter(Boolean)
+                        : [selectedCategory === 'uncategorized'
+                            ? { id: 'uncategorized', name: 'Uncategorized' }
+                            : categoryById.get(selectedCategory) || { id: selectedCategory, name: 'Uncategorized' }];
+                    if (!memberships.length) memberships.push({ id: 'uncategorized', name: 'Uncategorized' });
+                    memberships.forEach(category => {
+                        const key = String(category.id);
+                        if (!categoryGroups.has(key)) categoryGroups.set(key, { category, cards: [] });
+                        categoryGroups.get(key).cards.push(card);
+                    });
+                });
+                const groupOrder = selectedCategory === 'all'
+                    ? categories.map(category => String(category.id)).concat(['uncategorized'])
+                    : [selectedCategory];
+                const sortedGroups = [...categoryGroups.entries()].sort(([idA], [idB]) => {
+                    const orderA = groupOrder.indexOf(idA);
+                    const orderB = groupOrder.indexOf(idB);
+                    return (orderA < 0 ? Number.MAX_SAFE_INTEGER : orderA) - (orderB < 0 ? Number.MAX_SAFE_INTEGER : orderB)
+                        || categoryGroups.get(idA).category.name.localeCompare(categoryGroups.get(idB).category.name);
+                });
+                const renderCard = card => `<article class="star-rating-card rounded-xl border border-gray-200 bg-gray-50 p-3"><div class="flex items-start gap-3"><input type="checkbox" class="bulk-delete-star-checkbox mt-1 cursor-pointer" data-id="${Number(card.id)}" aria-label="Select ${escapeHtml(card.title || 'star rating card')}" style="width:1rem;height:1rem;"> <div class="flex-1 flex flex-wrap items-start justify-between gap-3"><div><h4 class="font-bold text-sm text-slate-900">${escapeHtml(card.title)}</h4><p class="text-xs text-slate-500">${escapeHtml(card.year || 'No year')} · ${rowSummary(card.rows || [])}</p><span class="mt-1 inline-flex rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold text-emerald-800">${escapeHtml((card.category_names || []).join(', ') || 'Uncategorized')}</span></div><span class="rounded-full px-2 py-1 text-[10px] font-bold uppercase ${card.is_published ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-200 text-slate-700'}">${card.is_published ? 'Published' : 'Draft'}</span></div></div><div class="mt-3 flex flex-wrap gap-2 pl-7"><button type="button" class="btn-studio-action" data-edit="${card.id}">Edit</button><button type="button" class="btn-studio-action" data-toggle="${card.id}">${card.is_published ? 'Unpublish' : 'Publish'}</button><button type="button" class="archive-delete-button" data-delete="${card.id}">Delete</button></div></article>`;
+                cardList.innerHTML = sortedGroups.map(([, group]) => `
+                    <details class="star-rating-category-group" data-star-category-group="${escapeHtml(group.category.id)}" ${starCategoryOpenState.get(String(group.category.id)) ?? true ? 'open' : ''}>
+                        <summary class="star-rating-category-heading">
+                            <span>${escapeHtml(group.category.name)}</span>
+                            <span>${group.cards.length} ${group.cards.length === 1 ? 'card' : 'cards'}</span>
+                        </summary>
+                        <div class="star-rating-category-items">
+                            ${group.cards.slice().sort((a, b) => Number(a.display_order || 0) - Number(b.display_order || 0)).map(renderCard).join('')}
+                        </div>
+                    </details>
+                `).join('');
+                cardList.querySelectorAll('[data-star-category-group]').forEach(group => {
+                    group.addEventListener('toggle', () => {
+                        starCategoryOpenState.set(group.dataset.starCategoryGroup, group.open);
+                    });
+                });
+                const selectAllStar = document.getElementById('selectAllStarCards');
                 const selectAllStarLabel = document.getElementById('selectAllStarCardsLabel');
 
                 if (selectAllStarLabel) selectAllStarLabel.style.display = visibleCards.length ? 'inline-flex' : 'none';
@@ -221,15 +269,24 @@
                     const currentBulkCount = document.getElementById('bulkDeleteStarCardsCount');
                     const allCbs = Array.from(cardList.querySelectorAll('.bulk-delete-star-checkbox'));
                     const selected = allCbs.filter(cb => cb.checked);
+                    const selectedIds = new Set(selected.map(cb => cb.dataset.id));
                     if (currentBulkBtn) {
-                        currentBulkBtn.style.display = selected.length > 0 ? 'inline-block' : 'none';
-                        currentBulkBtn.disabled = selected.length === 0;
+                        currentBulkBtn.style.display = selectedIds.size > 0 ? 'inline-block' : 'none';
+                        currentBulkBtn.disabled = selectedIds.size === 0;
                     }
-                    if (currentBulkCount) currentBulkCount.textContent = selected.length;
-                    if (selectAllStar) selectAllStar.checked = allCbs.length > 0 && selected.length === allCbs.length;
+                    if (currentBulkCount) currentBulkCount.textContent = String(selectedIds.size);
+                    if (selectAllStar) {
+                        const allIds = new Set(allCbs.map(cb => cb.dataset.id));
+                        selectAllStar.checked = allIds.size > 0 && selectedIds.size === allIds.size;
+                    }
                 };
 
-                cardList.querySelectorAll('.bulk-delete-star-checkbox').forEach(cb => cb.addEventListener('change', updateBulkBtn));
+                cardList.querySelectorAll('.bulk-delete-star-checkbox').forEach(cb => cb.addEventListener('change', () => {
+                    cardList.querySelectorAll('.bulk-delete-star-checkbox').forEach(duplicate => {
+                        if (duplicate.dataset.id === cb.dataset.id) duplicate.checked = cb.checked;
+                    });
+                    updateBulkBtn();
+                }));
 
                 if (selectAllStar) {
                     selectAllStar.onchange = () => {
@@ -243,7 +300,7 @@
                     const newBulkBtn = bulkBtn.cloneNode(true);
                     bulkBtn.parentNode.replaceChild(newBulkBtn, bulkBtn);
                     newBulkBtn.addEventListener('click', async () => {
-                        const selectedIds = Array.from(cardList.querySelectorAll('.bulk-delete-star-checkbox:checked')).map(cb => cb.dataset.id);
+                        const selectedIds = [...new Set(Array.from(cardList.querySelectorAll('.bulk-delete-star-checkbox:checked')).map(cb => cb.dataset.id))];
                         if (!selectedIds.length || newBulkBtn.disabled) return;
                         if (!confirm(`Delete ${selectedIds.length} selected star rating card(s)?`)) return;
                         newBulkBtn.disabled = true;

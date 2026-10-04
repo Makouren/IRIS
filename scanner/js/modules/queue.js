@@ -1,3 +1,6 @@
+/**
+ * Purpose: Scanner interface module for queue; loaded by the Scanner application.
+ */
 import { $, formatFileSize } from '../utils/helpers.js';
 
 export function initQueue(ctx) {

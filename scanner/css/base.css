@@ -306,6 +306,33 @@ body {
   font-weight: 600;
   line-height: 1.5;
 }
+.office-template-download {
+  border: 1px solid #64748B;
+  background-color: #FFFFFF;
+  color: #1F2A24 !important;
+  text-decoration: none;
+  transition: background-color .15s ease, border-color .15s ease, color .15s ease;
+}
+.office-template-download:hover {
+  border-color: #1E6031;
+  background-color: #EEF6F0;
+  color: #0D4A1F !important;
+}
+.office-template-download:focus-visible {
+  outline: 3px solid #1E6031;
+  outline-offset: 2px;
+}
+html.dark .office-template-download {
+  border-color: #94A3B8;
+  background-color: #273449;
+  color: #F8FAFC !important;
+}
+html.dark .office-template-download:hover {
+  border-color: #6EE7B7;
+  background-color: #334155;
+  color: #FFFFFF !important;
+}
+html.dark .office-template-download:focus-visible { outline-color: #6EE7B7; }
 html.dark .office-active-template-title { color: #F8FAFC !important; }
 html.dark .office-active-template-filename { color: #F1F5F9 !important; }
 .office-upload-layout .text-gray-700,

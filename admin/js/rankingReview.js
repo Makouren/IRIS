@@ -1,3 +1,6 @@
+/**
+ * Purpose: Admin browser behavior for ranking review; loaded by the related admin page.
+ */
 (() => {
   const modal = document.getElementById('rankingReviewModal');
   if (!modal) return;

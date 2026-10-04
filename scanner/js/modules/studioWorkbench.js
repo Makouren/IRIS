@@ -1,3 +1,6 @@
+/**
+ * Purpose: Scanner interface module for studio workbench; loaded by the Scanner application.
+ */
 import { $, escapeHtml, parseEditableValue } from '../utils/helpers.js';
 import { renderStudioChart } from './chartEngine.js?v=rank-axis-render-sync-20261004';
 import { initStudioColorCustomizer } from './studioColorCustomizer.js?v=echarts-six-chart-types-1';

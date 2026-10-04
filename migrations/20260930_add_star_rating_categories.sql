@@ -1,3 +1,4 @@
+-- Purpose: Applies the dated schema or data change identified by this migration filename; review the target database before running it.
 CREATE TABLE IF NOT EXISTS star_rating_categories (
     id INT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
     name VARCHAR(40) NOT NULL,

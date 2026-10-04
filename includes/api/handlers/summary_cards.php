@@ -1,4 +1,8 @@
 <?php
+/**
+ * Purpose: API handler for summary cards operations; dispatched through the shared API router.
+ */
+
 
         if ($_SERVER['REQUEST_METHOD'] === 'GET') {
             $rows = ($_SESSION['role'] ?? '') === 'super_admin'

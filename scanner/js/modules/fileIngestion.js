@@ -1,3 +1,6 @@
+/**
+ * Purpose: Scanner interface module for file ingestion; loaded by the Scanner application.
+ */
 import { $, all } from '../utils/helpers.js';
 
 const MAX_UPLOAD_SIZE_BYTES = Number(window.IRIS_MAX_UPLOAD_BYTES);

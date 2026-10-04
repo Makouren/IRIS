@@ -1,4 +1,8 @@
 <?php
+/**
+ * Purpose: Shared PHP helper for record file history operations used by application workflows.
+ */
+
 
 declare(strict_types=1);
 

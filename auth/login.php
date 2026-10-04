@@ -1,4 +1,8 @@
 <?php
+/**
+ * Purpose: Authentication flow for login; participates in the PHP session and access-control workflow.
+ */
+
 require_once __DIR__.'/../includes/functions.php';
 
 if (!empty($_SESSION['user_id'])) {

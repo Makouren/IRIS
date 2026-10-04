@@ -1,4 +1,8 @@
 <?php
+/**
+ * Purpose: API handler for records operations; dispatched through the shared API router.
+ */
+
 
         if ($_SERVER['REQUEST_METHOD'] === 'POST' && in_array($action, ['preview-record-merge', 'merge-records'], true)) {
             $data = json_input();

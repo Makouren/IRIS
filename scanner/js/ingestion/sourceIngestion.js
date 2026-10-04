@@ -1,5 +1,5 @@
 /**
- * Purpose: Pair selected text with a likely corresponding source line/value.
+ * Purpose: Scanner browser logic for source ingestion; loaded by the Scanner page.
  * Loaded by: scanner/index.php as a classic script before document viewer modules.
  * Inputs/outputs: Accepts selected text and source text; exposes SourceIngestion globally.
  * Dependencies: None.

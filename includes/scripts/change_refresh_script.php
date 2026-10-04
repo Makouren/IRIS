@@ -1,6 +1,6 @@
 <?php
 /**
- * Purpose: Emit the deferred client script that observes and signals data changes.
+ * Purpose: Shared PHP include for change refresh script application behavior.
  * Included by: Admin footer, office upload, and user dashboard pages.
  * Inputs/outputs: Reads session role and optional irisChangeRefreshView; emits one script tag.
  * Dependencies: scanner/js/ui/changeRefresh.js and api/change_signal.php.

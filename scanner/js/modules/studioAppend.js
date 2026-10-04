@@ -1,3 +1,6 @@
+/**
+ * Purpose: Scanner interface module for studio append; loaded by the Scanner application.
+ */
 import { $, escapeHtml } from '../utils/helpers.js';
 
 const MAX_PREVIEW_ROWS = 200;

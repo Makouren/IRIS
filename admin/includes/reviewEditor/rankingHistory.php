@@ -1,4 +1,8 @@
 <?php
+/**
+ * Purpose: Review Editor markup partial for the ranking history section; included by the Review Editor page.
+ */
+
 ?>
 <div id="rankingHistoryEditorPanel" class="modal-overlay" aria-hidden="true">
         <div class="modal-card summary-card-editor-modal" role="dialog" aria-modal="true" aria-labelledby="rankingHistoryEditorHeading">

@@ -1,5 +1,5 @@
 /**
- * Purpose: Animate the dashboard dot background toward pointer movement.
+ * Purpose: Scanner browser logic for dot background; loaded by the Scanner page.
  * Loaded by: Pages that render #dashboard-dot-background.
  * Inputs/outputs: Reads pointer and media-query state; updates background element styles.
  * Dependencies: DOM, requestAnimationFrame, and matchMedia.

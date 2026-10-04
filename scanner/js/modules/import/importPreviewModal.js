@@ -1,3 +1,6 @@
+/**
+ * Purpose: Scanner import module for import preview modal; supports the browser-side import workflow.
+ */
 import { getJson, postJson } from './importApiClient.js';
 import { displayValues, identityLabel } from './importDataMapper.js';
 

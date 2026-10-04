@@ -1,4 +1,8 @@
 <?php
+/**
+ * Purpose: Seeds the reference data identified by this migration filename; review the target database before running it.
+ */
+
 if (PHP_SAPI !== 'cli') {
     http_response_code(404);
     exit;

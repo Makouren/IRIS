@@ -1,3 +1,6 @@
+/**
+ * Purpose: Scanner interface module for viewer tab; loaded by the Scanner application.
+ */
 import { $ } from '../utils/helpers.js';
 export function initViewerTab(ctx) {
   ctx.api.renderViewerTab = scan => {

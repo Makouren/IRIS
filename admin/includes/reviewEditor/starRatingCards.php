@@ -1,4 +1,8 @@
 <?php
+/**
+ * Purpose: Review Editor markup partial for the star rating cards section; included by the Review Editor page.
+ */
+
 ?>
 <div id="starRatingEditorPanel" class="modal-overlay" aria-hidden="true">
         <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="starRatingEditorHeading" style="max-width: 860px; max-height: calc(100vh - 2rem); overflow-y: auto;">

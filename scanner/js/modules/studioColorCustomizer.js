@@ -1,3 +1,6 @@
+/**
+ * Purpose: Scanner interface module for studio color customizer; loaded by the Scanner application.
+ */
 import '../../vendor/vanilla-colorful/hex-color-picker.js';
 import '../charts/chartColors.js?v=data-preserving-colors-20260930';
 

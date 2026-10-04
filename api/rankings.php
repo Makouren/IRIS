@@ -1,4 +1,8 @@
 <?php
+/**
+ * Purpose: API endpoint for rankings operations; serves the corresponding application data or action.
+ */
+
 require_once __DIR__ . '/../includes/functions.php';
 require_once __DIR__ . '/../includes/helpers/CustomImportFields.php';
 requireRole(['super_admin', 'admin', 'user'], true);

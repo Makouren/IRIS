@@ -1,3 +1,6 @@
+/**
+ * Purpose: Scanner import module for import api client; supports the browser-side import workflow.
+ */
 export async function getJson(url) {
   const response = await fetch(url, { headers: { Accept: 'application/json' }, cache: 'no-store' });
   return readJson(response);

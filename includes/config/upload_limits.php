@@ -1,6 +1,6 @@
 <?php
 /**
- * Purpose: Define the common PHP upload limit and translate upload errors.
+ * Purpose: Shared PHP include for upload limits application behavior.
  * Included by: Upload pages and API endpoints before handling uploaded files.
  * Inputs/outputs: Reads PHP request and upload settings; provides constants and helper results.
  * Dependencies: PHP runtime upload constants and configuration.

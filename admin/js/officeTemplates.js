@@ -1,3 +1,6 @@
+/**
+ * Purpose: Admin browser behavior for office templates; loaded by the related admin page.
+ */
 (() => {
   const purposeSelect = document.getElementById('officeUploadPurpose');
   const templateSelect = document.getElementById('officeTemplateSelect');
@@ -106,7 +109,7 @@
       originalName.textContent = template.original_filename;
       details.append(name, originalName);
       const download = document.createElement('a');
-      download.className = 'inline-flex shrink-0 items-center gap-2 rounded-lg border border-gray-300 px-3 py-2 text-sm font-semibold hover:bg-gray-100 dark:border-slate-700 dark:hover:bg-slate-800';
+      download.className = 'office-template-download inline-flex shrink-0 items-center gap-2 rounded-lg px-3 py-2 text-sm font-semibold';
       download.href = template.is_profile_workbook
         ? `${downloadBase}?destination=${encodeURIComponent(template.import_destination)}`
         : `${downloadBase}?id=${encodeURIComponent(template.id)}`;

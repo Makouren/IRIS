@@ -1,6 +1,6 @@
 <?php
 /**
- * Purpose: Safely parse supported XLSX, CSV, and TSV workbooks for PHP upload workflows.
+ * Purpose: Shared PHP include for spreadsheet reader application behavior.
  * Included by: admin/upload_process.php and workbook import helpers.
  * Inputs/outputs: Parses a local file path and options; returns normalized workbook/sheet arrays.
  * Dependencies: ZipArchive, SimpleXML, and the PHP XML extensions.

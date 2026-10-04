@@ -1,4 +1,8 @@
 <?php
+/**
+ * Purpose: Shared admin layout or feature markup for header; included by admin pages.
+ */
+
 require_once __DIR__.'/../../includes/functions.php';
 require_once __DIR__.'/../../includes/config/upload_limits.php';
 require_once __DIR__.'/../../includes/assets/asset_bundles.php';

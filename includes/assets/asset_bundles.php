@@ -1,6 +1,6 @@
 <?php
 /**
- * Purpose: Render the shared scanner stylesheet bundle for PHP pages.
+ * Purpose: Shared PHP include for asset bundles application behavior.
  * Included by: scanner/index.php and admin pages that use the shared styles.
  * Inputs/outputs: Reads the ordered CSS filenames; emits versioned <link> tags.
  * Dependencies: includes/functions.php for base_url() and e().

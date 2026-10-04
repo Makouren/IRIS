@@ -1,3 +1,6 @@
+/**
+ * Purpose: Scanner interface module for admin portal; loaded by the Scanner application.
+ */
 import { $, all } from '../utils/helpers.js';
 
 export function initAdminPortal(ctx) {

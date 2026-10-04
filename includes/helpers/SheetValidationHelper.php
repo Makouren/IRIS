@@ -1,4 +1,8 @@
 <?php
+/**
+ * Purpose: Shared PHP helper for sheet validation helper operations used by application workflows.
+ */
+
 declare(strict_types=1);
 
 require_once __DIR__ . '/../config/upload_limits.php';

@@ -1,3 +1,6 @@
+/**
+ * Purpose: Shared Scanner styles for tokens; loaded through the versioned asset bundle.
+ */
 :root {
   --dashboard-container-max: 1808px;
   --dashboard-container-gutter: clamp(16px, 4vw, 64px);

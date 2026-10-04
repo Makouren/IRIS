@@ -1,3 +1,6 @@
+/**
+ * Purpose: Admin browser behavior for ranking body manager; loaded by the related admin page.
+ */
 (() => {
   const modal = document.getElementById('rankingBodyManagerModal');
   const list = document.getElementById('rankingBodyManagerList');

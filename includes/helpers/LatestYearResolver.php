@@ -1,4 +1,8 @@
 <?php
+/**
+ * Purpose: Shared PHP helper for latest year resolver operations used by application workflows.
+ */
+
 declare(strict_types=1);
 
 final class LatestYearResolver

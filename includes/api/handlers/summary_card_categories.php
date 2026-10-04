@@ -1,4 +1,8 @@
 <?php
+/**
+ * Purpose: API handler for summary card categories operations; dispatched through the shared API router.
+ */
+
 
         if ($_SERVER['REQUEST_METHOD'] === 'GET') {
             if ($action === 'public-default') {

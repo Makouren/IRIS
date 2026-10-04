@@ -1,4 +1,8 @@
 <?php
+/**
+ * Purpose: Admin page for dashboard; uses the shared admin layout and server-side access checks.
+ */
+
 $activeNav = 'ingestion';
 $pageTitle = 'File Ingestion & Overview - IRIS Admin';
 require_once __DIR__.'/includes/header.php';

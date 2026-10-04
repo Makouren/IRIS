@@ -1,3 +1,6 @@
+/**
+ * Purpose: Scanner browser logic for helpers; loaded by the Scanner page.
+ */
 export const $ = (id) => document.getElementById(id);
 export const all = (selector) => Array.from(document.querySelectorAll(selector));
 

@@ -1,3 +1,4 @@
+-- Purpose: Applies the dated schema or data change identified by this migration filename; review the target database before running it.
 CREATE TABLE IF NOT EXISTS field_colors (
     id INT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
     field_key VARCHAR(191) NOT NULL,

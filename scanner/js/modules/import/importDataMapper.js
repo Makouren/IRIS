@@ -1,3 +1,6 @@
+/**
+ * Purpose: Scanner import module for import data mapper; supports the browser-side import workflow.
+ */
 export function normalizeHeader(value) {
   return String(value ?? '').trim().toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
 }

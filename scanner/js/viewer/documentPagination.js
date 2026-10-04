@@ -1,5 +1,5 @@
 /**
- * Purpose: Paginate extracted document text into bounded, paragraph-aware pages.
+ * Purpose: Scanner browser logic for document pagination; loaded by the Scanner page.
  * Loaded by: scanner/index.php before document viewer modules; required by Node tests.
  * Inputs/outputs: Accepts text and a word limit; exports DocumentPagination in browser/CommonJS.
  * Dependencies: None.

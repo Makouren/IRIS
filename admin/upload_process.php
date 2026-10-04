@@ -1,4 +1,8 @@
 <?php
+/**
+ * Purpose: Admin page for upload process; uses the shared admin layout and server-side access checks.
+ */
+
 ini_set('display_errors', '0');
 ini_set('html_errors', '0');
 try {

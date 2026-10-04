@@ -1,3 +1,6 @@
+/**
+ * Purpose: Admin browser behavior for summary card history; loaded by the related admin page.
+ */
 (() => {
   const modal = document.getElementById('summaryCardHistoryModal');
   if (!modal) return;

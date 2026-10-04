@@ -1,4 +1,8 @@
 <?php
+/**
+ * Purpose: Admin page for upload source; uses the shared admin layout and server-side access checks.
+ */
+
 require_once __DIR__ . '/../includes/functions.php';
 requireRole(['super_admin']);
 

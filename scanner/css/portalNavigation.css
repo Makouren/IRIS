@@ -1,3 +1,6 @@
+/**
+ * Purpose: Shared Scanner styles for portal navigation; loaded through the versioned asset bundle.
+ */
 .portal-nav {
   position: sticky;
   top: 0;
@@ -58,6 +61,16 @@ html:not(.dark) .portal-nav.admin-nav .admin-profile-btn:hover {
   border-color: rgba(255, 255, 255, .3);
   background: rgba(255, 255, 255, .2);
   color: #fff;
+}
+
+html:not(.dark) .portal-nav.admin-nav .portal-nav-toggle {
+  border-color: rgba(255, 255, 255, .45);
+  background: #174d2a;
+  color: #fff;
+}
+
+html:not(.dark) .portal-nav.admin-nav .portal-nav-toggle:hover {
+  background: #123d21;
 }
 
 .portal-nav-inner {
@@ -157,6 +170,10 @@ html:not(.dark) .portal-nav.admin-nav .admin-profile-btn:hover {
   display: flex;
   align-items: center;
   gap: var(--space-2, .5rem);
+}
+
+.portal-nav-theme-label {
+  display: none;
 }
 
 .portal-nav-profile {
@@ -305,6 +322,8 @@ html:not(.dark) .portal-nav.admin-nav .admin-profile-btn:hover {
     width: min(23rem, calc(100vw - 2 * var(--dashboard-container-gutter, clamp(12px, 4vw, 64px))));
     max-height: min(36rem, calc(100dvh - 5rem));
     overflow-y: auto;
+    overscroll-behavior: contain;
+    -webkit-overflow-scrolling: touch;
     flex-direction: column;
     align-items: stretch;
     justify-content: flex-start;
@@ -342,6 +361,13 @@ html:not(.dark) .portal-nav.admin-nav .admin-profile-btn:hover {
     text-align: left;
   }
 
+  html:not(.dark) .portal-nav.admin-nav .portal-nav-menu .admin-nav-link,
+  html:not(.dark) .portal-nav.admin-nav .portal-nav-menu .admin-theme-btn {
+    border-color: transparent !important;
+    background: transparent !important;
+    color: var(--text-main, #1f2a24) !important;
+  }
+
   .portal-nav-menu .admin-nav-link span,
   .portal-nav-menu .nav-btn span {
     display: inline !important;
@@ -349,6 +375,12 @@ html:not(.dark) .portal-nav.admin-nav .admin-profile-btn:hover {
 
   .portal-nav-menu .admin-nav-link:hover,
   .portal-nav-menu .nav-btn:hover {
+    background: var(--bg-highlight, #eef6f0) !important;
+    color: var(--text-brand, #1e6031) !important;
+  }
+
+  html:not(.dark) .portal-nav.admin-nav .portal-nav-menu .admin-nav-link:hover,
+  html:not(.dark) .portal-nav.admin-nav .portal-nav-menu .admin-theme-btn:hover {
     background: var(--bg-highlight, #eef6f0) !important;
     color: var(--text-brand, #1e6031) !important;
   }
@@ -361,6 +393,12 @@ html:not(.dark) .portal-nav.admin-nav .admin-profile-btn:hover {
     border: 0 !important;
     background: transparent !important;
     color: var(--text-main, #1f2a24) !important;
+  }
+
+  .portal-nav-menu .portal-nav-theme-label {
+    display: inline;
+    font-size: .8rem;
+    font-weight: 600;
   }
 
   .portal-nav-profile {

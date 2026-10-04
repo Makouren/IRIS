@@ -1,4 +1,8 @@
 <?php
+/**
+ * Purpose: Admin page for smart upload confirm; uses the shared admin layout and server-side access checks.
+ */
+
 require_once __DIR__ . '/../includes/functions.php';
 require_admin();
 if (!ALLOW_SUPER_ADMIN_UPLOAD) flash_redirect('admin/review_editor.php', 'error', 'File uploads are handled by office accounts.');

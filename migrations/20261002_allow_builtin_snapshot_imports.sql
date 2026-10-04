@@ -1,3 +1,4 @@
+-- Purpose: Applies the dated schema or data change identified by this migration filename; review the target database before running it.
 USE iris_db;
 
 SET @drop_import_batch_template_fk = (

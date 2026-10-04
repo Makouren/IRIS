@@ -1,3 +1,6 @@
+/**
+ * Purpose: Scanner interface module for chart engine; loaded by the Scanner application.
+ */
 import '../charts/chartColors.js?v=iris-chart-builder-20261001';
 const { DEFAULT_CHART_COLORS, resolveFieldColors } = globalThis.IRISChartColors;
 

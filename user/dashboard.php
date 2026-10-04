@@ -1,4 +1,8 @@
 <?php
+/**
+ * Purpose: User-facing Observatory behavior for dashboard.
+ */
+
 require_once __DIR__.'/../includes/functions.php';
 requireRole(['super_admin', 'admin', 'user']);
 $fieldColors = [];
@@ -110,86 +114,90 @@ try {
             <div class="flex items-center p-4 text-red-800 rounded-xl bg-red-50 dark:bg-gray-800 dark:text-red-400 border border-red-200 dark:border-red-800" role="alert"><i class="fa-solid fa-circle-exclamation text-lg mr-3"></i><div class="text-sm font-medium"><?= htmlspecialchars(flash('error')) ?></div></div>
         <?php endif; ?>
 
-        <section id="summary-card-section" class="space-y-4 rounded-2xl border border-gray-200 bg-white/70 p-4 shadow-sm dark:border-gray-700 dark:bg-gray-800/50 sm:p-5">
-            <div class="flex flex-col sm:flex-row sm:items-end justify-between gap-3">
-                <div>
-                    <h2 class="text-xl font-bold text-gray-900 dark:text-white flex items-center">
-                        <i class="fa-solid fa-chart-simple text-amber-500 mr-2"></i> Latest Performance Snapshot
-                    </h2>
+        <section id="summary-card-section" class="scanner-public-scroll-container space-y-4 rounded-2xl border border-gray-200 bg-white/70 p-4 shadow-sm dark:border-gray-700 dark:bg-gray-800/50 sm:p-5">
+            <div class="scanner-public-scroll-header">
+                <div class="flex flex-col sm:flex-row sm:items-end justify-between gap-3">
+                    <div>
+                        <h2 class="text-xl font-bold text-gray-900 dark:text-white flex items-center">
+                            <i class="fa-solid fa-chart-simple text-amber-500 mr-2"></i> Latest Performance Snapshot
+                        </h2>
+                    </div>
                 </div>
-            </div>
 
-            <div id="summaryCardCategoryFilter" class="hidden -mx-4 px-4 sm:mx-0 sm:px-0 overflow-x-auto" aria-label="Filter summary cards by category">
-                <div id="summaryCardCategoryChips" class="flex w-max min-w-full items-center gap-2 pb-1" role="group" aria-label="Summary card categories"></div>
+                <div id="summaryCardCategoryFilter" class="hidden -mx-4 px-4 sm:mx-0 sm:px-0 overflow-x-auto" aria-label="Filter summary cards by category">
+                    <div id="summaryCardCategoryChips" class="flex w-max min-w-full items-center gap-2 pb-1" role="group" aria-label="Summary card categories"></div>
+                </div>
             </div>
             <div id="summaryCardsGrid" class="summary-card-grid"></div>
         </section>
 
-        <section id="ranking-history" class="space-y-4 rounded-2xl border border-gray-200 bg-white/70 p-4 shadow-sm dark:border-gray-700 dark:bg-gray-800/50 sm:p-5">
-            <div>
+        <section id="ranking-history" class="scanner-public-scroll-container space-y-4 rounded-2xl border border-gray-200 bg-white/70 p-4 shadow-sm dark:border-gray-700 dark:bg-gray-800/50 sm:p-5">
+            <div class="scanner-public-scroll-header">
                 <div>
                     <h2 class="text-xl font-bold text-gray-900 dark:text-white flex items-center">
                         <i class="fa-solid fa-ranking-star text-amber-500 mr-2"></i> Ranking History
                     </h2>
                     <p class="text-xs text-gray-500 dark:text-gray-400">Compare institutional rankings across available years.</p>
                 </div>
-            </div>
-            <div class="relative flex flex-wrap items-center justify-start gap-2 text-sm font-semibold text-gray-700 dark:text-gray-200" aria-label="Ranking History controls">
-                <label class="flex items-center gap-1.5">View
-                    <select id="rankingDisplayMode" class="rounded-xl border border-gray-300 bg-white px-3 py-2 text-sm dark:border-gray-600 dark:bg-gray-900">
-                        <option value="charts">Charts</option>
-                        <option value="matrix">Ranking Trend Matrix</option>
-                    </select>
-                </label>
-                <label id="rankingGraphLayoutControl" class="flex items-center gap-1.5">Graph layout
-                    <select id="rankingGraphLayout" class="rounded-xl border border-gray-300 bg-white px-3 py-2 text-sm dark:border-gray-600 dark:bg-gray-900">
-                        <option value="one-per-row">One per row</option>
-                        <option value="side-by-side">Side by side</option>
-                    </select>
-                </label>
-                <button id="rankingResetDefaults" type="button" class="rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm font-semibold text-gray-700 transition hover:border-green-700 hover:bg-green-50 dark:border-gray-600 dark:bg-gray-900 dark:text-gray-200 dark:hover:bg-gray-800">Reset to default</button>
-                <details id="rankingFiltersControl" class="group">
-                    <summary class="flex cursor-pointer list-none items-center gap-2 rounded-xl border border-gray-300 bg-white px-3 py-2 text-sm dark:border-gray-600 dark:bg-gray-900">
-                        Filters <i class="fa-solid fa-chevron-down text-xs transition-transform group-open:rotate-180" aria-hidden="true"></i>
-                    </summary>
-                    <div id="rankingFiltersPopover" class="fixed z-[100] grid max-h-[min(75vh,560px)] w-[min(92vw,760px)] grid-cols-1 gap-3 overflow-y-auto rounded-xl border border-gray-200 bg-white p-4 text-sm shadow-xl dark:border-gray-700 dark:bg-gray-900 sm:grid-cols-2 lg:grid-cols-3" aria-label="Filter Ranking History">
-                    <label class="flex min-w-0 flex-col items-start gap-1">Organization
-                        <select id="rankingOrganizationFilter" class="w-full min-w-0 rounded-xl border border-gray-300 bg-white px-3 py-2 text-sm dark:border-gray-600 dark:bg-gray-900"><option value="all">All organizations</option></select>
+                <div class="relative flex flex-wrap items-center justify-start gap-2 text-sm font-semibold text-gray-700 dark:text-gray-200" aria-label="Ranking History controls">
+                    <label class="flex items-center gap-1.5">View
+                        <select id="rankingDisplayMode" class="rounded-xl border border-gray-300 bg-white px-3 py-2 text-sm dark:border-gray-600 dark:bg-gray-900">
+                            <option value="charts">Charts</option>
+                            <option value="matrix">Ranking Trend Matrix</option>
+                        </select>
                     </label>
-                    <label id="rankingListControl" class="hidden min-w-0 flex-col items-start gap-1">List
-                        <select id="rankingListFilter" class="w-full min-w-0 rounded-xl border border-gray-300 bg-white px-3 py-2 text-sm dark:border-gray-600 dark:bg-gray-900"><option value="all">All lists</option></select>
+                    <label id="rankingGraphLayoutControl" class="flex items-center gap-1.5">Graph layout
+                        <select id="rankingGraphLayout" class="rounded-xl border border-gray-300 bg-white px-3 py-2 text-sm dark:border-gray-600 dark:bg-gray-900">
+                            <option value="one-per-row">One per row</option>
+                            <option value="side-by-side">Side by side</option>
+                        </select>
                     </label>
-                    <button id="rankingAllYears" type="button" class="w-auto justify-self-start self-center rounded-lg border border-green-800 bg-green-800 px-3 py-2 text-white dark:border-amber-500 dark:bg-amber-500 dark:text-gray-950" aria-pressed="true">All years</button>
-                    <details id="rankingYearRangeControl" class="group min-w-0 sm:col-span-2 lg:col-span-3">
+                    <button id="rankingResetDefaults" type="button" class="rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm font-semibold text-gray-700 transition hover:border-green-700 hover:bg-green-50 dark:border-gray-600 dark:bg-gray-900 dark:text-gray-200 dark:hover:bg-gray-800">Reset to default</button>
+                    <details id="rankingFiltersControl" class="group">
                         <summary class="flex cursor-pointer list-none items-center gap-2 rounded-xl border border-gray-300 bg-white px-3 py-2 text-sm dark:border-gray-600 dark:bg-gray-900">
-                            Year range <i class="fa-solid fa-chevron-down text-xs transition-transform group-open:rotate-180" aria-hidden="true"></i>
+                            Filters <i class="fa-solid fa-chevron-down text-xs transition-transform group-open:rotate-180" aria-hidden="true"></i>
                         </summary>
-                        <div class="mt-2 grid grid-cols-1 gap-3 rounded-xl border border-gray-200 bg-white p-3 text-sm shadow-sm dark:border-gray-700 dark:bg-gray-900 sm:grid-cols-2">
-                            <label class="flex min-w-0 flex-col items-start gap-1">From
-                                <select id="rankingYearFrom" class="w-full min-w-0 rounded-xl border border-gray-300 bg-white px-3 py-2 text-sm dark:border-gray-600 dark:bg-gray-900" disabled><option>Loading...</option></select>
-                            </label>
-                            <label class="flex min-w-0 flex-col items-start gap-1">To
-                                <select id="rankingYearTo" class="w-full min-w-0 rounded-xl border border-gray-300 bg-white px-3 py-2 text-sm dark:border-gray-600 dark:bg-gray-900" disabled><option>Loading...</option></select>
-                            </label>
-                        </div>
+                            <div id="rankingFiltersPopover" class="fixed z-[100] grid max-h-[min(75vh,560px)] w-[min(92vw,760px)] grid-cols-1 gap-3 overflow-y-auto rounded-xl border border-gray-200 bg-white p-4 text-sm shadow-xl dark:border-gray-700 dark:bg-gray-900 sm:grid-cols-2 lg:grid-cols-3" aria-label="Filter Ranking History">
+                                <label class="flex min-w-0 flex-col items-start gap-1">Organization
+                                    <select id="rankingOrganizationFilter" class="w-full min-w-0 rounded-xl border border-gray-300 bg-white px-3 py-2 text-sm dark:border-gray-600 dark:bg-gray-900"><option value="all">All organizations</option></select>
+                                </label>
+                                <label id="rankingListControl" class="hidden min-w-0 flex-col items-start gap-1">List
+                                    <select id="rankingListFilter" class="w-full min-w-0 rounded-xl border border-gray-300 bg-white px-3 py-2 text-sm dark:border-gray-600 dark:bg-gray-900"><option value="all">All lists</option></select>
+                                </label>
+                                <button id="rankingAllYears" type="button" class="w-auto justify-self-start self-center rounded-lg border border-green-800 bg-green-800 px-3 py-2 text-white dark:border-amber-500 dark:bg-amber-500 dark:text-gray-950" aria-pressed="true">All years</button>
+                                <details id="rankingYearRangeControl" class="group min-w-0 sm:col-span-2 lg:col-span-3">
+                                    <summary class="flex cursor-pointer list-none items-center gap-2 rounded-xl border border-gray-300 bg-white px-3 py-2 text-sm dark:border-gray-600 dark:bg-gray-900">
+                                        Year range <i class="fa-solid fa-chevron-down text-xs transition-transform group-open:rotate-180" aria-hidden="true"></i>
+                                    </summary>
+                                    <div class="mt-2 grid grid-cols-1 gap-3 rounded-xl border border-gray-200 bg-white p-3 text-sm shadow-sm dark:border-gray-700 dark:bg-gray-900 sm:grid-cols-2">
+                                        <label class="flex min-w-0 flex-col items-start gap-1">From
+                                            <select id="rankingYearFrom" class="w-full min-w-0 rounded-xl border border-gray-300 bg-white px-3 py-2 text-sm dark:border-gray-600 dark:bg-gray-900" disabled><option>Loading...</option></select>
+                                        </label>
+                                        <label class="flex min-w-0 flex-col items-start gap-1">To
+                                            <select id="rankingYearTo" class="w-full min-w-0 rounded-xl border border-gray-300 bg-white px-3 py-2 text-sm dark:border-gray-600 dark:bg-gray-900" disabled><option>Loading...</option></select>
+                                        </label>
+                                    </div>
+                                </details>
+                            </div>
                     </details>
-                    </div>
-                </details>
+                </div>
             </div>
             <div id="rankingChart" class="grid min-h-64 w-full grid-cols-1 gap-4 xl:grid-cols-2"></div>
         </section>
 
-        <section id="star-rating-cards-section" class="hidden space-y-4 rounded-2xl border border-gray-200 bg-white/70 p-4 shadow-sm dark:border-gray-700 dark:bg-gray-800/50 sm:p-5">
-            <div class="flex flex-col sm:flex-row sm:items-end justify-between gap-3">
-                <div>
-                    <h2 class="text-xl font-bold text-gray-900 dark:text-white flex items-center">
-                        <i class="fa-solid fa-star text-amber-500 mr-2" aria-hidden="true"></i> University Star Ratings
-                    </h2>
-                    <p class="text-xs text-gray-500 dark:text-gray-400">Published institutional star ratings</p>
+        <section id="star-rating-cards-section" class="scanner-public-scroll-container hidden space-y-4 rounded-2xl border border-gray-200 bg-white/70 p-4 shadow-sm dark:border-gray-700 dark:bg-gray-800/50 sm:p-5">
+            <div class="scanner-public-scroll-header">
+                <div class="flex flex-col sm:flex-row sm:items-end justify-between gap-3">
+                    <div>
+                        <h2 class="text-xl font-bold text-gray-900 dark:text-white flex items-center">
+                            <i class="fa-solid fa-star text-amber-500 mr-2" aria-hidden="true"></i> University Star Ratings
+                        </h2>
+                        <p class="text-xs text-gray-500 dark:text-gray-400">Published institutional star ratings</p>
+                    </div>
                 </div>
-            </div>
-            <div id="star-rating-category-filter" class="hidden -mx-4 overflow-x-auto px-4 sm:mx-0 sm:px-0" aria-label="Filter star rating cards by category">
-                <div id="star-rating-category-chips" class="flex w-max min-w-full items-center gap-2 pb-1" role="group" aria-label="Star rating categories"></div>
+                <div id="star-rating-category-filter" class="hidden -mx-4 overflow-x-auto px-4 sm:mx-0 sm:px-0" aria-label="Filter star rating cards by category">
+                    <div id="star-rating-category-chips" class="flex w-max min-w-full items-center gap-2 pb-1" role="group" aria-label="Star rating categories"></div>
+                </div>
             </div>
             <div id="star-rating-cards-grid" class="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3"></div>
         </section>

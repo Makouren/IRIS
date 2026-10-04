@@ -1,3 +1,6 @@
+/**
+ * Purpose: Scanner interface module for navigation; loaded by the Scanner application.
+ */
 import { $ } from '../utils/helpers.js';
 
 export function initNavigation(ctx) {

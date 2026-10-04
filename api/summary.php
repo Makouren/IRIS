@@ -1,4 +1,8 @@
 <?php
+/**
+ * Purpose: API endpoint for summary operations; serves the corresponding application data or action.
+ */
+
 require_once __DIR__ . '/../includes/functions.php';
 requireRole(['super_admin', 'admin', 'user'], true);
 header('Content-Type: application/json; charset=utf-8');

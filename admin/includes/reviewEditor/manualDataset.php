@@ -1,4 +1,8 @@
 <?php
+/**
+ * Purpose: Review Editor markup partial for the manual dataset section; included by the Review Editor page.
+ */
+
 ?>
 <div id="manualDatasetModal" class="modal-overlay" aria-hidden="true">
         <form id="manualDatasetForm" class="modal-card" role="dialog" aria-modal="true" aria-labelledby="manualDatasetTitle" style="max-width: 520px;">

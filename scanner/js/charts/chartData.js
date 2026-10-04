@@ -1,5 +1,5 @@
 /**
- * Purpose: Prepare and serialize chart rows and saved chart state.
+ * Purpose: Shared chart utility for chart data; used by Scanner chart views and exports.
  * Loaded by: scanner/index.php as a classic script; required by Node tests.
  * Inputs/outputs: Accepts row/chart data; exports ChartData for browser and CommonJS consumers.
  * Dependencies: None.

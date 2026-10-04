@@ -1,3 +1,6 @@
+/**
+ * Purpose: Admin browser behavior for template manager; loaded by the related admin page.
+ */
 (() => {
   const modal = document.getElementById('templateManagerModal');
   const list = document.getElementById('templateManagerList');

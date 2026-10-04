@@ -1,4 +1,8 @@
 <?php
+/**
+ * Purpose: Authentication flow for logout; participates in the PHP session and access-control workflow.
+ */
+
 require_once __DIR__ . '/../includes/functions.php';
 requireRole(['super_admin', 'admin', 'user']);
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {

@@ -1,4 +1,8 @@
 <?php
+/**
+ * Purpose: Admin page for smart upload process; uses the shared admin layout and server-side access checks.
+ */
+
 require_once __DIR__ . '/../includes/functions.php';
 require_once __DIR__ . '/../includes/config/upload_limits.php';
 require_once __DIR__ . '/../includes/upload/extractors.php';

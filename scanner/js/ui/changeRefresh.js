@@ -1,5 +1,5 @@
 /**
- * Purpose: Notify views about persisted data changes and refresh clean views safely.
+ * Purpose: Scanner browser logic for change refresh; loaded by the Scanner page.
  * Loaded by: PHP change-refresh partial on admin, office, and Observatory pages.
  * Inputs/outputs: Reads script data attributes and change-signal responses; updates the page.
  * Dependencies: api/change_signal.php, BroadcastChannel, and page form controls.

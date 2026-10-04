@@ -1,4 +1,8 @@
 <?php
+/**
+ * Purpose: Review Editor markup partial for the record edit section; included by the Review Editor page.
+ */
+
 ?>
 <div id="recordEditModal" class="modal-overlay">
         <div class="modal-card">

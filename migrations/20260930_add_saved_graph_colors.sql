@@ -1,3 +1,4 @@
+-- Purpose: Applies the dated schema or data change identified by this migration filename; review the target database before running it.
 SET @saved_graph_colors_column_exists := (
     SELECT COUNT(*)
     FROM INFORMATION_SCHEMA.COLUMNS

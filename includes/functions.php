@@ -1,4 +1,8 @@
 <?php
+/**
+ * Purpose: Shared PHP application functions for authentication, requests, and common page behavior.
+ */
+
 require_once __DIR__.'/../config/db.php';
 session_start();
 const REQUIRE_LOGIN_FOR_PUBLIC = true;

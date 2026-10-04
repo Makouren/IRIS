@@ -1,3 +1,6 @@
+/**
+ * Purpose: Review Editor browser logic for summary cards; loaded by the Review Editor page.
+ */
         (function () {
             const summaryCardApi = window.IRIS_REVIEW_EDITOR_CONFIG.irisApiUrl + '?resource=summary_cards';
             const categoryApi = window.IRIS_REVIEW_EDITOR_CONFIG.irisApiUrl + '?resource=summary_card_categories';
@@ -25,6 +28,7 @@
             let cards = [];
             let categories = [];
             let publicDefaultCategorySlug = '';
+            const summaryCategoryOpenState = new Map();
             const escapeHtml = value => String(value ?? '').replace(/[&<>"']/g, character => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[character]));
             const normalizeSearchText = value => String(value ?? '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLocaleLowerCase();
             const searchValues = value => {
@@ -85,10 +89,18 @@
                 });
             }
 
+            function summaryCardId(card) {
+                return String(card.id ?? card.card_id ?? '');
+            }
+
+            function isSummaryCardPublished(card) {
+                return card.is_published === true || card.is_published === 1 || card.is_published === '1';
+            }
+
             function renderPublicDefaultCategory() {
                 if (!publicDefaultCategory) return;
                 const publishedCategoryIds = new Set(cards
-                    .filter(card => card.is_published === true || card.is_published === 1 || card.is_published === '1')
+                    .filter(isSummaryCardPublished)
                     .flatMap(card => card.category_ids || (card.category_id ? [card.category_id] : []))
                     .map(String));
                 publicDefaultCategory.replaceChildren(
@@ -169,9 +181,12 @@
             }
 
             function renderCards() {
+                editorList.querySelectorAll('[data-summary-category-group]').forEach(group => {
+                    summaryCategoryOpenState.set(group.dataset.summaryCategoryGroup, group.open);
+                });
                 const selectedCategory = categoryFilter.value || 'all';
                 const searchTerms = normalizeSearchText(cardSearch.value).trim().split(/\s+/).filter(Boolean);
-                const draftCards = cards.filter(card => !card.is_published);
+                const draftCards = cards.filter(card => !isSummaryCardPublished(card));
                 const publishAllButton = document.getElementById('publishAllSummaryCards');
                 const publishAllCount = document.getElementById('publishAllSummaryCardsCount');
                 if (publishAllButton) {
@@ -181,7 +196,7 @@
                 if (publishAllCount) publishAllCount.textContent = String(draftCards.length);
                 if (publishAllButton) {
                     publishAllButton.onclick = async () => {
-                        const draftCards = cards.filter(card => !card.is_published);
+                        const draftCards = cards.filter(card => !isSummaryCardPublished(card));
                         if (!draftCards.length || publishAllButton.disabled) return;
                         if (!confirm(`Publish all ${draftCards.length} draft Summary Card(s)?`)) return;
                         publishAllButton.disabled = true;
@@ -191,7 +206,7 @@
                         try {
                             for (const card of draftCards) {
                                 try {
-                                    const response = await fetch(summaryCardApi + '&id=' + encodeURIComponent(card.id), {
+                                    const response = await fetch(summaryCardApi + '&id=' + encodeURIComponent(summaryCardId(card)), {
                                         method: 'PUT',
                                         headers: mutationHeaders(),
                                         body: JSON.stringify({ is_published: true })
@@ -233,36 +248,87 @@
                         if (button) { button.style.display = 'none'; button.disabled = true; }
                     });
                     if (selectAllSummary) selectAllSummary.checked = false;
+                    if (selectAllSummaryLabel) selectAllSummaryLabel.style.display = 'none';
                     return;
                 }
-                editorList.innerHTML = visibleCards
-                    .slice()
-                    .sort((a, b) => Number(a.display_order || 0) - Number(b.display_order || 0))
-                    .map(card => `
-                        <div class="rounded-xl border border-gray-200 bg-gray-50 p-3">
-                            <div class="flex items-start gap-3">
-                                <input type="checkbox" class="bulk-delete-summary-checkbox mt-1 cursor-pointer" data-id="${escapeHtml(card.id)}" aria-label="Select summary card" style="width:1rem;height:1rem;">
-                                <div class="flex-1">
-                                    <div class="flex items-center justify-between gap-3">
+                const categoryById = new Map(categories.map(category => [String(category.id), category]));
+                const categoryGroups = new Map();
+                visibleCards.forEach(card => {
+                    const categoryIds = [...new Set((card.category_ids || (card.category_id ? [card.category_id] : [])).map(String))];
+                    const memberships = selectedCategory !== 'all'
+                        ? [selectedCategory === 'uncategorized'
+                            ? { id: 'uncategorized', name: 'Uncategorized' }
+                            : categoryById.get(selectedCategory) || { id: selectedCategory, name: card.category_name || 'Uncategorized' }]
+                        : categoryIds.map(id => categoryById.get(id)).filter(Boolean);
+                    if (!memberships.length) {
+                        memberships.push({
+                            id: 'uncategorized',
+                            name: card.category_name || 'Uncategorized'
+                        });
+                    }
+                    memberships.forEach(category => {
+                        const key = String(category.id);
+                        if (!categoryGroups.has(key)) categoryGroups.set(key, { category, cards: [] });
+                        categoryGroups.get(key).cards.push(card);
+                    });
+                });
+                const groupOrder = selectedCategory === 'all'
+                    ? categories.map(category => String(category.id)).concat(['uncategorized'])
+                    : [selectedCategory];
+                const sortedGroups = [...categoryGroups.entries()].sort(([idA], [idB]) => {
+                    const orderA = groupOrder.indexOf(idA);
+                    const orderB = groupOrder.indexOf(idB);
+                    return (orderA < 0 ? Number.MAX_SAFE_INTEGER : orderA) - (orderB < 0 ? Number.MAX_SAFE_INTEGER : orderB)
+                        || categoryGroups.get(idA).category.name.localeCompare(categoryGroups.get(idB).category.name);
+                });
+                const renderCard = card => {
+                    const id = summaryCardId(card);
+                    const published = isSummaryCardPublished(card);
+                    const categoryNames = (card.category_ids || (card.category_id ? [card.category_id] : []))
+                        .map(categoryId => categoryById.get(String(categoryId))?.name)
+                        .filter(Boolean);
+                    return `
+                        <div class="summary-card-editor-item">
+                            <div class="summary-card-editor-item-content">
+                                <input type="checkbox" class="bulk-delete-summary-checkbox mt-1 cursor-pointer" data-id="${escapeHtml(id)}" aria-label="Select ${escapeHtml(card.title || 'Summary Card')}" style="width:1rem;height:1rem;">
+                                <div class="summary-card-editor-item-details">
+                                    <div class="summary-card-editor-item-heading">
                                         <div>
                                             <div class="font-bold text-sm text-slate-900">${escapeHtml(card.title || 'Summary Card')}</div>
                                             <div class="text-xs text-slate-500">Global Label: ${escapeHtml(card.import_key || '')}</div>
                                             <div class="text-xs text-slate-500">${escapeHtml(card.main_value || '')} · ${escapeHtml(card.main_label || '')}</div>
                                             <div class="mt-1 text-xs text-slate-500">Public: ${escapeHtml(card.current_public_period || 'None')} · Latest imported: ${escapeHtml(card.latest_imported_period || 'None')} · Periods: ${Number(card.history_count || 0)}</div>
-                                            <span class="inline-flex items-center rounded-full bg-emerald-50 text-emerald-800 px-2 py-0.5 mt-1 text-[10px] font-semibold">${escapeHtml(card.category_name || 'Uncategorized')}</span>
+                                            ${categoryNames.length ? `<div class="summary-card-editor-category-badges">${categoryNames.map(name => `<span>${escapeHtml(name)}</span>`).join('')}</div>` : ''}
                                         </div>
-                                        <span class="inline-flex items-center rounded-full px-2 py-1 text-[10px] font-bold uppercase tracking-wide ${card.is_published ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-200 text-slate-700'}">${card.is_published ? 'Published' : 'Draft'}</span>
+                                        <span class="inline-flex items-center rounded-full px-2 py-1 text-[10px] font-bold uppercase tracking-wide ${published ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-200 text-slate-700'}">${published ? 'Published' : 'Draft'}</span>
                                     </div>
                                     <div class="flex gap-2 mt-3">
-                                        <button type="button" class="summary-card-editor-edit btn-studio-action" data-id="${escapeHtml(card.id)}">Edit</button>
-                                        <button type="button" class="btn-studio-action" data-summary-history-open data-id="${escapeHtml(card.id)}">History</button>
-                                        <button type="button" class="summary-card-editor-toggle btn-studio-action" data-id="${escapeHtml(card.id)}" data-published="${card.is_published ? '1' : '0'}">${card.is_published ? 'Unpublish' : 'Publish'}</button>
-                                        <button type="button" class="summary-card-editor-delete archive-delete-button" data-id="${escapeHtml(card.id)}">Delete</button>
+                                        <button type="button" class="summary-card-editor-edit btn-studio-action" data-id="${escapeHtml(id)}">Edit</button>
+                                        <button type="button" class="btn-studio-action" data-summary-history-open data-id="${escapeHtml(id)}">History</button>
+                                        <button type="button" class="summary-card-editor-toggle btn-studio-action" data-id="${escapeHtml(id)}" data-published="${published ? '1' : '0'}">${published ? 'Unpublish' : 'Publish'}</button>
+                                        <button type="button" class="summary-card-editor-delete archive-delete-button" data-id="${escapeHtml(id)}">Delete</button>
                                     </div>
                                 </div>
                             </div>
                         </div>
-                    `).join('');
+                    `;
+                };
+                editorList.innerHTML = sortedGroups.map(([, group]) => `
+                    <details class="summary-card-category-group" data-summary-category-group="${escapeHtml(group.category.id)}" ${summaryCategoryOpenState.get(String(group.category.id)) ?? true ? 'open' : ''}>
+                        <summary class="summary-card-category-heading">
+                            <span>${escapeHtml(group.category.name)}</span>
+                            <span>${group.cards.length} ${group.cards.length === 1 ? 'card' : 'cards'}</span>
+                        </summary>
+                        <div class="summary-card-category-items">
+                            ${group.cards.slice().sort((a, b) => Number(a.display_order || 0) - Number(b.display_order || 0)).map(renderCard).join('')}
+                        </div>
+                    </details>
+                `).join('');
+                editorList.querySelectorAll('[data-summary-category-group]').forEach(group => {
+                    group.addEventListener('toggle', () => {
+                        summaryCategoryOpenState.set(group.dataset.summaryCategoryGroup, group.open);
+                    });
+                });
 
                 // Bulk delete wiring
 
@@ -278,19 +344,15 @@
                     const currentUnpublishCount = document.getElementById('bulkUnpublishSummaryCardsCount');
                     const allCbs = Array.from(editorList.querySelectorAll('.bulk-delete-summary-checkbox'));
                     const selected = allCbs.filter(cb => cb.checked);
-                    const selectedDrafts = selected.filter(cb => {
-                        const card = cards.find(item => item.id === cb.dataset.id);
-                        return card && !card.is_published;
-                    });
-                    const selectedPublished = selected.filter(cb => {
-                        const card = cards.find(item => item.id === cb.dataset.id);
-                        return card && card.is_published;
-                    });
+                    const selectedIds = new Set(selected.map(cb => cb.dataset.id));
+                    const selectedCards = cards.filter(card => selectedIds.has(summaryCardId(card)));
+                    const selectedDrafts = selectedCards.filter(card => !isSummaryCardPublished(card));
+                    const selectedPublished = selectedCards.filter(isSummaryCardPublished);
                     if (currentBulkBtn) {
-                        currentBulkBtn.style.display = selected.length > 0 ? 'inline-block' : 'none';
-                        currentBulkBtn.disabled = selected.length === 0;
+                        currentBulkBtn.style.display = selectedIds.size > 0 ? 'inline-block' : 'none';
+                        currentBulkBtn.disabled = selectedIds.size === 0;
                     }
-                    if (currentBulkCount) currentBulkCount.textContent = selected.length;
+                    if (currentBulkCount) currentBulkCount.textContent = String(selectedIds.size);
                     if (currentPublishBtn) {
                         currentPublishBtn.style.display = selectedDrafts.length > 0 ? 'inline-block' : 'none';
                         currentPublishBtn.disabled = selectedDrafts.length === 0;
@@ -301,10 +363,18 @@
                         currentUnpublishBtn.disabled = selectedPublished.length === 0;
                     }
                     if (currentUnpublishCount) currentUnpublishCount.textContent = selectedPublished.length;
-                    if (selectAllSummary) selectAllSummary.checked = allCbs.length > 0 && selected.length === allCbs.length;
+                    if (selectAllSummary) {
+                        const allIds = new Set(allCbs.map(cb => cb.dataset.id));
+                        selectAllSummary.checked = allIds.size > 0 && selectedIds.size === allIds.size;
+                    }
                 };
 
-                editorList.querySelectorAll('.bulk-delete-summary-checkbox').forEach(cb => cb.addEventListener('change', updateBulkBtn));
+                editorList.querySelectorAll('.bulk-delete-summary-checkbox').forEach(cb => cb.addEventListener('change', () => {
+                    editorList.querySelectorAll('.bulk-delete-summary-checkbox').forEach(duplicate => {
+                        if (duplicate.dataset.id === cb.dataset.id) duplicate.checked = cb.checked;
+                    });
+                    updateBulkBtn();
+                }));
 
                 if (selectAllSummary) {
                     selectAllSummary.onchange = () => {
@@ -318,7 +388,7 @@
                     const newBulkBtn = bulkBtn.cloneNode(true);
                     bulkBtn.parentNode.replaceChild(newBulkBtn, bulkBtn);
                     newBulkBtn.addEventListener('click', async () => {
-                        const selectedIds = Array.from(editorList.querySelectorAll('.bulk-delete-summary-checkbox:checked')).map(cb => cb.dataset.id);
+                        const selectedIds = [...new Set(Array.from(editorList.querySelectorAll('.bulk-delete-summary-checkbox:checked')).map(cb => cb.dataset.id))];
                         if (!selectedIds.length || newBulkBtn.disabled) return;
                         if (!confirm(`Delete ${selectedIds.length} selected summary card(s)?`)) return;
                         newBulkBtn.disabled = true;
@@ -347,7 +417,7 @@
                     publishBtn.parentNode.replaceChild(newPublishBtn, publishBtn);
                     newPublishBtn.addEventListener('click', async () => {
                         const selectedIds = new Set(Array.from(editorList.querySelectorAll('.bulk-delete-summary-checkbox:checked')).map(cb => cb.dataset.id));
-                        const selectedDrafts = cards.filter(card => selectedIds.has(card.id) && !card.is_published);
+                        const selectedDrafts = cards.filter(card => selectedIds.has(summaryCardId(card)) && !isSummaryCardPublished(card));
                         if (!selectedDrafts.length || newPublishBtn.disabled) return;
                         if (!confirm(`Publish ${selectedDrafts.length} selected Summary Card(s)?`)) return;
                         newPublishBtn.disabled = true;
@@ -357,7 +427,7 @@
                         try {
                             for (const card of selectedDrafts) {
                                 try {
-                                    const response = await fetch(summaryCardApi + '&id=' + encodeURIComponent(card.id), {
+                                    const response = await fetch(summaryCardApi + '&id=' + encodeURIComponent(summaryCardId(card)), {
                                         method: 'PUT',
                                         headers: mutationHeaders(),
                                         body: JSON.stringify({ is_published: true })
@@ -381,7 +451,7 @@
                     unpublishBtn.parentNode.replaceChild(newUnpublishBtn, unpublishBtn);
                     newUnpublishBtn.addEventListener('click', async () => {
                         const selectedIds = new Set(Array.from(editorList.querySelectorAll('.bulk-delete-summary-checkbox:checked')).map(cb => cb.dataset.id));
-                        const selectedPublished = cards.filter(card => selectedIds.has(card.id) && card.is_published);
+                        const selectedPublished = cards.filter(card => selectedIds.has(summaryCardId(card)) && isSummaryCardPublished(card));
                         if (!selectedPublished.length || newUnpublishBtn.disabled) return;
                         if (!confirm(`Unpublish ${selectedPublished.length} selected Summary Card(s)?`)) return;
                         newUnpublishBtn.disabled = true;
@@ -391,7 +461,7 @@
                         try {
                             for (const card of selectedPublished) {
                                 try {
-                                    const response = await fetch(summaryCardApi + '&id=' + encodeURIComponent(card.id), {
+                                    const response = await fetch(summaryCardApi + '&id=' + encodeURIComponent(summaryCardId(card)), {
                                         method: 'PUT',
                                         headers: mutationHeaders(),
                                         body: JSON.stringify({ is_published: false })
@@ -418,7 +488,7 @@
                             managerCategoryStatus.textContent = 'This summary card could not be found. Refresh the list and try again.';
                             return;
                         }
-                        document.getElementById('summaryCardEditorId').value = String(card.id ?? card.card_id ?? '');
+                        document.getElementById('summaryCardEditorId').value = summaryCardId(card);
                         document.getElementById('summaryCardEditorImportKey').value = card.import_key || card.id || card.card_id || '';
                         document.getElementById('summaryCardEditorTitle').value = card.title || '';
                         document.getElementById('summaryCardEditorMainValue').value = card.main_value || '';
@@ -435,7 +505,7 @@
                         newCategoryInput.value = '';
                         newCategoryInput.style.display = 'none';
                         document.getElementById('summaryCardEditorPrecision').value = String(card.display_precision ?? 2);
-                        document.getElementById('summaryCardEditorPublished').checked = !!card.is_published;
+                        document.getElementById('summaryCardEditorPublished').checked = isSummaryCardPublished(card);
                         managerCategoryStatus.textContent = '';
                         showCardForm(true);
                         openEditor();

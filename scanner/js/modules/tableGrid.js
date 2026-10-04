@@ -1,3 +1,6 @@
+/**
+ * Purpose: Scanner interface module for table grid; loaded by the Scanner application.
+ */
 import { $, escapeHtml, parseEditableValue } from '../utils/helpers.js';
 export function initTableGrid(ctx) {
   ctx.api.ensureTableDataStructure = record => {

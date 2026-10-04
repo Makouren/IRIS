@@ -1,3 +1,4 @@
+-- Purpose: Applies the dated schema or data change identified by this migration filename; review the target database before running it.
 USE iris_db;
 
 SET @allow_standalone_import_profiles = (

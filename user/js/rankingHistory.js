@@ -1,3 +1,6 @@
+/**
+ * Purpose: User-facing Observatory behavior for ranking history.
+ */
 (() => {
   const chartHost = document.getElementById('rankingChart');
   const displayModeSelect = document.getElementById('rankingDisplayMode');
@@ -133,6 +136,18 @@
   function seriesColor(name, index) {
     const colors = window.IRISChartColors?.DEFAULT_CHART_COLORS || ['#0F766E', '#D97706', '#2563EB', '#DB2777', '#65A30D', '#0891B2'];
     return colorOverrides[name] || colors[index % colors.length];
+  }
+
+  function rankingChartTitle(organization, rankingType) {
+    const organizationName = String(organization || '').trim();
+    const typeName = String(rankingType || '').trim();
+    if (!organizationName) return typeName || 'Ranking';
+    if (!typeName) return organizationName;
+    const normalizedOrganization = organizationName.toLowerCase();
+    const normalizedType = typeName.toLowerCase();
+    return normalizedType === normalizedOrganization || normalizedType.startsWith(`${normalizedOrganization} `)
+      ? typeName
+      : `${organizationName} ${typeName}`;
   }
 
   function disposeCharts() {
@@ -487,7 +502,7 @@
     chartHost.className = rankingChartGridClass();
     let index = 0;
     for (const family of families.values()) {
-      const title = selectedOrganization() === 'all' ? `${family.organization} ${family.type}` : family.type;
+      const title = selectedOrganization() === 'all' ? rankingChartTitle(family.organization, family.type) : family.type;
       makeChart(title, family.rows, seriesColor(`${family.organization} ${family.type}`, index), index++, chartCount > 1, chartCount === 1);
     }
     for (const [organization, sdgRows] of impact) makeImpactChart(organization, sdgRows, index++, chartCount > 1, chartCount === 1);

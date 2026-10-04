@@ -1,3 +1,6 @@
+/**
+ * Purpose: Observatory dashboard browser logic for main; loaded by the user dashboard.
+ */
         (function () {
             const loader = document.getElementById('page-loader');
             const hideLoader = () => {

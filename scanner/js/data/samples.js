@@ -1,7 +1,7 @@
 /**
  * IRIS AI - 1-Click Institutional Demo Sample Generator
  * Generates IAO International Rankings dataset (Excel XLSX)
- * Purpose: Generate the sample IAO International Rankings XLSX workbook for Scanner demos.
+ * Purpose: Scanner browser logic for samples; loaded by the Scanner page.
  * Loaded by: scanner/index.php as a classic script.
  * Inputs/outputs: No external input; SampleGenerator creates and downloads an XLSX sample.
  * Dependencies: Browser XLSX global.
