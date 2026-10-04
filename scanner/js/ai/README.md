@@ -1,6 +1,6 @@
 # Graph Generation and Chart Data
 
-> Current application release: [V6.7.0](../../../README_V6.7.0.md).
+> Current application release: [V6.7.0](../../../docs/releases/README_V6.7.0.md).
 
 V5.7.0 adds saved-graph editing and standalone chart-color persistence through the shared chart/data modules. It does not introduce a remote AI service or change the chart-recommendation boundary described here.
 
@@ -12,9 +12,9 @@ This folder contains browser-side chart recommendations. It does not call an ext
 
 ## Shared chart utilities
 
-- `chartMapping.js` infers category/value columns and parses numeric and rank values used by Studio charts.
-- `chartData.js` serializes chart state and supplies grouping helpers.
-- `graphExport.js` normalizes export payloads and builds Print Sheet/Print All documents.
+- `../charts/chartMapping.js` infers category/value columns and parses numeric and rank values used by Studio charts.
+- `../charts/chartData.js` serializes chart state and supplies grouping helpers.
+- `../charts/graphExport.js` normalizes export payloads and builds Print Sheet/Print All documents.
 - `../modules/chartEngine.js` owns Studio option routing; `../modules/graphsTab.js` owns draft-card rendering.
 
 ## Chart types

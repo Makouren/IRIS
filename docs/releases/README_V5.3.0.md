@@ -45,4 +45,4 @@ The final V5.3.0 migration adds `ranking_bodies.sort_order` and `saved_graphs.sc
 
 Manual checks should cover the IAO upload destinations and theme toggle, role-gated Back to Uploads navigation, File Archives purpose filtering and row actions, ranking defaults and viewer filters, saved-graph scope editing, and public visualization grouping. Browser automation and automated tests were not run for this release preparation.
 
-See [README.md](README.md) for setup and architecture and [README_PHP.md](README_PHP.md) for PHP deployment notes. Previous release notes remain in [README_V4.5.0.md](README_V4.5.0.md), [README_V3.4.7.md](README_V3.4.7.md), [README_V3.4.5.md](README_V3.4.5.md), and [README_V3.3.0.md](README_V3.3.0.md).
+See [README.md](../../README.md) for setup and architecture and [README_PHP.md](../README_PHP.md) for PHP deployment notes. Previous release notes remain in [README_V4.5.0.md](README_V4.5.0.md), [README_V3.4.7.md](README_V3.4.7.md), [README_V3.4.5.md](README_V3.4.5.md), and [README_V3.3.0.md](README_V3.3.0.md).

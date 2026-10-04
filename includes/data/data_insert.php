@@ -1,6 +1,6 @@
 <?php
-require_once __DIR__.'/functions.php';
-require_once __DIR__.'/helpers/RankBoundsParser.php';
+require_once __DIR__.'/../functions.php';
+require_once __DIR__.'/../helpers/RankBoundsParser.php';
 
 function insert_reference_name(PDO $pdo, string $table, string $idColumn, string $name, array $extra = []): ?int
 {

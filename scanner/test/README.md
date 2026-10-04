@@ -1,8 +1,8 @@
 # Scanner Tests
 
-> Current application release: [V6.7.0](../../README_V6.7.0.md).
+> Current application release: [V6.7.0](../../docs/releases/README_V6.7.0.md).
 
-Coverage includes record merge, File History snapshots, Summary Card categories/defaults, saved graph editing, chart colors, custom import mapping, and Ranking History display behavior. Run both PHP-specific checks and the JavaScript suite. Authenticated XAMPP/MySQL smoke tests remain necessary for database-backed merge/restore, imports, publication, and role-gated behavior. See [README_V6.7.0.md](../../README_V6.7.0.md) for release verification details.
+Coverage includes record merge, File History snapshots, Summary Card categories/defaults, saved graph editing, chart colors, custom import mapping, and Ranking History display behavior. Run both PHP-specific checks and the JavaScript suite. Authenticated XAMPP/MySQL smoke tests remain necessary for database-backed merge/restore, imports, publication, and role-gated behavior. See [README_V6.7.0.md](../../docs/releases/README_V6.7.0.md) for release verification details.
 
 ```powershell
 php scanner/test/templateImportMapping.test.php

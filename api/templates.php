@@ -41,7 +41,7 @@ function templates_csv_has_null_byte(string $path): bool {
 
 try {
     require_once __DIR__ . '/../includes/functions.php';
-    require_once __DIR__ . '/../includes/upload_limits.php';
+    require_once __DIR__ . '/../includes/config/upload_limits.php';
     require_once __DIR__ . '/../includes/helpers/SummaryCardImportProfiles.php';
     require_once __DIR__ . '/../includes/helpers/CustomImportFields.php';
     require_once __DIR__ . '/../includes/helpers/ProfileWorkbookService.php';

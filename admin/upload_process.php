@@ -3,8 +3,8 @@ ini_set('display_errors', '0');
 ini_set('html_errors', '0');
 try {
 require_once __DIR__ . '/../includes/functions.php';
-require_once __DIR__.'/../includes/upload_limits.php';
-require_once __DIR__.'/../includes/SpreadsheetReader.php';
+require_once __DIR__.'/../includes/config/upload_limits.php';
+require_once __DIR__.'/../includes/upload/SpreadsheetReader.php';
 require_once __DIR__ . '/../includes/helpers/SummaryCardImportProfiles.php';
 require_once __DIR__ . '/../includes/helpers/ProfileWorkbookService.php';
 $currentRole = (string)($_SESSION['role'] ?? '');

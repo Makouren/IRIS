@@ -1,5 +1,5 @@
 import '../../vendor/vanilla-colorful/hex-color-picker.js';
-import '../chartColors.js?v=data-preserving-colors-20260930';
+import '../charts/chartColors.js?v=data-preserving-colors-20260930';
 
 const { DEFAULT_CHART_COLORS, buildColoredSeriesData, isValidChartColor, normalizeFieldKey, resolveFieldColors } = globalThis.IRISChartColors;
 

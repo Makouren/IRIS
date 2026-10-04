@@ -1,6 +1,6 @@
 # v6.7.5 UI Patches
 
-This document records the IRIS v6.7.5 UI and workflow changes made across the patch session. It supplements, and does not replace, the main [README](README.md) or the [v6.7.0 release notes](README_V6.7.0.md).
+This document records the IRIS v6.7.5 UI and workflow changes made across the patch session. It supplements, and does not replace, the main [README](../../README.md) or the [v6.7.0 release notes](README_V6.7.0.md).
 
 ## Summary
 
@@ -83,10 +83,10 @@ The Super Admin Manage Templates page can show “Unable to process template req
 - `admin/dashboard.php`
 - `admin/includes/header.php`
 - `admin/office_upload.php`
-- `includes/portal_nav.php`
+- `includes/navigation/portal_nav.php`
 - `scanner/css/portalNavigation.css`
-- `scanner/css/` ordered stylesheet bundle, rendered through `includes/asset_bundles.php`
-- `scanner/js/portalNavigation.js`
+- `scanner/css/` ordered stylesheet bundle, rendered through `includes/assets/asset_bundles.php`
+- `scanner/js/ui/portalNavigation.js`
 - `user/dashboard.php`
 
 ### Uploads, templates, and import mapping
@@ -103,7 +103,7 @@ The Super Admin Manage Templates page can show “Unable to process template req
 - `includes/helpers/ProfileWorkbookService.php`
 - `includes/helpers/SheetValidationHelper.php`
 - `includes/helpers/TemplateImportSupport.php`
-- `includes/upload_limits.php`
+- `includes/config/upload_limits.php`
 - `scanner/index.php`
 - `scanner/js/modules/fileIngestion.js`
 

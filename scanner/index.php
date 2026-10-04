@@ -1,4 +1,4 @@
-<?php require_once __DIR__ . '/../includes/functions.php'; require_once __DIR__ . '/../includes/upload_limits.php'; require_once __DIR__ . '/../includes/asset_bundles.php'; require_admin(); ?>
+<?php require_once __DIR__ . '/../includes/functions.php'; require_once __DIR__ . '/../includes/config/upload_limits.php'; require_once __DIR__ . '/../includes/assets/asset_bundles.php'; require_admin(); ?>
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -20,7 +20,7 @@
 
   <!-- External Parsing & Charting CDN Libraries -->
   <script src="https://cdn.jsdelivr.net/npm/echarts@5.5.1/dist/echarts.min.js"></script>
-  <script src="js/chartConfig.js"></script>
+  <script src="js/charts/chartConfig.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 </head>
@@ -618,14 +618,14 @@
   <script src="js/parsers/excelParser.js"></script>
   <script src="js/ai/graphEngine.js?v=iris-chart-builder-20261001"></script>
   <script src="js/database/dbManager.js?v=<?= (int) filemtime(__DIR__.'/js/database/dbManager.js') ?>"></script>
-  <script src="js/samples.js"></script>
+  <script src="js/data/samples.js"></script>
   <script src="js/scanner.js"></script>
-  <script src="js/tableFilter.js"></script>
-  <script src="js/chartData.js?v=iris-chart-builder-20261001"></script>
-  <script src="js/chartMapping.js"></script>
-  <script src="js/sourceIngestion.js"></script>
-  <script src="js/documentPagination.js"></script>
-  <script src="js/graphExport.js"></script>
+  <script src="js/tables/tableFilter.js"></script>
+  <script src="js/charts/chartData.js?v=iris-chart-builder-20261001"></script>
+  <script src="js/charts/chartMapping.js"></script>
+  <script src="js/ingestion/sourceIngestion.js"></script>
+  <script src="js/viewer/documentPagination.js"></script>
+  <script src="js/charts/graphExport.js"></script>
   <script type="module" src="js/app.js?v=<?= (int) filemtime(__DIR__.'/js/app.js') ?>"></script>
 
 </body>

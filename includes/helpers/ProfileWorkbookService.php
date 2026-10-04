@@ -1,8 +1,8 @@
 <?php
 declare(strict_types=1);
 
-require_once __DIR__ . '/../SpreadsheetReader.php';
-require_once __DIR__ . '/../upload_limits.php';
+require_once __DIR__ . '/../upload/SpreadsheetReader.php';
+require_once __DIR__ . '/../config/upload_limits.php';
 require_once __DIR__ . '/SummaryCardImportProfiles.php';
 require_once __DIR__ . '/TemplateImportSupport.php';
 

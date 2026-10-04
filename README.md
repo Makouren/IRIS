@@ -6,7 +6,7 @@ IRIS is a plain-PHP application. Apache serves PHP pages and PDO-backed APIs; br
 
 ## V6.7.0 Highlight
 
-V6.7.0 improves template-driven office uploads and Ranking History: Super Admins can preview saved workbooks, custom ranking context is preserved, empty import rows are skipped, and blocked mappings identify the source column. The Observatory separates explanatory ranking context from information details and removes the published-graph count badge. See [README_V6.7.0.md](README_V6.7.0.md) for changes, required migrations, and verification.
+V6.7.0 improves template-driven office uploads and Ranking History: Super Admins can preview saved workbooks, custom ranking context is preserved, empty import rows are skipped, and blocked mappings identify the source column. The Observatory separates explanatory ranking context from information details and removes the published-graph count badge. See [README_V6.7.0.md](docs/releases/README_V6.7.0.md) for changes, required migrations, and verification.
 
 The Super Admin header logo opens the public Observatory; use the explicit admin navigation and menu for management pages.
 
@@ -253,13 +253,13 @@ The suite covers graph/chart mapping, record merge/File History behavior, table 
 
 ## Related Documentation
 
-- [`README_PHP.md`](README_PHP.md): PHP deployment notes.
-- [`README_V6.7.0.md`](README_V6.7.0.md): current release changes, migrations, and verification.
-- [`README_V5.7.0.md`](README_V5.7.0.md): V5.7.0 release changes, migrations, and verification.
-- [`README_V5.3.0.md`](README_V5.3.0.md): V5.3.0 release changes and migration steps.
-- [`README_V4.5.0.md`](README_V4.5.0.md): V4.5.0 release changes and migration steps.
-- [`README_V3.4.7.md`](README_V3.4.7.md): Historical V3.4.7 release details.
-- [`README_V3.4.5.md`](README_V3.4.5.md): Historical V3.4.5 release notes.
+- [`README_PHP.md`](docs/README_PHP.md): PHP deployment notes.
+- [`README_V6.7.0.md`](docs/releases/README_V6.7.0.md): current release changes, migrations, and verification.
+- [`README_V5.7.0.md`](docs/releases/README_V5.7.0.md): V5.7.0 release changes, migrations, and verification.
+- [`README_V5.3.0.md`](docs/releases/README_V5.3.0.md): V5.3.0 release changes and migration steps.
+- [`README_V4.5.0.md`](docs/releases/README_V4.5.0.md): V4.5.0 release changes and migration steps.
+- [`README_V3.4.7.md`](docs/releases/README_V3.4.7.md): Historical V3.4.7 release details.
+- [`README_V3.4.5.md`](docs/releases/README_V3.4.5.md): Historical V3.4.5 release notes.
 - [`scanner/js/ai/README.md`](scanner/js/ai/README.md): chart suggestions and shared chart utilities.
 - [`scanner/js/database/README.md`](scanner/js/database/README.md): persistence and API routes.
 - [`scanner/js/modules/README.md`](scanner/js/modules/README.md): browser module responsibilities.

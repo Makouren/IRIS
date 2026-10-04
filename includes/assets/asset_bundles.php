@@ -1,5 +1,5 @@
 <?php
-require_once __DIR__ . '/functions.php';
+require_once __DIR__ . '/../functions.php';
 
 function render_iris_stylesheet_bundle(): void
 {
@@ -18,7 +18,7 @@ function render_iris_stylesheet_bundle(): void
     ];
 
     foreach ($stylesheets as $stylesheet) {
-        $filePath = __DIR__ . '/../scanner/css/' . $stylesheet;
+        $filePath = __DIR__ . '/../../scanner/css/' . $stylesheet;
         $url = base_url('scanner/css/' . $stylesheet);
         echo '<link rel="stylesheet" href="' . e($url) . '?v=' . (int)filemtime($filePath) . '">' . PHP_EOL;
     }

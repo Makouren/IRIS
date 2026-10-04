@@ -1,6 +1,6 @@
 (function (root, factory) {
-  const chartMapping = root.ChartMapping || (typeof require === 'function' ? require('./chartMapping.js') : null);
-  const tableFilter = root.TableFilter || (typeof require === 'function' ? require('./tableFilter.js') : null);
+  const chartMapping = root.ChartMapping || (typeof require === 'function' ? require('../charts/chartMapping.js') : null);
+  const tableFilter = root.TableFilter || (typeof require === 'function' ? require('../tables/tableFilter.js') : null);
   const api = factory(chartMapping, tableFilter);
   if (typeof module === 'object' && module.exports) module.exports = api;
   else root.SheetMerge = api;

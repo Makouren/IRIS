@@ -1,8 +1,8 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { mergeSheet, resolveMergeConflicts, defaultKeyColumns, validateSheet, isRecentMerge } = require('../js/sheetMerge.js');
-const ChartMapping = require('../js/chartMapping.js');
-const ChartData = require('../js/chartData.js');
+const { mergeSheet, resolveMergeConflicts, defaultKeyColumns, validateSheet, isRecentMerge } = require('../js/data/sheetMerge.js');
+const ChartMapping = require('../js/charts/chartMapping.js');
+const ChartData = require('../js/charts/chartData.js');
 
 function makeSheet(headers, rows, extra = {}) {
   return {

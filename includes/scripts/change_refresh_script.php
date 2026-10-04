@@ -1,0 +1,1 @@
+<script src="<?= e(base_url('scanner/js/ui/changeRefresh.js')) ?>?v=<?= (int)filemtime(__DIR__ . '/../../scanner/js/ui/changeRefresh.js') ?>" data-iris-change-refresh data-endpoint="<?= e(base_url('api/change_signal.php')) ?>" data-role="<?= e($_SESSION['role'] ?? '') ?>" data-view="<?= e($irisChangeRefreshView ?? '') ?>" defer></script>

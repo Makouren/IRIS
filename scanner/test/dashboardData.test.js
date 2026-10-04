@@ -16,11 +16,11 @@ const readIrisApiSource = () => [
   ].map(handler => path.join(__dirname, '..', '..', 'includes', 'api', 'handlers', `${handler}.php`))
 ].map(file => fs.readFileSync(file, 'utf8')).join('\n');
 
-const { prepareCircularData, serializeChartState } = require('../js/chartData');
-const { pairSelectedText } = require('../js/sourceIngestion');
-const { normalizeGraphExportItem, buildPrintableGraphSheet, buildSavedChartOption } = require('../js/graphExport');
+const { prepareCircularData, serializeChartState } = require('../js/charts/chartData');
+const { pairSelectedText } = require('../js/ingestion/sourceIngestion');
+const { normalizeGraphExportItem, buildPrintableGraphSheet, buildSavedChartOption } = require('../js/charts/graphExport');
 const { buildChartOption, buildSavedGraphOption, createChart, renderStudioChart } = require('../js/modules/chartEngine');
-const { buildColoredSeriesData, getChartColors, isValidChartColor, normalizeFieldKey, resolveFieldColors } = require('../js/chartColors');
+const { buildColoredSeriesData, getChartColors, isValidChartColor, normalizeFieldKey, resolveFieldColors } = require('../js/charts/chartColors');
 const stylesheetBundle = [
   'base.css',
   'ingestion.css',

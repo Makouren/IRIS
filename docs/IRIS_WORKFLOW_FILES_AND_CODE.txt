@@ -17,7 +17,7 @@ WORKFLOW OVERVIEW
 Office user uploads a spreadsheet
     -> admin/office_upload.php
     -> admin/upload_process.php
-    -> includes/SpreadsheetReader.php parses the spreadsheet
+    -> includes/upload/SpreadsheetReader.php parses the spreadsheet
     -> records row is created with Pending Review status
     -> Super Admin opens admin/review_editor.php
     -> scanner/js/modules/studioWorkbench.js maps fields and saves a graph
@@ -57,7 +57,7 @@ Template list wiring:
 FILE: admin/upload_process.php
 ROLE: Validates the file, parses it, stores it outside the web root, and adds a
       Pending Review record associated with the uploading office/user.
-USES: includes/functions.php and includes/SpreadsheetReader.php.
+USES: includes/functions.php and includes/upload/SpreadsheetReader.php.
 
 Relevant parse and record insert:
 
@@ -77,7 +77,7 @@ success or error flash message. It does not publish a chart by itself.
 FILE: admin/js/officeTemplates.js
 ROLE: Client-side behavior for the Active Templates section on office_upload.php.
 
-FILE: includes/SpreadsheetReader.php
+FILE: includes/upload/SpreadsheetReader.php
 ROLE: Reads XLSX, CSV, and TSV data for the office upload handler.
 
 FILE: includes/functions.php
@@ -116,10 +116,10 @@ ROLE: Loads shared scripts and the ES module application on admin pages,
 Relevant application loader:
 
     <script src="<?= e(base_url('scanner/js/database/dbManager.js')) ?>"></script>
-    <script src="<?= e(base_url('scanner/js/chartData.js')) ?>"></script>
-    <script src="<?= e(base_url('scanner/js/chartMapping.js')) ?>"></script>
-    <script src="<?= e(base_url('scanner/js/chartColors.js')) ?>"></script>
-    <script src="<?= e(base_url('scanner/js/graphExport.js')) ?>"></script>
+    <script src="<?= e(base_url('scanner/js/charts/chartData.js')) ?>"></script>
+    <script src="<?= e(base_url('scanner/js/charts/chartMapping.js')) ?>"></script>
+    <script src="<?= e(base_url('scanner/js/charts/chartColors.js')) ?>"></script>
+    <script src="<?= e(base_url('scanner/js/charts/graphExport.js')) ?>"></script>
     <script type="module"
             src="<?= e(base_url('scanner/js/app.js')) ?>"></script>
 
@@ -304,17 +304,17 @@ Relevant exports and call sites:
         return chart;
     }
 
-FILE: scanner/js/chartData.js
+FILE: scanner/js/charts/chartData.js
 ROLE: Groups/aggregates rows and serializes real graph values and series before
       Studio saves a graph.
 
-FILE: scanner/js/chartMapping.js
+FILE: scanner/js/charts/chartMapping.js
 ROLE: Infers category/value fields and parses numeric, rank, and year values.
 
-FILE: scanner/js/chartColors.js
+FILE: scanner/js/charts/chartColors.js
 ROLE: Resolves field-specific and custom colors used by Studio and saved views.
 
-FILE: scanner/js/graphExport.js
+FILE: scanner/js/charts/graphExport.js
 ROLE: Normalizes graph exports and constructs printable graph sheets.
 
 FILE: scanner/js/ai/graphEngine.js

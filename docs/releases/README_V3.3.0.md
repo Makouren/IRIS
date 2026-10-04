@@ -6,7 +6,7 @@
 
 This document summarizes the IRIS phases beginning with account separation and office spreadsheet review, continuing through the ranked-chart correction, and including the latest chart, publication, and navigation work present on branch `V3.3.0`.
 
-The existing [README.md](README.md) remains the general setup and architecture guide. This file is the release-oriented history for this phase.
+The existing [README.md](../../README.md) remains the general setup and architecture guide. This file is the release-oriented history for this phase.
 
 ## Version Control Context
 
@@ -54,7 +54,7 @@ Key files:
 - `admin/office_upload.php`
 - `admin/upload_process.php`
 - `admin/upload_source.php`
-- `includes/SpreadsheetReader.php`
+- `includes/upload/SpreadsheetReader.php`
 - `admin/js/officeTemplates.js`
 - `admin/js/accountManager.js`
 - `admin/js/templateManager.js`
@@ -76,7 +76,7 @@ Commit `cbfdb95` corrected how ranked chart values are transformed and displayed
 
 Key files:
 
-- `scanner/js/chartMapping.js`
+- `scanner/js/charts/chartMapping.js`
 - `scanner/js/modules/chartEngine.js`
 
 ## Phase 3: Shared Chart Builder and Persistence Alignment
@@ -98,8 +98,8 @@ Key files:
 - `scanner/js/modules/studioWorkbench.js`
 - `scanner/js/modules/savedGraphsTab.js`
 - `scanner/js/modules/graphsTab.js`
-- `scanner/js/chartData.js`
-- `scanner/js/graphExport.js`
+- `scanner/js/charts/chartData.js`
+- `scanner/js/charts/graphExport.js`
 - `scanner/js/database/dbManager.js`
 - `api/iris.php`
 - `api/dashboard_graphs.php`
@@ -125,7 +125,7 @@ Key files:
 - `scanner/js/modules/studioColorCustomizer.js`
 - `scanner/js/modules/graphsTab.js`
 - `scanner/js/modules/savedGraphsTab.js`
-- `scanner/js/graphExport.js`
+- `scanner/js/charts/graphExport.js`
 - `api/iris.php`
 - `api/dashboard_graphs.php`
 - `migrations/20261001_unify_saved_graph_types.sql`
@@ -159,7 +159,7 @@ Key files:
 
 A separate Notepad-friendly path/code map was added for locating the Office Upload, Review Editor, Saved Graphs, public view, and shared chart files:
 
-- `IRIS_WORKFLOW_FILES_AND_CODE.txt`
+- `../IRIS_WORKFLOW_FILES_AND_CODE.txt`
 
 ## Verification Status
 

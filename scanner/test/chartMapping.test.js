@@ -1,6 +1,6 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { inferColumns, isRankField, parseNumericValue, parseRankValue, detectYearColumn, getYearOptions } = require('../js/chartMapping');
+const { inferColumns, isRankField, parseNumericValue, parseRankValue, detectYearColumn, getYearOptions } = require('../js/charts/chartMapping');
 
 test('rank detection requires an explicit rank field name', () => {
   assert.equal(isRankField('Overall Rank'), true);

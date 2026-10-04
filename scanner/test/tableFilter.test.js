@@ -1,6 +1,6 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { filterRows } = require('../js/tableFilter');
+const { filterRows } = require('../js/tables/tableFilter');
 
 const headers = ['Product', 'Status', 'Owner'];
 const rows = [

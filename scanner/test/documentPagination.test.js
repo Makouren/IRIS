@@ -1,6 +1,6 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { paginateText } = require('../js/documentPagination');
+const { paginateText } = require('../js/viewer/documentPagination');
 
 test('pagination keeps page two distinct for the page navigator', () => {
   const pages = paginateText('Page one content.\n\nPage two content.', 3);

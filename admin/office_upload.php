@@ -1,7 +1,7 @@
 <?php
 require_once __DIR__ . '/../includes/functions.php';
-require_once __DIR__ . '/../includes/upload_limits.php';
-require_once __DIR__ . '/../includes/asset_bundles.php';
+require_once __DIR__ . '/../includes/config/upload_limits.php';
+require_once __DIR__ . '/../includes/assets/asset_bundles.php';
 requireRole(['admin']);
 $accountQuery = db()->prepare('SELECT offices.office_name
     FROM users LEFT JOIN offices ON offices.office_id = users.office_id
@@ -49,11 +49,11 @@ $error = flash('error');
     <link rel="stylesheet" href="<?= e(base_url('scanner/css/tokens.css')) ?>">
     <?php render_iris_stylesheet_bundle(); ?>
     <link rel="stylesheet" href="<?= e(base_url('scanner/css/portalNavigation.css')) ?>?v=<?= (int) filemtime(__DIR__ . '/../scanner/css/portalNavigation.css') ?>">
-    <script src="<?= e(base_url('scanner/js/dotBackground.js')) ?>?v=<?= (int) filemtime(__DIR__ . '/../scanner/js/dotBackground.js') ?>" defer></script>
+    <script src="<?= e(base_url('scanner/js/ui/dotBackground.js')) ?>?v=<?= (int) filemtime(__DIR__ . '/../scanner/js/ui/dotBackground.js') ?>" defer></script>
 </head>
 <body class="dot-grid-dashboard min-h-screen text-gray-900 dark:text-gray-100">
     <div id="dashboard-dot-background" aria-hidden="true"></div>
-    <?php $portalNavMode = 'office'; require __DIR__ . '/../includes/portal_nav.php'; ?>
+    <?php $portalNavMode = 'office'; require __DIR__ . '/../includes/navigation/portal_nav.php'; ?>
     <main class="dashboard-container office-upload-layout">
         <section class="studio-left-card office-upload-form-card h-fit">
             <h2 class="mb-1 text-lg font-bold">Upload a file</h2>
@@ -150,6 +150,6 @@ $error = flash('error');
         })();
     </script>
     <script src="<?= e(base_url('admin/js/officeTemplates.js')) ?>?v=<?= (int) filemtime(__DIR__ . '/js/officeTemplates.js') ?>" defer></script>
-    <?php require __DIR__ . '/../includes/change_refresh_script.php'; ?>
+    <?php require __DIR__ . '/../includes/scripts/change_refresh_script.php'; ?>
 </body>
 </html>

@@ -1,7 +1,7 @@
 <?php
 require_once __DIR__.'/../../includes/functions.php';
-require_once __DIR__.'/../../includes/upload_limits.php';
-require_once __DIR__.'/../../includes/asset_bundles.php';
+require_once __DIR__.'/../../includes/config/upload_limits.php';
+require_once __DIR__.'/../../includes/assets/asset_bundles.php';
 require_admin();
 $activeNav = $activeNav ?? 'ingestion';
 $pageTitle = $pageTitle ?? 'IRIS Admin Control Panel';
@@ -71,7 +71,7 @@ $pageTitle = $pageTitle ?? 'IRIS Admin Control Panel';
     <link href="https://cdnjs.cloudflare.com/ajax/libs/flowbite/2.3.0/flowbite.min.css" rel="stylesheet" />
     <script src="https://cdnjs.cloudflare.com/ajax/libs/flowbite/2.3.0/flowbite.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/echarts@5.5.1/dist/echarts.min.js"></script>
-    <script src="<?= e(base_url('scanner/js/chartConfig.js')) ?>"></script>
+    <script src="<?= e(base_url('scanner/js/charts/chartConfig.js')) ?>"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
@@ -79,7 +79,7 @@ $pageTitle = $pageTitle ?? 'IRIS Admin Control Panel';
     <?php render_iris_stylesheet_bundle(); ?>
     <link rel="stylesheet" href="<?= e(base_url('scanner/css/portalNavigation.css')) ?>?v=<?= (int) filemtime(__DIR__.'/../../scanner/css/portalNavigation.css') ?>">
     <?php if ($activeNav === 'review'): ?>
-        <script src="<?= e(base_url('scanner/js/dotBackground.js')) ?>?v=<?= (int) filemtime(__DIR__.'/../../scanner/js/dotBackground.js') ?>" defer></script>
+        <script src="<?= e(base_url('scanner/js/ui/dotBackground.js')) ?>?v=<?= (int) filemtime(__DIR__.'/../../scanner/js/ui/dotBackground.js') ?>" defer></script>
     <?php endif; ?>
     <link href="https://fonts.googleapis.com/css2?family=Libre+Franklin:wght@400;500;600;700;800&family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
     <style>
@@ -251,7 +251,7 @@ $pageTitle = $pageTitle ?? 'IRIS Admin Control Panel';
         <div class="iris-loader" aria-hidden="true"></div>
     </div>
 
-    <?php $portalNavMode = 'admin'; require __DIR__ . '/../../includes/portal_nav.php'; ?>
+    <?php $portalNavMode = 'admin'; require __DIR__ . '/../../includes/navigation/portal_nav.php'; ?>
 
     <!-- Main Shell -->
     <main class="admin-scanner-shell flex-1 w-full py-8">

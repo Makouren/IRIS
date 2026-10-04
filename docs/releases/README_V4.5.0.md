@@ -47,4 +47,4 @@ node --test scanner/test/*.test.js
 
 Against local XAMPP/MySQL, verify all three upload purposes, template filtering, import preview and apply, Ranking History search and defaults, and the Review Editor's separation of import-only workbooks.
 
-See [README_V6.7.0.md](README_V6.7.0.md) for the current release, [README.md](README.md) for setup and architecture, [README_PHP.md](README_PHP.md) for deployment details, and [README_V3.4.7.md](README_V3.4.7.md) for the preceding documented release.
+See [README_V6.7.0.md](README_V6.7.0.md) for the current release, [README.md](../../README.md) for setup and architecture, [README_PHP.md](../README_PHP.md) for deployment details, and [README_V3.4.7.md](README_V3.4.7.md) for the preceding documented release.

@@ -1,5 +1,5 @@
 <?php
-require_once __DIR__ . '/upload_limits.php';
+require_once __DIR__ . '/../config/upload_limits.php';
 $activeNav = $activeNav ?? '';
 $portalNavMode = $portalNavMode ?? 'public';
 $portalRole = (string)($_SESSION['role'] ?? 'user');
@@ -97,4 +97,4 @@ $portalAdminLinks = [
     </div>
 </nav>
 <script>window.IRIS_MAX_UPLOAD_BYTES = <?= IRIS_MAX_UPLOAD_BYTES ?>;</script>
-<script src="<?= e(base_url('scanner/js/portalNavigation.js')) ?>?v=<?= (int) filemtime(__DIR__ . '/../scanner/js/portalNavigation.js') ?>" defer></script>
+<script src="<?= e(base_url('scanner/js/ui/portalNavigation.js')) ?>?v=<?= (int) filemtime(__DIR__ . '/../scanner/js/ui/portalNavigation.js') ?>" defer></script>

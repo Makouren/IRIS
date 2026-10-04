@@ -1,4 +1,4 @@
-import '../chartColors.js?v=iris-chart-builder-20261001';
+import '../charts/chartColors.js?v=iris-chart-builder-20261001';
 const { DEFAULT_CHART_COLORS, resolveFieldColors } = globalThis.IRISChartColors;
 
 function sharedFieldColorIsNewer(field, irisConfig) {

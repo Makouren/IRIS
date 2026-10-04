@@ -77,7 +77,7 @@ const templateApi = fs.readFileSync(path.join(__dirname, '..', '..', 'api', 'tem
 const officeUpload = fs.readFileSync(path.join(__dirname, '..', '..', 'admin', 'office_upload.php'), 'utf8');
 const officeUploadProcess = fs.readFileSync(path.join(__dirname, '..', '..', 'admin', 'upload_process.php'), 'utf8');
 const officeTemplates = fs.readFileSync(path.join(__dirname, '..', '..', 'admin', 'js', 'officeTemplates.js'), 'utf8');
-const changeRefresh = fs.readFileSync(path.join(__dirname, '..', 'js', 'changeRefresh.js'), 'utf8');
+const changeRefresh = fs.readFileSync(path.join(__dirname, '..', 'js', 'ui', 'changeRefresh.js'), 'utf8');
 const graphDrafts = fs.readFileSync(path.join(__dirname, '..', 'js', 'modules', 'graphsTab.js'), 'utf8');
 
 test('Studio and draft chart selectors expose exactly the six supported types in order', () => {
@@ -268,8 +268,8 @@ test('template uploads assign and retain one of the three office destinations', 
 test('Super Admin has no manual refresh control; public views update from change signals', () => {
   assert.doesNotMatch(adminHeader, /data-iris-manual-refresh|data-iris-refresh-status|Refresh public view/);
   assert.doesNotMatch(changeRefresh, /manualRefresh|refreshStatus|publicRefreshStorageKey|refresh_public|localStorage/);
-  assert.match(fs.readFileSync(path.join(__dirname, '..', '..', 'user', 'dashboard.php'), 'utf8'), /\$irisChangeRefreshView = 'public'; require __DIR__ \. '\/\.\.\/includes\/change_refresh_script\.php'/);
-  assert.match(fs.readFileSync(path.join(__dirname, '..', '..', 'includes', 'change_refresh_script.php'), 'utf8'), /data-view="<\?= e\(\$irisChangeRefreshView \?\? ''\) \?>"/);
+  assert.match(fs.readFileSync(path.join(__dirname, '..', '..', 'user', 'dashboard.php'), 'utf8'), /\$irisChangeRefreshView = 'public'; require __DIR__ \. '\/\.\.\/includes\/scripts\/change_refresh_script\.php'/);
+  assert.match(fs.readFileSync(path.join(__dirname, '..', '..', 'includes', 'scripts', 'change_refresh_script.php'), 'utf8'), /data-view="<\?= e\(\$irisChangeRefreshView \?\? ''\) \?>"/);
   assert.match(changeRefresh, /if \(isPublicView\) \{\s*if \(isDirty\(\)\) showPendingRefresh\(\);[\s\S]*?else window\.location\.reload\(\);\s*return;\s*\}\s*if \(isSuperAdmin\) \{\s*return;\s*\}/);
 });
 

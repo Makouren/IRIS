@@ -79,11 +79,11 @@ try {
     <script src="https://cdnjs.cloudflare.com/ajax/libs/flowbite/2.3.0/flowbite.min.js"></script>
     <!-- Apache ECharts CDN -->
     <script src="https://cdn.jsdelivr.net/npm/echarts@5.5.0/dist/echarts.min.js"></script>
-    <script src="<?= e(base_url('scanner/js/chartConfig.js')) ?>"></script>
-    <script src="<?= e(base_url('scanner/js/chartMapping.js')) ?>"></script>
-    <script src="<?= e(base_url('scanner/js/chartColors.js')) ?>?v=<?= (int) filemtime(__DIR__.'/../scanner/js/chartColors.js') ?>"></script>
+    <script src="<?= e(base_url('scanner/js/charts/chartConfig.js')) ?>"></script>
+    <script src="<?= e(base_url('scanner/js/charts/chartMapping.js')) ?>"></script>
+    <script src="<?= e(base_url('scanner/js/charts/chartColors.js')) ?>?v=<?= (int) filemtime(__DIR__.'/../scanner/js/charts/chartColors.js') ?>"></script>
     <script>window.IRIS_DASHBOARD_CONFIG = <?= json_encode(['baseUrl' => base_url(''), 'irisApiUrl' => base_url('api/iris.php'), 'dashboardGraphsApiUrl' => base_url('api/dashboard_graphs.php'), 'canManagePublishedGraphs' => ($_SESSION['role'] ?? null) === 'super_admin', 'fieldColors' => $fieldColors, 'fieldColorUpdatedAt' => $fieldColorUpdatedAt], JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>; window.IRISFieldColors = window.IRIS_DASHBOARD_CONFIG.fieldColors; window.IRISFieldColorUpdatedAt = window.IRIS_DASHBOARD_CONFIG.fieldColorUpdatedAt;</script>
-    <script src="<?= e(base_url('scanner/js/graphExport.js')) ?>?v=<?= (int) filemtime(__DIR__.'/../scanner/js/graphExport.js') ?>"></script>
+    <script src="<?= e(base_url('scanner/js/charts/graphExport.js')) ?>?v=<?= (int) filemtime(__DIR__.'/../scanner/js/charts/graphExport.js') ?>"></script>
     <script type="module" src="<?= e(base_url('user/js/dashboard/chartBuilder.js')) ?>?v=<?= (int) filemtime(__DIR__ . '/js/dashboard/chartBuilder.js') ?>"></script>
     <!-- Font Awesome -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
@@ -91,7 +91,7 @@ try {
     <link href="https://fonts.googleapis.com/css2?family=Libre+Franklin:wght@400;500;600;700;800&family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="<?= e(base_url('scanner/css/tokens.css')) ?>">
     <link rel="stylesheet" href="<?= e(base_url('scanner/css/portalNavigation.css')) ?>?v=<?= (int) filemtime(__DIR__ . '/../scanner/css/portalNavigation.css') ?>">
-    <script src="<?= e(base_url('scanner/js/dotBackground.js')) ?>?v=<?= (int) filemtime(__DIR__ . '/../scanner/js/dotBackground.js') ?>" defer></script>
+    <script src="<?= e(base_url('scanner/js/ui/dotBackground.js')) ?>?v=<?= (int) filemtime(__DIR__ . '/../scanner/js/ui/dotBackground.js') ?>" defer></script>
     <link rel="stylesheet" href="<?= e(base_url('user/css/dashboard.css')) ?>?v=<?= (int) filemtime(__DIR__ . '/css/dashboard.css') ?>">
 </head>
 <body data-role="<?= e($_SESSION['role'] ?? 'user') ?>" class="dot-grid-dashboard text-gray-900 dark:text-gray-100 min-h-screen flex flex-col">
@@ -100,7 +100,7 @@ try {
         <div class="iris-loader" aria-hidden="true"></div>
     </div>
 
-    <?php $portalNavMode = 'public'; require __DIR__ . '/../includes/portal_nav.php'; ?>
+    <?php $portalNavMode = 'public'; require __DIR__ . '/../includes/navigation/portal_nav.php'; ?>
 
     <!-- Main Container -->
 
@@ -241,6 +241,6 @@ try {
     <script src="<?= e(base_url('admin/js/profileWorkbookMapper.js')) ?>?v=<?= (int) filemtime(__DIR__ . '/../admin/js/profileWorkbookMapper.js') ?>" defer></script>
 <?php endif; ?>
 <script src="<?= e(base_url('user/js/rankingHistory.js')) ?>?v=<?= (int) filemtime(__DIR__ . '/js/rankingHistory.js') ?>" data-api="<?= e(base_url('api/rankings.php')) ?>" defer></script>
-<?php $irisChangeRefreshView = 'public'; require __DIR__ . '/../includes/change_refresh_script.php'; ?>
+<?php $irisChangeRefreshView = 'public'; require __DIR__ . '/../includes/scripts/change_refresh_script.php'; ?>
 </body>
 </html>

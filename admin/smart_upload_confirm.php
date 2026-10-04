@@ -2,7 +2,7 @@
 require_once __DIR__ . '/../includes/functions.php';
 require_admin();
 if (!ALLOW_SUPER_ADMIN_UPLOAD) flash_redirect('admin/review_editor.php', 'error', 'File uploads are handled by office accounts.');
-require_once __DIR__ . '/../includes/data_insert.php';
+require_once __DIR__ . '/../includes/data/data_insert.php';
 verify_csrf();
 if (empty($_SESSION['pending_extraction'])) flash_redirect('admin/smart_upload.php', 'error', 'The extraction session expired. Please upload the file again.');
 
