@@ -52,12 +52,14 @@
         catch (RuntimeException $exception) { bad($exception->getMessage()); }
         $expectedVersion = (string)($data['row_version'] ?? '');
         if ($expectedVersion === '') bad('Refresh the history before changing a period.');
+        // Lock and compare the version before writing so a stale page cannot overwrite newer history.
         $pdo->beginTransaction();
         try {
             $lockedCardQuery = $pdo->prepare('SELECT summary_cards.*, card_id AS id FROM summary_cards WHERE card_id = ? FOR UPDATE');
             $lockedCardQuery->execute([(string)$id]);
             $lockedCard = $lockedCardQuery->fetch(PDO::FETCH_ASSOC);
             $allPeriods = SummaryCardHistory::periods($pdo, (string)$id, true);
+            // The version fingerprint rejects stale edits after the row lock; hash_equals avoids loose comparison.
             if (!$lockedCard || !hash_equals($expectedVersion, SummaryCardHistory::version($lockedCard, $allPeriods))) {
                 throw new RuntimeException('Summary Card history changed. Refresh before applying this action.', 409);
             }

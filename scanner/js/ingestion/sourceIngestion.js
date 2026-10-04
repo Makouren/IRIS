@@ -1,3 +1,10 @@
+/**
+ * Purpose: Pair selected text with a likely corresponding source line/value.
+ * Loaded by: scanner/index.php as a classic script before document viewer modules.
+ * Inputs/outputs: Accepts selected text and source text; exposes SourceIngestion globally.
+ * Dependencies: None.
+ * Load order: Load before documentViewer.js consumes pairSelectedText().
+ */
 (function (root, factory) {
   if (typeof module === 'object' && module.exports) {
     module.exports = factory();
@@ -9,6 +16,12 @@
     return /\d/.test(text) || /[$%]/.test(text) || /^[-+]?\d[\d,.]*(?:\s*[-/]\s*\d[\d,.]*)?$/.test(text);
   }
 
+  /**
+   * Add a neighboring value to a selected label when source text suggests a pair.
+   * @param {string} selection Text selected in the document viewer.
+   * @param {string} sourceText Extracted record text.
+   * @returns {string} Paired selection, or the original selection when no safe pair exists.
+   */
   function pairSelectedText(selection, sourceText) {
     const selected = String(selection || '').trim();
     if (!selected) return '';

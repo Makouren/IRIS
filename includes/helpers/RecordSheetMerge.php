@@ -74,6 +74,16 @@ function record_merge_numeric_stats(array $headers, array $rows): array
     return $stats;
 }
 
+/**
+ * Merge source worksheet rows into the target using normalized composite keys.
+ *
+ * @param array $target Existing target sheet with headers and rows.
+ * @param array $source Incoming source sheet with headers and rows.
+ * @param array $keyColumns Zero-based target header indexes defining row identity.
+ * @param array $resolutions Per-cell source/target choices for conflicting values.
+ * @return array Merged sheet, conflict details, and row/column statistics or validation error.
+ * @side-effects None; returns a new sheet structure without mutating either input.
+ */
 function record_merge_sheet(array $target, array $source, array $keyColumns, array $resolutions = []): array
 {
     $targetHeaders = $target['headers'] ?? null;
@@ -122,6 +132,7 @@ function record_merge_sheet(array $target, array $source, array $keyColumns, arr
     }
 
     $sourceKeyColumns = array_map(static fn(int $column): int => $sourceHeaderIndex[record_merge_normalize_text($targetHeaders[$column])], $keyColumns);
+    // Normalize the composite key on both sheets so equivalent dates/numbers match despite formatting.
     $keyForRow = static function (array $row, array $columns): ?string {
         $values = [];
         foreach ($columns as $column) {
@@ -139,6 +150,7 @@ function record_merge_sheet(array $target, array $source, array $keyColumns, arr
     $lastIncoming = [];
     foreach ($sourceRows as $rowIndex => $row) {
         $key = $keyForRow($row, $sourceKeyColumns);
+        // Keep the last duplicate source row, matching the preview's deterministic conflict choice.
         if ($key !== null) $lastIncoming[$key] = $rowIndex;
     }
 
@@ -166,6 +178,7 @@ function record_merge_sheet(array $target, array $source, array $keyColumns, arr
         }
         $matches = $targetMatches[$key] ?? [];
         if (!$matches) {
+            // A new key appends one row; existing keys update in place below.
             $added = [];
             foreach ($targetHeaders as $header) {
                 $sourceColumn = $sourceHeaderIndex[record_merge_normalize_text($header)] ?? null;
@@ -186,6 +199,7 @@ function record_merge_sheet(array $target, array $source, array $keyColumns, arr
             if ($sourceColumn === null) continue;
             $sourceValue = $row[$sourceColumn] ?? null;
             $targetValue = $targetRows[$targetRowIndex][$column] ?? null;
+            // Blank source cells are omissions, not instructions to erase target values.
             if (record_merge_is_blank($sourceValue) || record_merge_same_value($targetValue, $sourceValue)) continue;
             $conflictId = $rowIndex . ':' . $column;
             $resolution = $resolutions[$conflictId] ?? null;
@@ -201,6 +215,7 @@ function record_merge_sheet(array $target, array $source, array $keyColumns, arr
                 'resolution' => in_array($resolution, ['source', 'target'], true) ? $resolution : null,
             ];
             if ($resolution === 'source') {
+                // Conflicts change the target only when the preview explicitly chose the source value.
                 $mergedRows[$targetRowIndex][$column] = $sourceValue;
                 $changed = true;
             }

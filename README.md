@@ -44,6 +44,16 @@ Public registration creates only an inactive `user` account. The existing `users
 | File Archives | `admin/file_archives.php` and the admin File Archives tab | Filters imported records and provides role-gated merge, history, download, and restore actions. |
 | Scanner workspace | `scanner/index.php` | Provides browser-based ingestion, extraction overview, document/data viewing, draft charts, and links to the admin and Observatory. |
 
+## Project map
+
+- `admin/`, `auth/`, and `user/` contain the stable PHP page entry points for administration, authentication, and the Observatory.
+- `api/` contains HTTP endpoints. The `api/iris.php` router loads shared helpers from `includes/api/common.php` and dispatches each resource to `includes/api/handlers/`.
+- `includes/` contains shared PHP functions, configuration, data and upload helpers, navigation partials, and page snippets.
+- `scanner/` contains the Scanner entry point, styles, vendor assets, and browser code. `scanner/js/modules/` contains ES modules; the other `scanner/js/` folders group classic scripts by purpose.
+- `docs/` contains project notes; version-specific release notes are in `docs/releases/`.
+
+Typical request flow: a page entry point loads its PHP includes and ordered assets, browser interactions call an endpoint under `api/`, and `api/iris.php` performs its authentication/role/CSRF gates before including the matching handler.
+
 ## Data Workflows
 
 ### Structured Institutional CSV

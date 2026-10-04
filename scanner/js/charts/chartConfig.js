@@ -1,3 +1,10 @@
+/**
+ * Purpose: Publish chart palette constants used by the Scanner.
+ * Loaded by: scanner/index.php as a classic script.
+ * Inputs/outputs: No inputs; assigns IRISChartConfig to window.
+ * Dependencies: None.
+ * Load order: Load before chart modules that read IRISChartConfig.
+ */
 (function (root) {
   root.IRISChartConfig = {
     palettes: {

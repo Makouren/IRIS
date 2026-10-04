@@ -1,7 +1,25 @@
 <?php
+/**
+ * Purpose: Insert or update selected Smart Upload rows in the institutional tables.
+ * Included by: admin/smart_upload_confirm.php after the user confirms staged rows.
+ * Inputs/outputs: Accepts validated row arrays; writes through PDO and returns success flags.
+ * Dependencies: includes/functions.php and helpers/RankBoundsParser.php.
+ * Load order: Load only after the caller has selected and validated the rows to persist.
+ */
 require_once __DIR__.'/../functions.php';
 require_once __DIR__.'/../helpers/RankBoundsParser.php';
 
+/**
+ * Find a reference row by name or create it, constrained to the allowlisted table/columns.
+ *
+ * @param PDO $pdo Database connection.
+ * @param string $table Allowlisted reference table.
+ * @param string $idColumn Matching primary-key column for the table.
+ * @param string $name Reference name.
+ * @param array $extra Additional allowlisted scope columns.
+ * @return int|null Existing or created identifier, or null for invalid input.
+ * @side-effects Inserts a reference row when no matching row exists.
+ */
 function insert_reference_name(PDO $pdo, string $table, string $idColumn, string $name, array $extra = []): ?int
 {
 	$allowed = [
@@ -35,6 +53,13 @@ function insert_reference_name(PDO $pdo, string $table, string $idColumn, string
 	}
 }
 
+/**
+ * Insert a ranking row or update the matching body/type/category/year record.
+ *
+ * @param array $r Validated ranking fields from a selected Smart Upload row.
+ * @return bool Whether the matching row was saved.
+ * @side-effects Creates reference values as needed and writes ranking data.
+ */
 function insert_ranking(array $r): bool
 {
 	$pdo = db();
@@ -65,6 +90,13 @@ function insert_ranking(array $r): bool
 	return $save->execute($values);
 }
 
+/**
+ * Insert or update a breakdown item only when its parent ranking is unambiguous.
+ *
+ * @param array $r Validated breakdown fields from a selected Smart Upload row.
+ * @return bool Whether the breakdown was saved.
+ * @side-effects Writes a ranking breakdown row.
+ */
 function insert_breakdown(array $r): bool
 {
 	$pdo = db();
@@ -104,6 +136,13 @@ function insert_breakdown(array $r): bool
 	return $save->execute([$rankingId, $group, $item, $rankDisplay, $rankDisplay !== null ? parse_rank_to_value($rankDisplay) : null, $note]);
 }
 
+/**
+ * Create or refresh a college and, when supplied, its year contribution.
+ *
+ * @param array $r Validated college fields from a selected Smart Upload row.
+ * @return bool Whether the college data was accepted and saved.
+ * @side-effects Writes a college and optional college-year row.
+ */
 function insert_college(array $r): bool
 {
 	$pdo = db();
@@ -132,6 +171,13 @@ function insert_college(array $r): bool
 	return true;
 }
 
+/**
+ * Insert or update a program's ranking for its resolved college and year.
+ *
+ * @param array $r Validated program and ranking fields from a selected row.
+ * @return bool Whether the program ranking was saved.
+ * @side-effects Creates a missing program and writes its annual ranking.
+ */
 function insert_program(array $r): bool
 {
 	$pdo = db();
@@ -158,6 +204,13 @@ function insert_program(array $r): bool
 	return $save->execute([(int)$programId, (int)$year, $rank, $score, $movement]);
 }
 
+/**
+ * Insert or update accreditation data only when the program match is unambiguous.
+ *
+ * @param array $r Validated accreditation fields from a selected row.
+ * @return bool Whether the accreditation row was saved.
+ * @side-effects Creates reference names as needed and writes accreditation data.
+ */
 function insert_accreditation(array $r): bool
 {
 	$pdo = db();

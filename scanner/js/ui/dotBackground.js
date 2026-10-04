@@ -1,3 +1,10 @@
+/**
+ * Purpose: Animate the dashboard dot background toward pointer movement.
+ * Loaded by: Pages that render #dashboard-dot-background.
+ * Inputs/outputs: Reads pointer and media-query state; updates background element styles.
+ * Dependencies: DOM, requestAnimationFrame, and matchMedia.
+ * Load order: Load after the background element; motion tracking respects reduced-motion settings.
+ */
 (() => {
   const background = document.getElementById('dashboard-dot-background');
   if (!background) return;

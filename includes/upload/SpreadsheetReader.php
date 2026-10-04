@@ -1,4 +1,11 @@
 <?php
+/**
+ * Purpose: Safely parse supported XLSX, CSV, and TSV workbooks for PHP upload workflows.
+ * Included by: admin/upload_process.php and workbook import helpers.
+ * Inputs/outputs: Parses a local file path and options; returns normalized workbook/sheet arrays.
+ * Dependencies: ZipArchive, SimpleXML, and the PHP XML extensions.
+ * Load order: Require the class before constructing SpreadsheetReader.
+ */
 final class SpreadsheetReader {
     private const MAX_FILE_BYTES = 10485760;
     private const MAX_UNCOMPRESSED_BYTES = 52428800;
@@ -10,6 +17,16 @@ final class SpreadsheetReader {
     private const REL_NS = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships';
     private const PACKAGE_REL_NS = 'http://schemas.openxmlformats.org/package/2006/relationships';
 
+    /**
+     * Dispatch a validated local workbook to its format-specific parser.
+     *
+     * @param string $path Readable temporary file path.
+     * @param string $extension File extension without a leading dot.
+     * @param string $fileName Original display name used in the result.
+     * @param string|null $selectedSheet Optional worksheet name to parse.
+     * @param int|null $headerRow Optional one-based row containing headers.
+     * @return array Normalized workbook metadata and parsed sheets.
+     */
     public function parse(string $path, string $extension, string $fileName, ?string $selectedSheet = null, ?int $headerRow = null): array {
         $extension = strtolower($extension);
         if ($headerRow !== null && ($headerRow < 1 || $headerRow > 10000)) throw new InvalidArgumentException('Header row must be between 1 and 10,000.');
@@ -106,6 +123,7 @@ final class SpreadsheetReader {
         return $node->xpath($expression) ?: [];
     }
 
+    /** Resolve a workbook relationship without allowing it to escape the XLSX ZIP root. */
     private function resolveWorkbookTarget(string $target): string {
         $target = rawurldecode(str_replace('\\', '/', $target));
         $parts = str_starts_with($target, '/') ? [] : ['xl'];
@@ -151,6 +169,7 @@ final class SpreadsheetReader {
         return preg_match('/m{3,}/i', $format) === 1;
     }
 
+    /** Read sparse XLSX rows while retaining their real column indexes and year values. */
     private function readWorksheet(SimpleXMLElement $worksheet, array $sharedStrings, array $dateStyles, bool $date1904): array {
         $sheetDataNodes = $this->xpathNodes($worksheet, '/x:worksheet/x:sheetData');
         if (!$sheetDataNodes) return [];
@@ -192,6 +211,7 @@ final class SpreadsheetReader {
         return $matrix;
     }
 
+    /** Convert a cell according to its XLSX type, shared-string index, and date style. */
     private function readCell(SimpleXMLElement $cell, array $sharedStrings, array $dateStyles, bool $date1904, bool $preserveYear = false) {
         $type = (string)$cell['t'];
         if ($type === 'e') return '';
@@ -261,6 +281,7 @@ final class SpreadsheetReader {
         return $value === null || (is_string($value) && trim($value) === '');
     }
 
+    /** Parse CSV/TSV data into the same sheet shape returned by the XLSX parser. */
     private function parseDelimited(string $path, string $extension, string $fileName, ?string $selectedSheet = null, ?int $headerRow = null): array {
         $handle = fopen($path, 'rb');
         if ($handle === false) throw new RuntimeException('The delimited file could not be opened.');
@@ -307,6 +328,7 @@ final class SpreadsheetReader {
         return $bestDelimiter;
     }
 
+    /** Normalize a row matrix into headers, data rows, counts, and numeric summaries. */
     private function makeSheet(string $name, array $matrix, bool $hidden, ?int $headerRow = null): array {
         if (!$matrix) return ['name' => $name, 'hidden' => $hidden, 'rowCount' => 0, 'colCount' => 0, 'headers' => [], 'rows' => [], 'numericStats' => []];
         $rawRows = $matrix;
@@ -398,6 +420,12 @@ final class SpreadsheetReader {
         ];
     }
 
+    /**
+     * Convert a parsed worksheet with year/category/rank columns into ranking rows.
+     *
+     * @param array $sheet Parsed sheet structure from SpreadsheetReader.
+     * @return array|null Normalized ranking rows, or null when required values are absent.
+     */
     function ranking_rows_from_sheet(array $sheet): ?array {
         $normalized = [];
         foreach (($sheet['headers'] ?? []) as $index => $header) {

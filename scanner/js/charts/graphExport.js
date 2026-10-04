@@ -1,3 +1,10 @@
+  /**
+   * Purpose: Normalize saved chart data and produce consistent view/export/print options.
+   * Loaded by: scanner/index.php as a classic script before database and export consumers.
+   * Inputs/outputs: Accepts saved graph objects and render context; exposes GraphExport globally.
+   * Dependencies: IRISChartBuilder and ChartMapping for saved chart rendering.
+   * Load order: Load after the chart builder/mapping globals and before export consumers.
+   */
   (function (root) {
     function escapeHtml(value) {
       return String(value ?? '')
@@ -88,6 +95,7 @@
       return rawConfig;
     }
 
+    /** Build the ECharts option used by saved-graph viewing and export surfaces. */
     function buildSavedChartOption(graph, options = {}) {
       return root.IRISChartBuilder?.buildSavedGraphOption(graph, {
         width: options.width || 0,
@@ -97,6 +105,13 @@
       }) || {};
     }
 
+    /**
+     * Normalize legacy and current graph payload shapes into the export API contract.
+     * @param {Object} graphData Saved graph data in any supported API shape.
+     * @param {number|string} recordId Owning record identifier when absent in graphData.
+     * @returns {Object} Normalized graph export payload.
+     * @throws {Error} If no record identifier can be resolved.
+     */
     function normalizeGraphExportItem(graphData, recordId) {
       const source = graphData || {};
       const chartData = readChartConfig(source.chart_data || source.chartData || {});
@@ -133,6 +148,7 @@
       return normalized;
     }
 
+    /** Build one self-contained printable HTML sheet from a saved graph. */
     function buildPrintableGraphSheet(graph, context = {}) {
       const recordName = context.recordName || 'IRIS Report';
       const title = graph.title || 'Saved Graph';
@@ -324,6 +340,7 @@
       `;
     }
 
+    /** Build print markup for a collection of saved graphs using the shared graph renderer. */
     function buildPrintableGraphSheets(graphs, context = {}) {
       const sheets = (graphs || []).map(graph => {
         const recordName = typeof context.recordNameForGraph === 'function'

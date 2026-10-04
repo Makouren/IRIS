@@ -1,4 +1,11 @@
 <?php
+/**
+ * Purpose: Render the shared portal header navigation and account controls.
+ * Included by: Admin header, office upload, and public dashboard pages.
+ * Inputs/outputs: Reads session identity/role and portalNavMode; emits navigation markup.
+ * Dependencies: includes/functions.php helpers and the portal navigation assets.
+ * Load order: The including page sets portalNavMode before requiring this partial.
+ */
 require_once __DIR__ . '/../config/upload_limits.php';
 $activeNav = $activeNav ?? '';
 $portalNavMode = $portalNavMode ?? 'public';

@@ -1,3 +1,10 @@
+/**
+ * Purpose: Validate and merge incoming worksheet rows with an existing worksheet.
+ * Loaded by: Shared admin footer as a classic script; required by Node tests.
+ * Inputs/outputs: Accepts worksheet objects and merge options; exports SheetMerge.
+ * Dependencies: ChartMapping and TableFilter globals, or their relative CommonJS modules.
+ * Load order: In the browser, load chartMapping.js and tableFilter.js first.
+ */
 (function (root, factory) {
   const chartMapping = root.ChartMapping || (typeof require === 'function' ? require('../charts/chartMapping.js') : null);
   const tableFilter = root.TableFilter || (typeof require === 'function' ? require('../tables/tableFilter.js') : null);
@@ -53,6 +60,7 @@
     return String(left).trim() === String(right).trim();
   }
 
+  /** Choose stable identity columns from headers and the existing row values. */
   function defaultKeyColumns(headers, rows) {
     const safeHeaders = Array.isArray(headers) ? headers : [];
     const inferred = ChartMapping?.inferColumns?.(safeHeaders, Array.isArray(rows) ? rows : []);
@@ -86,6 +94,13 @@
     return numeric / occupied.length >= 0.5;
   }
 
+  /**
+   * Validate the incoming worksheet shape and its compatibility with the target sheet.
+   * @param {Object} sheet Candidate worksheet.
+   * @param {Object|null} existing Existing worksheet when validating a merge.
+   * @param {number[]|null} selectedKeyColumns Explicit target-column identity keys.
+   * @returns {{ok: boolean, problems: string[]}} Validation result and explanations.
+   */
   function validateSheet(sheet, existing = null, selectedKeyColumns = null) {
     const problems = [];
     if (!sheet || typeof sheet !== 'object' || Array.isArray(sheet)) return { ok: false, problems: ['No readable worksheet was selected.'] };
@@ -144,6 +159,13 @@
     return stats;
   }
 
+  /**
+   * Find differing non-key values and apply explicit source/target resolutions.
+   * @param {Object} existing Target worksheet.
+   * @param {Object} incoming Source worksheet.
+   * @param {Object} options Key columns and per-cell conflict resolutions.
+   * @returns {Object} Merged worksheet, conflicts, and unresolved count.
+   */
   function resolveMergeConflicts(existing, incoming, options = {}) {
     const keyColumns = Array.isArray(options.keyColumns)
       ? [...new Set(options.keyColumns)]
@@ -216,6 +238,10 @@
     };
   }
 
+  /**
+   * Merge rows by normalized composite keys; new keys append and nonblank source
+   * values replace differing target values, while blank source cells retain target data.
+   */
   function mergeSheet(existing, incoming, options = {}) {
     const existingCheck = validateSheet(existing);
     if (!existingCheck.ok) return { error: existingCheck.problems[0], problems: existingCheck.problems };
@@ -324,6 +350,7 @@
     };
   }
 
+  /** Check whether record metadata contains a merge timestamp within the retention window. */
   function isRecentMerge(metadata, now = new Date()) {
     const mergedAt = metadata?.merge?.merged_at;
     const mergedTime = typeof mergedAt === 'string' || mergedAt instanceof Date ? new Date(mergedAt).getTime() : NaN;

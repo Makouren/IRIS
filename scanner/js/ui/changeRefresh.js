@@ -1,3 +1,10 @@
+/**
+ * Purpose: Notify views about persisted data changes and refresh clean views safely.
+ * Loaded by: PHP change-refresh partial on admin, office, and Observatory pages.
+ * Inputs/outputs: Reads script data attributes and change-signal responses; updates the page.
+ * Dependencies: api/change_signal.php, BroadcastChannel, and page form controls.
+ * Load order: Deferred after page markup; one instance is enabled by the data attribute.
+ */
 (() => {
   const script = document.querySelector('script[data-iris-change-refresh]');
   if (!script) return;
@@ -70,6 +77,7 @@
     else window.location.reload();
   }
 
+  /** Poll for newer server state and defer reload while local form edits are dirty. */
   async function poll() {
     if (document.visibilityState !== 'visible' || polling) return;
     polling = true;

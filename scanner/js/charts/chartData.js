@@ -1,3 +1,10 @@
+/**
+ * Purpose: Prepare and serialize chart rows and saved chart state.
+ * Loaded by: scanner/index.php as a classic script; required by Node tests.
+ * Inputs/outputs: Accepts row/chart data; exports ChartData for browser and CommonJS consumers.
+ * Dependencies: None.
+ * Load order: Load before Studio modules that consume ChartData.
+ */
 (function (root, factory) {
   if (typeof module === 'object' && module.exports) {
     module.exports = factory();
@@ -40,6 +47,12 @@
     };
   }
 
+  /**
+   * Group pie rows by a selected parent column while preserving their child values.
+   * @param {Array<Object>} rows Prepared chart rows with source row values.
+   * @param {number} groupField Zero-based source-column index.
+   * @returns {{groups: Array<Object>, rows: Array<Object>}} Parent groups and flattened children.
+   */
   function prepareNestedPieData(rows, groupField) {
     if (!Number.isInteger(groupField) || groupField < 0) return { groups: [], rows: [] };
     const groups = new Map();
@@ -57,6 +70,12 @@
     return { groups: Array.from(groups.values()), rows: Array.from(groups.values()).flatMap(group => group.children) };
   }
 
+  /**
+   * Recover editable labels, raw values, and series from rendered chart options.
+   * @param {Object} options Chart options, usually from ECharts.
+   * @param {Object} config Persisted chart settings used to retain original values.
+   * @returns {{labels: string[], values: Array<unknown>, series: Array<Object>}} Editable chart state.
+   */
   function serializeChartState(options, config = {}) {
     const sourceSeries = Array.isArray(options?.series) ? options.series : [];
     const series = sourceSeries.map((item, seriesIndex) => ({

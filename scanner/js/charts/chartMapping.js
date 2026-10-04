@@ -1,3 +1,10 @@
+/**
+ * Purpose: Infer semantic spreadsheet columns and parse ranking/year values for charts.
+ * Loaded by: scanner/index.php before sheet merging and chart modules; required by Node tests.
+ * Inputs/outputs: Accepts headers and row arrays; exports ChartMapping in browser/CommonJS.
+ * Dependencies: None.
+ * Load order: Load before sheetMerge.js and Studio modules that use ChartMapping.
+ */
 (function (root, factory) {
   if (typeof module === 'object' && module.exports) {
     module.exports = factory();
@@ -39,6 +46,7 @@
     return Math.round(numeric);
   }
 
+  /** Detect the year column from its header or, failing that, the values in a column. */
   function detectYearColumn(headers, rows) {
     const safeHeaders = Array.isArray(headers) ? headers : [];
     const safeRows = Array.isArray(rows) ? rows : [];
@@ -66,6 +74,7 @@
    * Classify each column and return best default label/value columns plus full metadata.
    * Returns { labelColumn, valueColumn, numericColumns, labelColumns, columnTypes }
    */
+  /** Infer category/value columns from header semantics and the observed cell values. */
   function inferColumns(headers, rows) {
     const safeHeaders = headers || [];
     const safeRows = rows || [];

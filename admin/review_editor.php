@@ -1,4 +1,10 @@
 <?php
+/**
+ * Purpose: Render the Super Admin Review Editor and Records Studio.
+ * Inputs/outputs: Supplies review markup, modal partials, and page-specific API configuration.
+ * Dependencies: Admin header/footer and admin/js/reviewEditor modules.
+ * Load order: Emit the configuration before scripts that consume its URLs and CSRF token.
+ */
 $activeNav = 'review';
 $pageTitle = 'Review Editor & Records Studio - IRIS Admin';
 require_once __DIR__.'/includes/header.php';
@@ -318,6 +324,7 @@ require_once __DIR__.'/includes/header.php';
     <?php require __DIR__ . '/includes/reviewEditor/recordEdit.php'; ?>
 </section>
 
+    <!-- Keep PHP values in one JSON config and define it before page-specific consumers. -->
     <script>window.IRIS_REVIEW_EDITOR_CONFIG = <?= json_encode(['irisApiUrl' => base_url('api/iris.php'), 'starRatingApiUrl' => base_url('api/star_rating_cards.php'), 'rankingApiUrl' => base_url('api/admin_rankings.php'), 'baseUrl' => base_url(''), 'csrfToken' => csrf_token()], JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>;</script>
     <script src="<?= e(base_url('admin/js/reviewEditor/summaryCards.js')) ?>?v=<?= (int) filemtime(__DIR__ . '/js/reviewEditor/summaryCards.js') ?>"></script>
     <script src="<?= e(base_url('admin/js/reviewEditor/starRatingCards.js')) ?>?v=<?= (int) filemtime(__DIR__ . '/js/reviewEditor/starRatingCards.js') ?>"></script>

@@ -1,11 +1,29 @@
 <?php
+/**
+ * Purpose: Define the common PHP upload limit and translate upload errors.
+ * Included by: Upload pages and API endpoints before handling uploaded files.
+ * Inputs/outputs: Reads PHP request and upload settings; provides constants and helper results.
+ * Dependencies: PHP runtime upload constants and configuration.
+ * Load order: Include before upload validation or parser invocation.
+ */
 const IRIS_MAX_UPLOAD_BYTES = 10 * 1024 * 1024;
 
+/**
+ * Format the shared upload byte limit for user-facing validation messages.
+ *
+ * @return string Human-readable upload limit.
+ */
 function iris_upload_limit_label(): string
 {
     return rtrim(rtrim(number_format(IRIS_MAX_UPLOAD_BYTES / 1048576, 2, '.', ''), '0'), '.') . ' MB';
 }
 
+/**
+ * Convert a PHP ini size value (including K/M/G suffixes) to bytes.
+ *
+ * @param string $value Value returned by an ini setting.
+ * @return int Parsed byte count, or zero for an empty setting.
+ */
 function iris_ini_size_bytes(string $value): int
 {
     $value = trim($value);
@@ -20,6 +38,11 @@ function iris_ini_size_bytes(string $value): int
     });
 }
 
+/**
+ * Detect multipart requests discarded by PHP because post_max_size was exceeded.
+ *
+ * @return bool True when PHP dropped the POST body due to its configured size limit.
+ */
 function iris_upload_request_exceeded_post_limit(): bool
 {
     $contentType = strtolower((string)($_SERVER['CONTENT_TYPE'] ?? ''));
@@ -33,6 +56,12 @@ function iris_upload_request_exceeded_post_limit(): bool
         && empty($_FILES);
 }
 
+/**
+ * Map a PHP upload error code to the established user-facing message.
+ *
+ * @param int $code PHP upload error code.
+ * @return string User-facing explanation.
+ */
 function iris_upload_error_message(int $code): string
 {
     return match ($code) {

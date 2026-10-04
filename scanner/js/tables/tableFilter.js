@@ -1,6 +1,11 @@
 /**
  * Search spreadsheet rows using headers and cell values.
  * The optional previous result set lets callers progressively narrow results.
+ * Purpose: Search spreadsheet rows using headers and cell values with OCR-tolerant matching.
+ * Loaded by: scanner/index.php before sheet merging and document viewer consumers.
+ * Inputs/outputs: Accepts headers, rows, query, and optional previous results; exports TableFilter.
+ * Dependencies: None.
+ * Load order: Classic script; load before sheetMerge.js and dependent ES modules.
  */
 (function (root, factory) {
   if (typeof module === 'object' && module.exports) {
@@ -96,6 +101,14 @@
     return terms.length > previousTerms.length && previousTerms.every(term => terms.includes(term));
   }
 
+  /**
+   * Rank matching rows, reusing a prior set only when the query is a strict refinement.
+   * @param {Array<unknown>} headers Spreadsheet headers.
+   * @param {Array<Array<unknown>>} rows Spreadsheet row values.
+   * @param {string} query User search text.
+   * @param {Object} options Previous query/results and header-search configuration.
+   * @returns {Array<Object>} Matching row wrappers ordered by score and source position.
+   */
   function filterRows(headers, rows, query, options = {}) {
     const terms = queryTerms(query);
     const source = terms.length > 0 && isProgressiveQuery(options.previousQuery || '', query) && Array.isArray(options.previousResults)

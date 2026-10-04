@@ -617,6 +617,7 @@
   <!-- JavaScript Modules in Order -->
   <script src="js/parsers/excelParser.js"></script>
   <script src="js/ai/graphEngine.js?v=iris-chart-builder-20261001"></script>
+  <!-- Preserve classic global dependencies above the ES module; mtime versions invalidate asset caches. -->
   <script src="js/database/dbManager.js?v=<?= (int) filemtime(__DIR__.'/js/database/dbManager.js') ?>"></script>
   <script src="js/data/samples.js"></script>
   <script src="js/scanner.js"></script>

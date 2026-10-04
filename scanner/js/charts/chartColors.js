@@ -1,3 +1,10 @@
+/**
+ * Purpose: Resolve stable chart and series colors from saved, shared, and fallback palettes.
+ * Loaded by: Shared admin/Observatory footers and ES-module chart consumers.
+ * Inputs/outputs: Accepts chart/field color metadata; exposes color helpers on globalThis.
+ * Dependencies: None.
+ * Load order: Load before classic or module consumers that read IRISChartColors.
+ */
 (function (root, factory) {
   const api = factory();
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
@@ -23,6 +30,12 @@
     return !Number.isFinite(chartUpdated) || fieldUpdated >= chartUpdated;
   }
 
+  /**
+   * Resolve colors by shared-field freshness, then chart/legacy values, then defaults.
+   * @param {string[]} fields Display names used to look up shared field colors.
+   * @param {Object} options Saved colors, update timestamps, and fallback settings.
+   * @returns {string[]} One valid color per requested field.
+   */
   function resolveFieldColors(fields, {
     chartColors = null,
     fieldColors = globalThis.IRISFieldColors || {},
@@ -54,6 +67,7 @@
     });
   }
 
+  /** Attach resolved itemStyle colors to chart points without mutating the input data. */
   function buildColoredSeriesData(data, names, colors) {
     const source = Array.isArray(data) ? data : [];
     const fields = Array.isArray(names) ? names : [];

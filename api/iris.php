@@ -5,6 +5,7 @@ require_once __DIR__ . '/../includes/helpers/SummaryCardHistory.php';
 require_once __DIR__ . '/../includes/helpers/RecordSheetMerge.php';
 require_once __DIR__ . '/../includes/helpers/RecordFileHistory.php';
 require_once __DIR__ . '/../includes/api/common.php';
+// Authenticate before dispatch so a handler can never bypass the shared role boundary.
 requireRole(['super_admin', 'admin', 'user'], true);
 header('Content-Type: application/json; charset=utf-8');
 
@@ -19,6 +20,7 @@ if (in_array($action, ['preview-record-merge', 'merge-records'], true) && ($_SES
     echo json_encode(['error' => 'Only a Super Admin can merge records.']);
     exit;
 }
+// Mutating requests must pass the admin gate and CSRF check before any resource handler runs.
 if (($_SERVER['REQUEST_METHOD'] ?? 'GET') !== 'GET') {
     requireRole(['super_admin'], true);
     ensure_json_csrf();

@@ -1,3 +1,10 @@
+/**
+ * Purpose: Control shared portal menus, theme switching, and password-change modal behavior.
+ * Loaded by: Shared portal header/footer on admin, office, and Observatory pages.
+ * Inputs/outputs: Reads portal DOM hooks and form data; updates menus and submits password changes.
+ * Dependencies: api/change_password.php and server-provided CSRF/form data attributes.
+ * Load order: Load after the shared portal markup.
+ */
 (() => {
   const toggle = document.getElementById('portalNavToggle');
   const menu = document.getElementById('portalNavMenu');

@@ -70,6 +70,7 @@
                 exit;
             }
             $new = [];
+            // Keep graph rows and their related series/points atomic as one export operation.
             $pdo->beginTransaction();
             try {
                 foreach ($graphs as $graph) {
