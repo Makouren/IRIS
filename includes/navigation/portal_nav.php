@@ -104,4 +104,4 @@ $portalAdminLinks = [
     </div>
 </nav>
 <script>window.IRIS_MAX_UPLOAD_BYTES = <?= IRIS_MAX_UPLOAD_BYTES ?>;</script>
-<script src="<?= e(base_url('scanner/js/ui/portalNavigation.js')) ?>?v=<?= (int) filemtime(__DIR__ . '/../scanner/js/ui/portalNavigation.js') ?>" defer></script>
+<script src="<?= e(base_url('scanner/js/ui/portalNavigation.js')) ?>?v=<?= (int) filemtime(__DIR__ . '/../../scanner/js/ui/portalNavigation.js') ?>" defer></script>
