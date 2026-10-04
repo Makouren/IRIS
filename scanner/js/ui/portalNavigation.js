@@ -10,6 +10,9 @@
   const menu = document.getElementById('portalNavMenu');
   const profileToggle = document.getElementById('user-menu-button');
   const profileMenu = document.getElementById('user-dropdown');
+  const passwordModal = document.getElementById('passwordChangeModal');
+  const passwordForm = passwordModal?.querySelector('[data-password-change-form]');
+  const passwordStatus = passwordModal?.querySelector('[data-password-change-status]');
   const officeThemeToggle = document.getElementById('officeThemeToggle');
   const officeIsDark = () => document.documentElement.classList.contains('dark');
   const setOfficeTheme = dark => {
@@ -53,6 +56,66 @@
       if (event.target.closest('a, button')) setProfileMenuOpen(false);
     });
   }
+
+  if (passwordModal && passwordForm && passwordStatus) {
+    const setPasswordModalOpen = open => {
+      passwordModal.classList.toggle('hidden', !open);
+      passwordModal.classList.toggle('flex', open);
+      passwordModal.setAttribute('aria-hidden', String(!open));
+      if (open) passwordForm.querySelector('[name="current_password"]')?.focus();
+    };
+    const showPasswordStatus = (message, isError = false) => {
+      passwordStatus.textContent = message;
+      passwordStatus.className = `mb-4 rounded-lg p-3 text-sm ${isError
+        ? 'bg-red-50 text-red-800 dark:bg-red-950 dark:text-red-200'
+        : 'bg-emerald-50 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-200'}`;
+    };
+
+    document.querySelectorAll('[data-password-change-open]').forEach(button => {
+      button.addEventListener('click', () => {
+        passwordStatus.classList.add('hidden');
+        setPasswordModalOpen(true);
+      });
+    });
+    passwordModal.querySelectorAll('[data-password-change-close]').forEach(button => {
+      button.addEventListener('click', () => setPasswordModalOpen(false));
+    });
+    passwordModal.addEventListener('click', event => {
+      if (event.target === passwordModal) setPasswordModalOpen(false);
+    });
+    passwordForm.addEventListener('submit', async event => {
+      event.preventDefault();
+      const submitButton = passwordForm.querySelector('[type="submit"]');
+      submitButton.disabled = true;
+      try {
+        const response = await fetch(passwordForm.dataset.api, {
+          method: 'POST',
+          headers: {
+            'Accept': 'application/json',
+            'Content-Type': 'application/json',
+            'X-CSRF-Token': passwordForm.dataset.csrf || ''
+          },
+          body: JSON.stringify(Object.fromEntries(new FormData(passwordForm)))
+        });
+        const result = await response.json();
+        if (!response.ok) throw new Error(result.error || 'Unable to update your password.');
+        passwordForm.reset();
+        showPasswordStatus(result.message || 'Password updated.');
+      } catch (error) {
+        showPasswordStatus(error.message, true);
+      } finally {
+        submitButton.disabled = false;
+      }
+    });
+  }
+
+  document.addEventListener('keydown', event => {
+    if (event.key === 'Escape' && passwordModal && !passwordModal.classList.contains('hidden')) {
+      passwordModal.classList.add('hidden');
+      passwordModal.classList.remove('flex');
+      passwordModal.setAttribute('aria-hidden', 'true');
+    }
+  });
 
   if (!toggle || !menu) return;
 

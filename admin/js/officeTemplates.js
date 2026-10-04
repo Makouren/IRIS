@@ -12,17 +12,19 @@
       templateSelect.value = '';
       options.forEach(option => { option.hidden = !purpose || option.dataset.purpose !== purpose; });
       const available = options.some(option => option.dataset.purpose === purpose);
-      templateSelect.required = purpose === 'analytics';
-      templateSelect.disabled = !purpose || hasImportProfile || !available;
+      templateSelect.required = false;
+      templateSelect.disabled = !purpose || hasImportProfile;
       if (templateControl) templateControl.hidden = !purpose || hasImportProfile;
       templateSelect.options[0].textContent = purpose
         ? (purpose === 'analytics'
-          ? (available ? 'Choose a template' : 'No templates available')
+          ? 'General (uncategorized — template can be assigned later)'
           : 'Active destination profile is used automatically')
         : 'Choose a purpose first';
       if (templateHelp) templateHelp.textContent = purpose
         ? (purpose === 'analytics'
-          ? (available ? 'Choose a template for general data and report visualization.' : 'No general data templates are available. Ask the Super Admin to add one.')
+          ? (available
+            ? 'Choose a template, or keep General to submit without one. The Super Admin can configure it later.'
+            : 'No templates are available yet. General lets you submit now; the Super Admin can configure a template later.')
           : 'The active destination profile will be used automatically.')
         : 'Choose a destination to see its import profile.';
     };

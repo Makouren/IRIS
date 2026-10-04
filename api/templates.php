@@ -45,6 +45,7 @@ try {
     require_once __DIR__ . '/../includes/helpers/SummaryCardImportProfiles.php';
     require_once __DIR__ . '/../includes/helpers/CustomImportFields.php';
     require_once __DIR__ . '/../includes/helpers/ProfileWorkbookService.php';
+    require_once __DIR__ . '/../includes/helpers/ImportedRecordDataCleanup.php';
     if (iris_upload_request_exceeded_post_limit()) {
         templates_fail('The upload request exceeds the server request limit. Keep the file at or below ' . iris_upload_limit_label() . ' and configure PHP post_max_size to at least 12M.');
     }
@@ -314,6 +315,18 @@ try {
         echo json_encode(['success' => true, 'active_profile_id' => (int)$profile['id'], 'profile_name' => $profile['profile_name'], 'destination' => $destination]);
         exit;
     }
+    if ($action === 'deactivate-import-profile') {
+        $profileId = filter_var($_POST['profile_id'] ?? null, FILTER_VALIDATE_INT);
+        $destination = (string)($_POST['destination'] ?? '');
+        if (!$profileId || $profileId < 1 || !in_array($destination, ['summary_cards', 'ranking_history'], true)) templates_fail('Choose a valid import profile and destination.');
+        try {
+            $profile = SummaryCardImportProfiles::deactivate($pdo, (int)$profileId, (int)$_SESSION['user_id'], $destination);
+        } catch (RuntimeException $exception) {
+            templates_fail($exception->getMessage(), 409);
+        }
+        echo json_encode(['success' => true, 'profile_name' => $profile['profile_name'], 'destination' => $destination]);
+        exit;
+    }
     if ($action === 'save-import-profile-settings') {
         templates_require_destination_schema($pdo);
         $profileId = filter_var($_POST['profile_id'] ?? null, FILTER_VALIDATE_INT);
@@ -363,7 +376,7 @@ try {
                 if (!isset($mapping[$field])) templates_fail('Required Ranking History mapping is missing: ' . $field);
             }
         } else {
-            $allowedFields = ['import_key', 'card_title', 'main_value', 'secondary_value', 'year_date', 'main_label', 'secondary_label', 'description', 'secondary_description', 'info_text', 'source_info', 'period_key'];
+            $allowedFields = ['import_key', 'card_title', 'main_value', 'secondary_value', 'year_date', 'main_label', 'secondary_label', 'description', 'secondary_description', 'info_text', 'source_info', 'period_key', 'category_names', 'display_precision'];
             if (!$identityFields || !in_array('import_key', $identityFields, true) || in_array('period_key', $identityFields, true)) templates_fail('Summary Card identity fields must include import_key and exclude period_key.');
             $allowedFields = array_values(array_unique(array_merge($allowedFields, $identityFields)));
             foreach (['import_key', 'period_key', 'main_value', 'main_label'] as $field) if (!isset($mapping[$field])) templates_fail('Required Summary Card mapping is missing: ' . $field);
@@ -467,7 +480,6 @@ try {
         if ($recordId === '') templates_fail('Choose a Summary Card upload to delete.');
         $record = null;
         $storedFile = '';
-        $preservedRecord = false;
         $pdo->beginTransaction();
         try {
             $query = $pdo->prepare('SELECT record_id AS id, file_name AS fileName, template_id, import_profile_id, metadata FROM records WHERE record_id = ? FOR UPDATE');
@@ -489,23 +501,15 @@ try {
                 $isSummaryUpload = $purposeQuery->fetchColumn() === 'summary_cards';
             }
             if (!$isSummaryUpload) throw new RuntimeException('Only Summary Card uploads can be deleted here.', 409);
-            $applied = $pdo->prepare("SELECT COUNT(*) FROM import_batches WHERE source_record_id = ? AND import_type = 'summary_cards' AND status = 'applied'");
-            $applied->execute([$recordId]);
-            $hasAppliedBatch = (int)$applied->fetchColumn() > 0;
-            $historyReferences = $pdo->prepare('SELECT COUNT(*) FROM summary_card_snapshots WHERE BINARY source_record_id = BINARY ? OR BINARY last_source_record_id = BINARY ?');
-            $historyReferences->execute([$recordId, $recordId]);
-            $hasHistoryReferences = (int)$historyReferences->fetchColumn() > 0;
-            $preservedRecord = $hasAppliedBatch || $hasHistoryReferences;
             $storedFile = is_array($metadata) ? (string)($metadata['stored_file'] ?? '') : '';
             if (!preg_match('/^[a-f0-9]{48}\.(xlsx|csv|tsv)$/', $storedFile)) {
                 throw new RuntimeException('The selected upload has no supported private file to delete.', 409);
             }
-            if (!$preservedRecord) {
-                $pdo->prepare('DELETE FROM saved_graphs WHERE record_id = ?')->execute([$recordId]);
-                $delete = $pdo->prepare('DELETE FROM records WHERE record_id = ?');
-                $delete->execute([(int)$recordId]);
-                if ($delete->rowCount() !== 1) throw new RuntimeException('The selected upload could not be deleted.', 409);
-            }
+            ImportedRecordDataCleanup::remove($pdo, (int)$recordId);
+            $pdo->prepare('DELETE FROM saved_graphs WHERE record_id = ?')->execute([$recordId]);
+            $delete = $pdo->prepare('DELETE FROM records WHERE record_id = ?');
+            $delete->execute([(int)$recordId]);
+            if ($delete->rowCount() !== 1) throw new RuntimeException('The selected upload could not be deleted.', 409);
             $pdo->commit();
         } catch (Throwable $exception) {
             if ($pdo->inTransaction()) $pdo->rollBack();
@@ -528,7 +532,7 @@ try {
         if (!$referenced && $root && $path && dirname($path) === $root && $outsideWebRoot && is_file($path) && !@unlink($path)) {
             error_log('IRIS could not remove deleted Summary Card upload file: ' . $storedFile);
         }
-        echo json_encode(['success' => true, 'deleted_record_id' => $recordId, 'deleted_file_name' => (string)($record['fileName'] ?? ''), 'preserved_record' => $preservedRecord]);
+        echo json_encode(['success' => true, 'deleted_record_id' => $recordId, 'deleted_file_name' => (string)($record['fileName'] ?? '')]);
         exit;
     }
     if ($action === 'activate-summary-card-profile') {
@@ -611,7 +615,7 @@ try {
         if (!is_array($profileData)) templates_fail('Import profile must be valid JSON.');
         $allowedFields = $destination === 'ranking_history'
             ? ['organization', 'ranking_type', 'year', 'global_rank', 'ph_rank', 'info_text']
-            : ['import_key', 'card_title', 'main_value', 'secondary_value', 'year_date', 'main_label', 'secondary_label', 'description', 'secondary_description', 'info_text', 'source_info', 'period_key'];
+            : ['import_key', 'card_title', 'main_value', 'secondary_value', 'year_date', 'main_label', 'secondary_label', 'description', 'secondary_description', 'info_text', 'source_info', 'period_key', 'category_names', 'display_precision'];
         $aliases = $profileData['header_aliases'] ?? [];
         $mapping = $profileData['mapping_rules'] ?? [];
         $required = $profileData['required_columns'] ?? [];

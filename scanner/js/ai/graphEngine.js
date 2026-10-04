@@ -106,7 +106,7 @@ class GraphEngine {
 
       drafts.push({
         id: `draft_${Date.now()}_${datasetIndex}`,
-        title: `${headerName} — ${sourceLabel}`,
+        title: (sourceLabel || '').replace(/[_\s]/g, '').toLowerCase() === 'manualdata' ? headerName : `${headerName} \u2014 ${sourceLabel}`,
         source: sourceLabel,
         primaryType,
         recommendation,

@@ -1,9 +1,40 @@
 import { $, escapeHtml } from '../utils/helpers.js';
-import { createChart, buildSavedGraphOption } from './chartEngine.js?v=echarts-six-chart-types-1';
+import { createChart, buildSavedGraphOption } from './chartEngine.js?v=rank-axis-render-sync-20261004';
 
 function getRecordName(graph, records) {
   const record = records.find(item => String(item.id) === String(graph.record_id));
   return graph.source_file_name || record?.fileName || graph.record_id || 'Unknown file';
+}
+
+function getReportVisualizationGraphs(records) {
+  return records.flatMap(record => {
+    const drafts = Array.isArray(record.graphDrafts) ? record.graphDrafts : [];
+    return drafts.flatMap((draft, index) => {
+      if (!draft || typeof draft !== 'object') return [];
+      const chartData = draft.chartData || draft.chart_data || {};
+      const candidateSeriesData = chartData.series?.[0]?.data || chartData.datasets?.[0]?.data || [];
+      const seriesData = Array.isArray(candidateSeriesData) ? candidateSeriesData : [];
+      const candidateLabels = draft.labels || chartData.labels || chartData.xAxis?.data;
+      const labels = Array.isArray(candidateLabels) ? candidateLabels
+        : seriesData.map((point, pointIndex) => point && typeof point === 'object' ? point.name ?? String(pointIndex + 1) : String(pointIndex + 1));
+      const candidateValues = draft.values_data || chartData.rawValues;
+      const values = Array.isArray(candidateValues) ? candidateValues
+        : seriesData.map(point => point && typeof point === 'object' ? point.rawValue ?? point.value : point);
+      return [{
+        id: `report-draft-${record.id}-${index}`,
+        record_id: record.id,
+        source_file_name: record.fileName,
+        source_file_type: record.fileType,
+        title: draft.title || 'Report Visualization',
+        chart_type: draft.chart_type || draft.primaryType || 'bar',
+        chart_data: chartData,
+        labels,
+        values_data: values,
+        report_source: draft.source || '',
+        is_report_draft: true
+      }];
+    });
+  });
 }
 
 export function downloadText(payload) {
@@ -270,13 +301,43 @@ export function initSavedGraphsTab(ctx) {
     return { card, canvasId, render };
   };
 
+  const renderReportVisualizationCard = (graph, records) => {
+    const canvasId = `report_visualization_canvas_${String(graph.id).replace(/[^a-zA-Z0-9_-]/g, '_')}`;
+    const card = document.createElement('div');
+    card.className = 'graph-card';
+    card.dataset.reportVisualization = 'true';
+    const sourceName = getRecordName(graph, records);
+    const chartType = ['line', 'stackedArea', 'bar', 'pie', 'doughnut', 'nestedPie'].includes(String(graph.chart_type))
+      ? graph.chart_type
+      : 'bar';
+    card.innerHTML = `<div class="graph-card-header"><div><div class="graph-card-title">${escapeHtml(graph.title || 'Report Visualization')}</div><div style="font-size:.78rem;color:var(--text-muted);margin-top:.25rem;">Source: ${escapeHtml(sourceName)}${graph.report_source ? ` · ${escapeHtml(graph.report_source)}` : ''}</div></div><div class="graph-card-actions"><span class="badge badge-low">DATA REPORT</span><button class="graph-action-button export-report-print" type="button" title="Print this report visualization"><svg aria-hidden="true" viewBox="0 0 24 24"><path d="M6 9V4h12v5M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2M6 14h12v6H6z"/></svg><span>Print Sheet</span></button></div></div><div style="font-size:.82rem;color:var(--accent-cyan);margin-bottom:1rem;">Chart type: <strong>${escapeHtml(chartType.replace(/([a-z])([A-Z])/g, '$1 $2').toUpperCase())}</strong></div><div class="graph-canvas-container"><div id="${canvasId}" style="height:100%;width:100%"></div></div>`;
+    card.querySelector('.export-report-print').onclick = () => ctx.dbManager.printGraphSheet(graph, { recordName: sourceName });
+
+    const render = () => {
+      const chartHost = $(canvasId);
+      if (!chartHost) return;
+      card._savedChartResizeObserver?.disconnect?.();
+      card._savedChart?.dispose?.();
+      card._savedGraph = graph;
+      card._savedChart = createChart(chartHost, chartType, graph);
+      card._savedChart?.resize?.();
+      if (typeof ResizeObserver !== 'undefined') {
+        card._savedChartResizeObserver = new ResizeObserver(() => card._savedChart?.resize?.());
+        card._savedChartResizeObserver.observe(chartHost);
+      }
+    };
+    return { card, render };
+  };
+
   ctx.api.renderSavedGraphsTab = async () => {
     const container = $('savedDashboardGraphsContainer');
     if (!container) return;
-    const graphs = await ctx.dbManager.getAllSavedGraphs();
-    ctx.api.savedGraphsAll = graphs;
+    const savedGraphs = await ctx.dbManager.getAllSavedGraphs();
     const records = await ctx.dbManager.getAllRecords();
     ctx.api.savedGraphsRecords = records;
+    const reportGraphs = getReportVisualizationGraphs(records);
+    const graphs = [...savedGraphs, ...reportGraphs];
+    ctx.api.savedGraphsAll = savedGraphs;
     const select = $('savedGraphsRecordSelect');
     const ids = [...new Set(graphs.map(graph => String(graph.record_id || '')).filter(Boolean))];
 
@@ -300,14 +361,16 @@ export function initSavedGraphsTab(ctx) {
     }
 
     const selectedId = String(select?.value || ids[0] || '');
-    let visibleGraphs = state.savedGraphsViewAll ? graphs : graphs.filter(graph => String(graph.record_id || '') === selectedId);
-    ctx.api.savedGraphsVisible = visibleGraphs;
+    const visibleGraphs = state.savedGraphsViewAll ? graphs : graphs.filter(graph => String(graph.record_id || '') === selectedId);
+    const selectableGraphs = visibleGraphs.filter(graph => !graph.is_report_draft);
+    ctx.api.savedGraphsVisible = selectableGraphs;
+    ctx.api.savedGraphsEntriesVisible = visibleGraphs;
     container.querySelectorAll('.graph-card').forEach(card => { card._savedChartResizeObserver?.disconnect?.(); card._savedChart?.dispose?.(); card._savedChart?.destroy?.(); });
     container.innerHTML = '';
 
     if (!visibleGraphs.length) {
-      container.innerHTML = '<div style="color:var(--text-muted);padding:2rem;text-align:center">No saved dashboard graphs found for the selected file yet. Save a chart in the Studio to populate this view.</div>';
-      refreshSelectionUi(visibleGraphs);
+      container.innerHTML = '<div style="color:var(--text-muted);padding:2rem;text-align:center">No saved graphs or report visualizations were found for the selected file.</div>';
+      refreshSelectionUi(selectableGraphs);
       return;
     }
 
@@ -321,8 +384,12 @@ export function initSavedGraphsTab(ctx) {
         heading.style.cssText = 'margin:1.25rem 0 .65rem;color:#146C36;border-bottom:1px solid #D7E3DA;padding-bottom:.45rem;';
         heading.innerHTML = `<i class="fa-solid fa-folder" aria-hidden="true"></i> ${escapeHtml(getRecordName(first, records))} (${(first.source_file_type || record?.fileType || 'FILE').toUpperCase()})`;
         container.appendChild(heading);
-        group.forEach((graph, index) => {
-          const rendered = renderCard(graph, group.length - index, records);
+        let savedGraphIndex = 0;
+        const savedGraphCount = group.filter(graph => !graph.is_report_draft).length;
+        group.forEach(graph => {
+          const rendered = graph.is_report_draft
+            ? renderReportVisualizationCard(graph, records)
+            : renderCard(graph, savedGraphCount - savedGraphIndex++, records);
           container.appendChild(rendered.card);
           requestAnimationFrame(() => {
             rendered.render();
@@ -330,8 +397,12 @@ export function initSavedGraphsTab(ctx) {
         });
       });
     } else {
-      visibleGraphs.forEach((graph, index) => {
-        const rendered = renderCard(graph, visibleGraphs.length - index, records);
+      let savedGraphIndex = 0;
+      const savedGraphCount = visibleGraphs.filter(graph => !graph.is_report_draft).length;
+      visibleGraphs.forEach(graph => {
+        const rendered = graph.is_report_draft
+          ? renderReportVisualizationCard(graph, records)
+          : renderCard(graph, savedGraphCount - savedGraphIndex++, records);
         container.appendChild(rendered.card);
         requestAnimationFrame(() => {
           rendered.render();
@@ -339,7 +410,7 @@ export function initSavedGraphsTab(ctx) {
       });
     }
 
-    refreshSelectionUi(visibleGraphs);
+    refreshSelectionUi(selectableGraphs);
   };
 
   $('savedGraphsViewAllBtn')?.addEventListener('click', async event => {

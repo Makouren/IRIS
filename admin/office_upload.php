@@ -50,9 +50,20 @@ $error = flash('error');
     <?php render_iris_stylesheet_bundle(); ?>
     <link rel="stylesheet" href="<?= e(base_url('scanner/css/portalNavigation.css')) ?>?v=<?= (int) filemtime(__DIR__ . '/../scanner/css/portalNavigation.css') ?>">
     <script src="<?= e(base_url('scanner/js/ui/dotBackground.js')) ?>?v=<?= (int) filemtime(__DIR__ . '/../scanner/js/ui/dotBackground.js') ?>" defer></script>
+    <style>
+        #page-loader{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;background:rgba(15,23,42,.68);backdrop-filter:blur(6px);z-index:10000;transition:opacity .3s ease,visibility .3s ease;}
+        #page-loader.hidden{opacity:0;visibility:hidden;pointer-events:none;}
+        .iris-loader{position:relative;width:72px;height:72px;border-radius:50%;background:conic-gradient(#10b981,#34d399,#fbbf24,#10b981);animation:spin 1s linear infinite;box-shadow:0 0 30px rgba(16,185,129,.5)}
+        .iris-loader::before{content:"";position:absolute;inset:10px;border-radius:50%;background:rgba(15,23,42,.9);border:2px solid rgba(255,255,255,.18)}
+        .iris-loader::after{content:"IRIS";position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:800;letter-spacing:.12em;color:#d1fae5}
+        @keyframes spin{to{transform:rotate(360deg)}}
+    </style>
 </head>
 <body class="dot-grid-dashboard min-h-screen text-gray-900 dark:text-gray-100">
     <div id="dashboard-dot-background" aria-hidden="true"></div>
+    <div id="page-loader" class="hidden" aria-live="polite" aria-label="Loading page">
+        <div class="iris-loader" aria-hidden="true"></div>
+    </div>
     <?php $portalNavMode = 'office'; require __DIR__ . '/../includes/navigation/portal_nav.php'; ?>
     <main class="dashboard-container office-upload-layout">
         <section class="studio-left-card office-upload-form-card h-fit">
@@ -72,7 +83,7 @@ $error = flash('error');
                 <div data-template-control>
                     <label for="officeTemplateSelect" class="block text-sm font-semibold">Template profile (optional)</label>
                     <select id="officeTemplateSelect" name="template_id" disabled class="form-input disabled:opacity-50">
-                        <option value="">Use active destination profile</option>
+                        <option value="">General (uncategorized — template can be assigned later)</option>
                         <?php foreach ($templates as $template): ?>
                             <option value="<?= (int)$template['id'] ?>" data-purpose="<?= e($template['upload_purpose']) ?>">
                                 <?= e($template['name'] . ' — ' . $template['original_filename']) ?>
@@ -90,7 +101,7 @@ $error = flash('error');
         </section>
         <section class="studio-right-card office-uploads-panel">
             <div class="mb-4 flex flex-wrap items-end justify-between gap-3"><div><h2 class="text-lg font-bold">Your uploads</h2><p class="text-sm text-gray-500 dark:text-slate-400">Only files submitted by this office are shown.</p></div><span class="badge badge-low"><?= count($uploads) ?> total</span></div>
-            <div class="table-container">
+            <div class="table-container office-uploads-scroll" tabindex="0" aria-label="Your recent uploads; scroll to see older uploads">
                 <table class="data-table office-uploads-table">
                     <thead><tr><th>File</th><th>Purpose</th><th>Date</th><th>Status</th></tr></thead>
                     <tbody>
@@ -151,5 +162,33 @@ $error = flash('error');
     </script>
     <script src="<?= e(base_url('admin/js/officeTemplates.js')) ?>?v=<?= (int) filemtime(__DIR__ . '/js/officeTemplates.js') ?>" defer></script>
     <?php require __DIR__ . '/../includes/scripts/change_refresh_script.php'; ?>
+    <script>
+        (function () {
+            const loader = document.getElementById('page-loader');
+            let templateDownloadPending = false;
+            let templateDownloadReset;
+            const hideLoader = () => { if (loader) loader.classList.add('hidden'); };
+            setTimeout(hideLoader, 90);
+            window.addEventListener('load', hideLoader);
+            document.addEventListener('click', event => {
+                const link = event.target.closest('a[href]');
+                if (!link) return;
+                const target = new URL(link.href, window.location.href);
+                if (!target.pathname.endsWith('/admin/template_download.php')) return;
+                templateDownloadPending = true;
+                window.clearTimeout(templateDownloadReset);
+                templateDownloadReset = window.setTimeout(() => { templateDownloadPending = false; }, 2000);
+            }, true);
+            window.addEventListener('beforeunload', () => {
+                if (templateDownloadPending) {
+                    templateDownloadPending = false;
+                    window.clearTimeout(templateDownloadReset);
+                    return;
+                }
+                if (loader) loader.classList.remove('hidden');
+            });
+            window.addEventListener('pagehide', () => { if (loader) loader.classList.add('hidden'); });
+        })();
+    </script>
 </body>
 </html>

@@ -80,7 +80,11 @@
     const sourceSeries = Array.isArray(options?.series) ? options.series : [];
     const series = sourceSeries.map((item, seriesIndex) => ({
       name: item.name || `Series ${seriesIndex + 1}`,
-      data: (Array.isArray(item.data) ? item.data : []).map(point => point && typeof point === 'object' ? point.rawValue ?? point.value : point)
+      data: (Array.isArray(item.data) ? item.data : []).map((point, index, points) => {
+        const sourceIndex = config.reverseOrder ? points.length - index - 1 : index;
+        const sourcePoint = points[sourceIndex];
+        return sourcePoint && typeof sourcePoint === 'object' ? sourcePoint.rawValue ?? sourcePoint.value : sourcePoint;
+      })
     }));
     const firstSeries = sourceSeries[0] || {};
     const points = Array.isArray(firstSeries.data) ? firstSeries.data : [];

@@ -1,5 +1,5 @@
 import { $, escapeHtml, parseEditableValue } from '../utils/helpers.js';
-import { renderStudioChart } from './chartEngine.js?v=echarts-six-chart-types-1';
+import { renderStudioChart } from './chartEngine.js?v=rank-axis-render-sync-20261004';
 import { initStudioColorCustomizer } from './studioColorCustomizer.js?v=echarts-six-chart-types-1';
 
 export function initStudioWorkbench(ctx) {

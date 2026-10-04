@@ -1,5 +1,5 @@
 import { $, all, escapeHtml } from '../utils/helpers.js';
-import { buildSavedGraphOption, createChart } from './chartEngine.js?v=echarts-six-chart-types-1';
+import { buildSavedGraphOption, createChart } from './chartEngine.js?v=rank-axis-render-sync-20261004';
 import { downloadText, showExportChoice } from './savedGraphsTab.js';
 
 export function initGraphsTab(ctx) {

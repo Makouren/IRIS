@@ -133,11 +133,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             background-image: radial-gradient(rgba(255,255,255,0.08) 1px, transparent 1px);
             background-size: 18px 18px;
         }
+        #page-loader{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;background:rgba(15,23,42,.68);backdrop-filter:blur(6px);z-index:10000;transition:opacity .3s ease,visibility .3s ease;}
+        #page-loader.hidden{opacity:0;visibility:hidden;pointer-events:none;}
+        .iris-loader{position:relative;width:72px;height:72px;border-radius:50%;background:conic-gradient(#10b981,#34d399,#fbbf24,#10b981);animation:spin 1s linear infinite;box-shadow:0 0 30px rgba(16,185,129,.5)}
+        .iris-loader::before{content:"";position:absolute;inset:10px;border-radius:50%;background:rgba(15,23,42,.9);border:2px solid rgba(255,255,255,.18)}
+        .iris-loader::after{content:"IRIS";position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:800;letter-spacing:.12em;color:#d1fae5}
+        @keyframes spin{to{transform:rotate(360deg)}}
     </style>
 </head>
 <body class="login-page min-h-screen flex items-center justify-center p-4 bg-dots">
 
-    <div class="w-full max-w-4xl grid md:grid-cols-2 rounded-3xl overflow-hidden shadow-2xl border border-white/10">
+    <div id="page-loader" class="hidden" aria-live="polite" aria-label="Loading page">
+        <div class="iris-loader" aria-hidden="true"></div>
+    </div>
+
+    <div class="w-full max-w-4xl grid md:grid-cols-2 rounded-3xl overflow-hidden shadow-2xl border border-white/10 relative z-10">
 
         <!-- Left brand panel -->
         <div class="hidden md:flex flex-col justify-between bg-gradient-to-br from-brand-600 to-brand-800 dark:from-brand-900 dark:to-brand-950 p-10 text-white relative overflow-hidden transition-colors">
@@ -408,11 +418,23 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 return;
             }
 
-            // Prevent double-submit while the POST is in flight.
+            // Prevent double-submit and show smooth transition loading screen
             if (submitButton && !submitButton.disabled) {
+                event.preventDefault(); // Intercept the immediate POST
+
                 submitButton.disabled = true;
                 submitButton.classList.add('opacity-60', 'cursor-not-allowed');
                 submitButton.innerHTML = '<i class="fa-solid fa-spinner fa-spin mr-2"></i> Signing in…';
+
+                const loadingOverlay = document.getElementById('page-loader');
+                if (loadingOverlay) {
+                    loadingOverlay.classList.remove('hidden');
+                }
+
+                // Artificial transition delay before actually submitting
+                setTimeout(() => {
+                    loginForm.submit();
+                }, 500);
             }
         });
 

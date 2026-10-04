@@ -410,6 +410,7 @@ export function initAdminPortal(ctx) {
       const uploader = officeName || (record.uploaded_by ? 'Office' : 'Legacy / Super Admin');
       const templateLabel = record.template_name ? ` · via ${record.template_name}` : '';
       const isNew = Boolean(record.uploaded_at && !record.opened_at);
+      const isUncategorized = record.metadata?.template_status === 'uncategorized';
         const recordId = escape(record.id);
         const merge = record.metadata?.merge;
         const recentMerge = window.SheetMerge?.isRecentMerge(record.metadata, new Date()) === true;
@@ -419,7 +420,7 @@ export function initAdminPortal(ctx) {
       return `<tr>
         <td><input class="admin-record-checkbox" type="checkbox" data-id="${escape(record.id)}" aria-label="Select record ${escape(record.id)}"></td>
         <td>${escape(record.id)}</td>
-          <td>${escape(record.fileName || 'Untitled')}${recentMerge ? ` <span class="badge badge-low" title="${escape(mergeBadgeTitle)}">NEW</span>` : ''}</td>
+          <td>${escape(record.fileName || 'Untitled')}${isUncategorized ? ' <span class="badge badge-low" title="General upload without a template; assign or configure a template during review">GENERAL · TEMPLATE NEEDED</span>' : ''}${recentMerge ? ` <span class="badge badge-low" title="${escape(mergeBadgeTitle)}">NEW</span>` : ''}</td>
         <td>${escape(uploader)}${escape(templateLabel)}${isNew ? ' <span class="badge badge-low" aria-label="New, not yet opened">New</span>' : ''}</td>
         <td>${escape((record.fileType || 'UNKNOWN').toUpperCase())}</td>
         <td><span class="badge">${escape(displayStatus)}</span></td>
@@ -432,7 +433,6 @@ export function initAdminPortal(ctx) {
             <div class="record-actions-menu" role="menu" aria-label="File actions" hidden>
               <div class="record-actions-menu-group">Workflow</div>
               <button class="record-actions-menu-item btn-table-load-studio" type="button" role="menuitem" data-id="${recordId}"><i class="fa-solid fa-palette" aria-hidden="true"></i><span>Review</span></button>
-              ${record.metadata?.stored_file && status !== 'Approved' && (!record.template_id || !['xlsx', 'csv', 'tsv'].includes(String(record.fileType || '').toLowerCase())) ? `<button class="record-actions-menu-item" type="button" role="menuitem" data-template-review-record="${recordId}"><i class="fa-solid fa-code-compare" aria-hidden="true"></i><span>Diff &amp; Approve</span></button>` : ''}
               ${approved ? `<button class="record-actions-menu-item btn-table-unpublish" type="button" role="menuitem" data-id="${recordId}" title="Unpublish this record and its saved charts"><i class="fa-solid fa-eye-slash" aria-hidden="true"></i><span>Unpublish</span></button>` : `<button class="record-actions-menu-item btn-table-approve" type="button" role="menuitem" data-id="${recordId}"><i class="fa-solid fa-circle-check" aria-hidden="true"></i><span>Publish</span></button>`}
               <div class="record-actions-menu-divider" role="separator"></div>
               <div class="record-actions-menu-group">Information</div>
@@ -463,16 +463,11 @@ export function initAdminPortal(ctx) {
 
     all('.btn-table-load-studio').forEach(button => button.onclick = async () => {
       const record = filtered.find(item => String(item.id) === String(button.dataset.id));
-      if (record) {
-        try {
-          const response = await fetch(ctx.dbManager.config.endpoints.recordById(record.id), { headers: { Accept: 'application/json' } });
-          if (response.ok) Object.assign(record, await response.json());
-        } catch (error) {}
-        ctx.state.studioActiveRecord = record;
-        setEditorRecordUrl(record.id);
-        ctx.api.renderStudioWorkbench(record);
-        const workbench = $('studioContainer');
-        if (workbench) requestAnimationFrame(() => workbench.scrollIntoView({ behavior: 'smooth', block: 'start' }));
+      if (!record) return;
+      try {
+        await ctx.api.openReviewStudio(record.id);
+      } catch (error) {
+        alert(`Unable to open "${record.fileName || record.id}" for review: ${error.message}`);
       }
     });
 
@@ -591,7 +586,33 @@ export function initAdminPortal(ctx) {
         showToast(message);
       } catch (error) {
         action.disabled = false;
-        alert(`${mode[0].toUpperCase()}${mode.slice(1)} failed: ${error.message}`);
+        if (mode === 'delete' && error.message && error.message.includes('was stopped to protect')) {
+          let overrideWarning = modal.querySelector('[data-override-warning]');
+          if (!overrideWarning) {
+            overrideWarning = document.createElement('div');
+            overrideWarning.dataset.overrideWarning = '';
+            overrideWarning.style.cssText = 'margin-top:.75rem;padding:.65rem .75rem;background:#fef2f2;border:1px solid #fca5a5;border-radius:.5rem;font-size:.8rem;color:#991b1b;';
+            overrideWarning.innerHTML = `<strong>⚠ Data protection triggered:</strong> ${error.message}<br><br>` +
+              `<button type="button" data-override-confirm style="margin-top:.4rem;padding:.4rem .85rem;background:#dc2626;color:#fff;border:none;border-radius:.375rem;font-size:.8rem;font-weight:700;cursor:pointer;">Override &amp; force delete</button>` +
+              `<span style="margin-left:.5rem;font-size:.75rem;color:#7f1d1d;">This will delete even if the data has changed since import.</span>`;
+            action.closest('div').before(overrideWarning);
+            overrideWarning.querySelector('[data-override-confirm]').onclick = async () => {
+              overrideWarning.querySelector('[data-override-confirm]').disabled = true;
+              try {
+                const result = await ctx.dbManager.deleteRecords(selectedIds, { override: true });
+                close();
+                selectedRecordIds.clear();
+                await ctx.api.renderAdminPortal();
+                showToast(`${result.successCount} of ${selectedIds.length} records force-deleted.`);
+              } catch (overrideError) {
+                overrideWarning.querySelector('[data-override-confirm]').disabled = false;
+                alert(`Force delete failed: ${overrideError.message}`);
+              }
+            };
+          }
+        } else {
+          alert(`${mode[0].toUpperCase()}${mode.slice(1)} failed: ${error.message}`);
+        }
       }
     };
   };
@@ -714,7 +735,22 @@ export function initAdminPortal(ctx) {
   window.addEventListener('focus', refreshArchive);
   document.addEventListener('visibilitychange', refreshArchive);
   refreshTimer = window.setInterval(refreshArchive, 30000);
-  window.addEventListener('pagehide', () => window.clearInterval(refreshTimer), { once: true });
+
+  let changeChannel = null;
+  if ('BroadcastChannel' in window) {
+    changeChannel = new BroadcastChannel('iris-data-change');
+    changeChannel.addEventListener('message', () => {
+      // If we are currently visible, fetch immediately. If not, visibilitychange will catch it.
+      if (document.visibilityState === 'visible') {
+        refreshArchive();
+      }
+    });
+  }
+
+  window.addEventListener('pagehide', () => {
+    window.clearInterval(refreshTimer);
+    if (changeChannel) changeChannel.close();
+  }, { once: true });
 
   ctx.api.renderAdminPortal();
 }

@@ -7,7 +7,10 @@
   const form = document.getElementById('rankingHistoryAdminForm');
   const list = document.getElementById('rankingHistoryAdminList');
   const yearFilter = document.getElementById('rankingHistoryAdminYearFilter');
+  const packFilter = document.getElementById('rankingHistoryAdminPackFilter');
   const searchInput = document.getElementById('rankingHistoryAdminSearch');
+  const expandGroupsButton = document.getElementById('expandRankingHistoryGroups');
+  const collapseGroupsButton = document.getElementById('collapseRankingHistoryGroups');
   const chartDefaultOrganization = document.getElementById('rankingHistoryChartDefaultOrganization');
   const chartDefaultList = document.getElementById('rankingHistoryChartDefaultList');
   const chartDefaultsStatus = document.getElementById('rankingHistoryChartDefaultsStatus');
@@ -19,7 +22,15 @@
 
   let rankings = [];
   let customFieldDefinitions = {};
+  const rankingGroupOpenState = new Map();
   const escapeHtml = value => String(value ?? '').replace(/[&<>"']/g, character => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[character]));
+  const normalizeSearchText = value => String(value ?? '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLocaleLowerCase();
+  const searchValues = value => {
+    if (value == null) return [];
+    if (Array.isArray(value)) return value.flatMap(searchValues);
+    if (typeof value === 'object') return Object.values(value).flatMap(searchValues);
+    return [String(value)];
+  };
 
   function rankingGraphValue(organization, type) {
     return JSON.stringify([organization, type]);
@@ -105,30 +116,44 @@
   }
 
   function render() {
+    list.querySelectorAll('[data-ranking-group]').forEach(group => {
+      rankingGroupOpenState.set(group.dataset.rankingGroup, group.open);
+    });
     const selectedYear = yearFilter.value || 'all';
     const years = [...new Set(rankings.map(row => String(row.year)))].sort((left, right) => Number(right) - Number(left));
     yearFilter.innerHTML = '<option value="all">All years</option>' + years.map(year => `<option value="${escapeHtml(year)}">${escapeHtml(year)}</option>`).join('');
     yearFilter.value = years.includes(selectedYear) || selectedYear === 'all' ? selectedYear : 'all';
-    const searchTerm = (searchInput?.value || '').trim().toLocaleLowerCase();
+    const searchTerms = normalizeSearchText(searchInput?.value).trim().split(/\s+/).filter(Boolean);
+    const selectedPack = packFilter?.value || 'all';
     const visible = rankings.filter(row => {
       if (yearFilter.value !== 'all' && String(row.year) !== yearFilter.value) return false;
-      if (!searchTerm) return true;
-      const searchable = [row.organization, row.ranking_type, row.year, row.global_rank, row.info_text]
-        .filter(Boolean).join(' ').toLocaleLowerCase();
-      return searchable.includes(searchTerm);
+      const packName = String(row.ranking_type || row.organization || '').trim() || 'Unclassified';
+      if (selectedPack !== 'all' && packName !== selectedPack) return false;
+      if (!searchTerms.length) return true;
+      const searchable = normalizeSearchText(searchValues([
+        packName, row.organization, row.organization_short_name, row.ranking_type, row.year,
+        row.global_rank, row.rank_value, row.ph_rank, row.info_text, row.custom_fields
+      ]).join(' '));
+      return searchTerms.every(term => searchable.includes(term));
     });
     if (!visible.length) {
-      list.innerHTML = `<div class="rounded-xl border border-dashed border-gray-300 bg-gray-50 px-4 py-6 text-center text-sm text-gray-600 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200">${searchTerm ? 'No rankings match your search and filters.' : 'No ranking rows found.'}</div>`;
+      list.innerHTML = `<div class="rounded-xl border border-dashed border-gray-300 bg-gray-50 px-4 py-6 text-center text-sm text-gray-600 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200">${searchTerms.length || selectedPack !== 'all' || yearFilter.value !== 'all' ? 'No rankings match your search and filters.' : 'No ranking rows found.'}</div>`;
       bindBulkDelete(0);
       return;
     }
-    list.innerHTML = visible.map(row => {
+    const groups = new Map();
+    for (const row of visible) {
+      const name = String(row.ranking_type || row.organization || '').trim() || 'Unclassified';
+      if (!groups.has(name)) groups.set(name, []);
+      groups.get(name).push(row);
+    }
+    const renderCard = row => {
       const isPublished = Number(row.is_published ?? 1) !== 0;
       const badgeClass = isPublished
         ? 'inline-flex items-center rounded-full bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300 px-2 py-0.5 text-[10px] font-bold uppercase'
         : 'inline-flex items-center rounded-full bg-slate-200 text-slate-600 dark:bg-slate-700 dark:text-slate-300 px-2 py-0.5 text-[10px] font-bold uppercase';
       return `
-      <div class="rounded-xl border border-gray-200 bg-gray-50 p-3 dark:border-gray-600 dark:bg-gray-800">
+      <article class="rounded-xl border border-gray-200 bg-gray-50 p-3 dark:border-gray-600 dark:bg-gray-800">
         <div class="flex items-start gap-3">
           <input type="checkbox" class="bulk-delete-checkbox mt-1 cursor-pointer" data-id="${Number(row.id)}" aria-label="Select for bulk delete" style="width:1rem;height:1rem;">
           <div class="flex-1">
@@ -152,9 +177,28 @@
             </div>
           </div>
         </div>
-      </div>
+      </article>
     `;
+    };
+    list.innerHTML = [...groups.entries()].map(([name, rows]) => {
+      const cards = rows.map(renderCard).join('');
+      const escapedGroupName = escapeHtml(name);
+      const isOpen = rankingGroupOpenState.get(name) ?? true;
+      return `
+        <details class="ranking-history-name-group overflow-hidden rounded-xl border border-emerald-200 bg-emerald-50/40 dark:border-emerald-900 dark:bg-emerald-950/10" data-ranking-group="${escapedGroupName}" ${isOpen ? 'open' : ''}>
+          <summary class="flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 font-bold text-sm text-slate-900 marker:hidden dark:text-slate-100">
+            <span>${escapedGroupName}</span>
+            <span class="shrink-0 rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-semibold text-emerald-800 dark:bg-emerald-900/50 dark:text-emerald-200">${rows.length} cards</span>
+          </summary>
+          <div class="grid gap-3 border-t border-emerald-200 p-3 dark:border-emerald-900">${cards}</div>
+        </details>
+      `;
     }).join('');
+    list.querySelectorAll('[data-ranking-group]').forEach(group => {
+      group.addEventListener('toggle', () => {
+        rankingGroupOpenState.set(group.dataset.rankingGroup, group.open);
+      });
+    });
     bindBulkDelete(visible.length);
     list.querySelectorAll('[data-edit-ranking]').forEach(button => button.addEventListener('click', () => {
       const row = rankings.find(item => String(item.id) === button.dataset.editRanking);
@@ -266,18 +310,101 @@
         button.disabled = false;
       }
     });
+    const publishBtn = document.getElementById('bulkPublishRankingHistory');
+    if (publishBtn) {
+      const newPublishBtn = publishBtn.cloneNode(true);
+      publishBtn.replaceWith(newPublishBtn);
+      newPublishBtn.addEventListener('click', async () => {
+        const selected = [...list.querySelectorAll('.bulk-delete-checkbox:checked')].filter(cb => {
+          const row = rankings.find(item => String(item.id) === cb.dataset.id);
+          return row && Number(row.is_published ?? 1) === 0;
+        });
+        const ids = selected.map(cb => cb.dataset.id);
+        if (!ids.length || !window.confirm(`Publish ${ids.length} selected ranking history row(s)?`)) return;
+        newPublishBtn.disabled = true;
+        try {
+          let failed = 0;
+          for (const id of ids) {
+            const response = await fetch(`${api}?action=publish-ranking`, { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': token, Accept: 'application/json' }, body: JSON.stringify({ id: Number(id), published: true }) });
+            if (!response.ok) failed += 1;
+          }
+          if (failed) window.alert(`${failed} of ${ids.length} ranking history row(s) could not be published.`);
+          await refresh();
+        } catch (error) {
+          window.alert(error.message || 'Unable to publish selected rankings.');
+        } finally {
+          newPublishBtn.disabled = false;
+        }
+      });
+    }
+
+    const unpublishBtn = document.getElementById('bulkUnpublishRankingHistory');
+    if (unpublishBtn) {
+      const newUnpublishBtn = unpublishBtn.cloneNode(true);
+      unpublishBtn.replaceWith(newUnpublishBtn);
+      newUnpublishBtn.addEventListener('click', async () => {
+        const selected = [...list.querySelectorAll('.bulk-delete-checkbox:checked')].filter(cb => {
+          const row = rankings.find(item => String(item.id) === cb.dataset.id);
+          return row && Number(row.is_published ?? 1) !== 0;
+        });
+        const ids = selected.map(cb => cb.dataset.id);
+        if (!ids.length || !window.confirm(`Unpublish ${ids.length} selected ranking history row(s)?`)) return;
+        newUnpublishBtn.disabled = true;
+        try {
+          let failed = 0;
+          for (const id of ids) {
+            const response = await fetch(`${api}?action=publish-ranking`, { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': token, Accept: 'application/json' }, body: JSON.stringify({ id: Number(id), published: false }) });
+            if (!response.ok) failed += 1;
+          }
+          if (failed) window.alert(`${failed} of ${ids.length} ranking history row(s) could not be unpublished.`);
+          await refresh();
+        } catch (error) {
+          window.alert(error.message || 'Unable to unpublish selected rankings.');
+        } finally {
+          newUnpublishBtn.disabled = false;
+        }
+      });
+    }
+
     updateBulkButton();
   }
 
   function updateBulkButton() {
     const button = document.getElementById('bulkDeleteRankingHistory');
-    const count = list.querySelectorAll('.bulk-delete-checkbox:checked').length;
+    const selectedCbs = [...list.querySelectorAll('.bulk-delete-checkbox:checked')];
+    const count = selectedCbs.length;
+
     if (button) {
       button.style.display = count ? 'inline-flex' : 'none';
       button.disabled = count === 0;
     }
     const countLabel = document.getElementById('bulkDeleteCount');
     if (countLabel) countLabel.textContent = String(count);
+
+    const publishBtn = document.getElementById('bulkPublishRankingHistory');
+    const publishCountLabel = document.getElementById('bulkPublishRankingHistoryCount');
+    const drafts = selectedCbs.filter(cb => {
+      const row = rankings.find(item => String(item.id) === cb.dataset.id);
+      return row && Number(row.is_published ?? 1) === 0;
+    });
+    if (publishBtn) {
+      publishBtn.style.display = drafts.length ? 'block' : 'none';
+      publishBtn.disabled = drafts.length === 0;
+    }
+    if (publishCountLabel) publishCountLabel.textContent = String(drafts.length);
+
+    const unpublishBtn = document.getElementById('bulkUnpublishRankingHistory');
+    const unpublishCountLabel = document.getElementById('bulkUnpublishRankingHistoryCount');
+    const published = selectedCbs.filter(cb => {
+      const row = rankings.find(item => String(item.id) === cb.dataset.id);
+      return row && Number(row.is_published ?? 1) !== 0;
+    });
+    if (unpublishBtn) {
+      unpublishBtn.style.display = published.length ? 'block' : 'none';
+      unpublishBtn.disabled = published.length === 0;
+    }
+    if (unpublishCountLabel) unpublishCountLabel.textContent = String(published.length);
+
     const selectAll = document.getElementById('selectAllRanking');
     const checkboxes = [...list.querySelectorAll('.bulk-delete-checkbox')];
     if (selectAll) selectAll.checked = checkboxes.length > 0 && checkboxes.every(checkbox => checkbox.checked);
@@ -295,12 +422,27 @@
     showForm(true);
   }
 
+  function setAllRankingGroupsOpen(isOpen) {
+    for (const row of rankings) {
+      const name = String(row.ranking_type || row.organization || '').trim() || 'Unclassified';
+      rankingGroupOpenState.set(name, isOpen);
+    }
+    list.querySelectorAll('[data-ranking-group]').forEach(group => { group.open = isOpen; });
+  }
+
   async function refresh() {
     const response = await fetch(api, { headers: { Accept: 'application/json' }, cache: 'no-store' });
     const payload = await response.json().catch(() => null);
     if (!response.ok) throw new Error(payload?.error || `Unable to load rankings (HTTP ${response.status}).`);
     if (!payload || !Array.isArray(payload.rankings)) throw new Error('The rankings response is invalid.');
     rankings = payload.rankings;
+    if (packFilter) {
+      const selectedPack = packFilter.value || 'all';
+      const packs = [...new Set(rankings.map(row => String(row.ranking_type || row.organization || '').trim() || 'Unclassified'))]
+        .sort((left, right) => left.localeCompare(right));
+      packFilter.replaceChildren(new Option('All packs', 'all'), ...packs.map(name => new Option(name, name)));
+      packFilter.value = packs.includes(selectedPack) ? selectedPack : 'all';
+    }
     customFieldDefinitions = payload.custom_field_definitions && typeof payload.custom_field_definitions === 'object'
       ? payload.custom_field_definitions
       : {};
@@ -338,7 +480,14 @@
     showForm(false);
   });
   yearFilter.addEventListener('change', render);
+  packFilter?.addEventListener('change', render);
   searchInput?.addEventListener('input', render);
+  expandGroupsButton?.addEventListener('click', () => {
+    setAllRankingGroupsOpen(true);
+  });
+  collapseGroupsButton?.addEventListener('click', () => {
+    setAllRankingGroupsOpen(false);
+  });
   chartDefaultOrganization.addEventListener('change', () => {
     const selected = selectedRankingGraph();
     if (selected && selected.organization !== chartDefaultOrganization.value) chartDefaultList.value = '';
@@ -429,9 +578,31 @@
   document.getElementById('closeRankingHistoryEditor')?.addEventListener('click', close);
   panel.addEventListener('click', event => { if (event.target === panel) close(); });
   document.addEventListener('keydown', event => { if (event.key === 'Escape' && panel.classList.contains('active')) close(); });
+
+  const refreshRankingBtn = document.getElementById('refreshRankingHistoryBtn');
+  if (refreshRankingBtn) {
+    refreshRankingBtn.addEventListener('click', async () => {
+      refreshRankingBtn.disabled = true;
+      refreshRankingBtn.innerHTML = '<i class="fa-solid fa-arrows-rotate fa-spin"></i>';
+      try {
+        await refresh();
+      } catch (error) {
+        window.alert(error.message || 'Unable to refresh Ranking History.');
+      } finally {
+        refreshRankingBtn.disabled = false;
+        refreshRankingBtn.innerHTML = '<i class="fa-solid fa-arrows-rotate"></i>';
+      }
+    });
+  }
+
   refresh().catch(error => {
     console.error('Unable to load ranking history:', error);
     list.innerHTML = `<div role="alert" class="rounded-xl border border-red-200 bg-red-50 px-4 py-6 text-center text-sm text-red-700 dark:border-red-800 dark:bg-red-950/30 dark:text-red-300">${escapeHtml(error.message || 'Unable to load ranking history.')}</div>`;
     bindBulkDelete(0);
+  });
+
+  document.addEventListener('iris:template-import-complete', event => {
+    if (event.detail?.destination !== 'ranking_history') return;
+    refresh().catch(error => console.error('Auto-refresh after import failed:', error));
   });
 })();

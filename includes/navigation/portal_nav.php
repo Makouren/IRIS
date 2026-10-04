@@ -88,10 +88,10 @@ $portalAdminLinks = [
                         </ul>
                     <?php endif; ?>
                     <ul class="py-2" aria-labelledby="user-menu-button">
-                        <li><a href="<?= e(base_url('auth/change_password.php')) ?>"><i class="fa-solid fa-key" aria-hidden="true"></i><span>Change password</span></a></li>
+                        <li><button type="button" data-password-change-open><i class="fa-solid fa-key" aria-hidden="true"></i><span>Change password</span></button></li>
                     </ul>
                     <div class="py-1 border-t border-slate-700">
-                        <form method="POST" action="<?= e(base_url('auth/logout.php')) ?>" class="w-full">
+                        <form method="POST" action="<?= e(base_url('auth/logout.php')) ?>" class="w-full" onsubmit="document.getElementById('page-loader')?.classList.remove('hidden');">
                             <?= csrf_field() ?>
                             <button type="submit" class="signout w-full px-4 py-2 text-sm whitespace-nowrap">
                                 <i class="fa-solid fa-right-from-bracket flex-shrink-0" aria-hidden="true"></i><span>Sign out</span>
@@ -103,5 +103,20 @@ $portalAdminLinks = [
         </div>
     </div>
 </nav>
+<div id="passwordChangeModal" class="fixed inset-0 z-[1200] hidden items-center justify-center bg-slate-950/60 p-4" aria-hidden="true">
+    <section class="w-full max-w-md rounded-xl border border-gray-200 bg-white p-6 shadow-2xl dark:border-slate-700 dark:bg-slate-900" role="dialog" aria-modal="true" aria-labelledby="passwordChangeTitle">
+        <header class="mb-5 flex items-start justify-between gap-4 border-b border-gray-200 pb-4 dark:border-slate-700">
+            <div><h2 id="passwordChangeTitle" class="text-lg font-extrabold">Change password</h2><p class="mt-1 text-sm text-gray-500 dark:text-slate-400">Update your account password.</p></div>
+            <button type="button" data-password-change-close class="rounded-lg px-3 py-1 text-2xl leading-none text-gray-500 hover:bg-gray-100 dark:hover:bg-slate-800" aria-label="Close">&times;</button>
+        </header>
+        <p data-password-change-status class="mb-4 hidden rounded-lg p-3 text-sm" role="status" aria-live="polite"></p>
+        <form data-password-change-form data-api="<?= e(base_url('api/change_password.php')) ?>" data-csrf="<?= e(csrf_token()) ?>" class="space-y-4">
+            <label class="block text-sm font-semibold">Current password<input class="mt-1 block w-full rounded-lg border border-gray-300 bg-gray-50 p-2.5 dark:border-slate-700 dark:bg-slate-800" type="password" name="current_password" autocomplete="current-password" required></label>
+            <label class="block text-sm font-semibold">New password<input class="mt-1 block w-full rounded-lg border border-gray-300 bg-gray-50 p-2.5 dark:border-slate-700 dark:bg-slate-800" type="password" name="new_password" minlength="8" autocomplete="new-password" required></label>
+            <label class="block text-sm font-semibold">Confirm new password<input class="mt-1 block w-full rounded-lg border border-gray-300 bg-gray-50 p-2.5 dark:border-slate-700 dark:bg-slate-800" type="password" name="confirm_password" minlength="8" autocomplete="new-password" required></label>
+            <button type="submit" class="w-full rounded-lg bg-emerald-700 px-4 py-2.5 text-sm font-bold text-white hover:bg-emerald-800">Update password</button>
+        </form>
+    </section>
+</div>
 <script>window.IRIS_MAX_UPLOAD_BYTES = <?= IRIS_MAX_UPLOAD_BYTES ?>;</script>
 <script src="<?= e(base_url('scanner/js/ui/portalNavigation.js')) ?>?v=<?= (int) filemtime(__DIR__ . '/../../scanner/js/ui/portalNavigation.js') ?>" defer></script>

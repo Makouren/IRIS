@@ -2,6 +2,7 @@
 require_once __DIR__ . '/../includes/functions.php';
 require_once __DIR__ . '/../includes/helpers/LatestYearResolver.php';
 require_once __DIR__ . '/../includes/helpers/SummaryCardHistory.php';
+require_once __DIR__ . '/../includes/helpers/ImportedRecordDataCleanup.php';
 require_once __DIR__ . '/../includes/helpers/RecordSheetMerge.php';
 require_once __DIR__ . '/../includes/helpers/RecordFileHistory.php';
 require_once __DIR__ . '/../includes/api/common.php';
@@ -61,4 +62,8 @@ try {
         require __DIR__ . '/../includes/api/handlers/graphs.php';
     }
     bad('Unknown API resource',404);
-} catch(Throwable $e) { error_log($e->getMessage()); bad('Server error: '.$e->getMessage(),500); }
+} catch(Throwable $e) {
+    error_log($e->getMessage());
+    $status = in_array($e->getCode(), [404, 409], true) ? (int)$e->getCode() : 500;
+    bad($status === 500 ? 'Server error: '.$e->getMessage() : $e->getMessage(), $status);
+}

@@ -208,16 +208,29 @@
       targetCell.className = 'p-2 font-semibold';
       if (customField) {
         const key = field.slice('custom_fields.'.length);
+        const isAdded = state.addedFields.some(item => item.key === key);
+        const wrapper = document.createElement('div');
+        wrapper.className = 'flex items-center gap-1';
         const input = document.createElement('input');
         input.type = 'text';
         input.maxLength = 80;
         input.required = true;
         input.placeholder = 'Custom field label';
         input.value = state.addedFields.find(item => item.key === key)?.label || profileJson(state.destination).custom_fields?.[key] || '';
-        input.className = 'w-full rounded border border-gray-300 bg-white p-1.5 text-gray-900 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100';
+        input.className = 'flex-1 min-w-0 rounded border border-gray-300 bg-white p-1.5 text-gray-900 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100';
         input.dataset.customFieldLabel = key;
         input.addEventListener('input', () => { state.confirmed = false; updateValidation(panel); });
-        targetCell.append(input);
+        wrapper.append(input);
+        if (isAdded) {
+          const removeBtn = document.createElement('button');
+          removeBtn.type = 'button';
+          removeBtn.title = 'Remove this custom field';
+          removeBtn.textContent = '\u00D7';
+          removeBtn.className = 'flex-shrink-0 rounded border border-red-300 bg-white px-1.5 py-1 text-xs font-bold text-red-600 hover:bg-red-50 dark:border-red-700 dark:bg-slate-800 dark:text-red-400 dark:hover:bg-red-950/40';
+          removeBtn.addEventListener('click', () => removeCustomField(panel, key));
+          wrapper.append(removeBtn);
+        }
+        targetCell.append(wrapper);
       } else {
         targetCell.textContent = labels[field] || field;
       }
@@ -281,6 +294,13 @@
     panel.querySelector('[data-mapper-confirm]').disabled = missing.length > 0 || duplicate || invalidCustom;
     const saveButton = getSaveButton(state.destination);
     if (saveButton) saveButton.disabled = missing.length > 0 || duplicate || invalidCustom || !state.confirmed;
+  }
+
+  function removeCustomField(panel, key) {
+    const state = states.get(panel);
+    if (!state) return;
+    state.addedFields = state.addedFields.filter(item => item.key !== key);
+    renderTable(panel, state.preview);
   }
 
   function addCustomField(panel) {
@@ -402,7 +422,9 @@
     state.confirmed = true;
     const saveButton = getSaveButton(state.destination);
     if (saveButton) saveButton.disabled = false;
-    statusMessage(panel, 'Mappings confirmed in Field mappings. Use Save profile settings to save the profile and workbook.');
+    panel.querySelector('[data-mapper-preview-panel]').classList.add('hidden');
+    statusMessage(panel, 'Mappings confirmed. Saving and activating this profile for Office Upload…');
+    if (saveButton && !saveButton.disabled) saveButton.click();
   }
 
   panels.forEach(panel => {

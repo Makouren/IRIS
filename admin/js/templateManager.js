@@ -21,12 +21,14 @@
   const summaryProfileEditor = modal.querySelector('[data-summary-profile-json]');
   const activeSummaryProfileLabel = modal.querySelector('[data-active-summary-profile]');
   const summaryProfileActivate = modal.querySelector('[data-summary-profile-activate]');
+  const summaryProfileDeactivate = modal.querySelector('[data-summary-profile-deactivate]');
   const summaryProfileSave = modal.querySelector('[data-summary-profile-save]');
   const rankingProfileSelect = modal.querySelector('[data-ranking-profile-select]');
   const rankingProfileName = modal.querySelector('[data-ranking-profile-name]');
   const rankingProfileEditor = modal.querySelector('[data-ranking-profile-json]');
   const activeRankingProfileLabel = modal.querySelector('[data-active-ranking-profile]');
   const rankingProfileActivate = modal.querySelector('[data-ranking-profile-activate]');
+  const rankingProfileDeactivate = modal.querySelector('[data-ranking-profile-deactivate]');
   const rankingProfileSave = modal.querySelector('[data-ranking-profile-save]');
   let templates = [];
   let rankingBodies = [];
@@ -35,7 +37,7 @@
   let activeSummaryProfileId = null;
   let rankingImportProfiles = [];
   let activeRankingProfileId = null;
-  const profileActionsPending = { summaryActivate: false, summarySave: false, rankingActivate: false, rankingSave: false };
+  const profileActionsPending = { summaryActivate: false, summaryDeactivate: false, summarySave: false, rankingActivate: false, rankingDeactivate: false, rankingSave: false };
   const profileFieldLabels = {
     import_key: 'Import key', card_title: 'Card title', period_key: 'Period', main_value: 'Main value', main_label: 'Main label',
     year_date: 'Year / date', secondary_label: 'Secondary label', secondary_value: 'Secondary value', description: 'Description',
@@ -72,10 +74,37 @@
     timeout = window.setTimeout(removeToast, 5000);
   }
 
+  function showProfileConfirmation(destination, name) {
+    const toast = document.createElement('div');
+    toast.className = 'fixed inset-x-4 bottom-4 z-[1600] mx-auto flex max-w-md items-center justify-between gap-3 rounded-lg border border-emerald-300 bg-emerald-50 p-4 text-sm font-semibold text-emerald-900 shadow-xl dark:border-emerald-800 dark:bg-emerald-950 dark:text-emerald-100';
+    toast.setAttribute('role', 'status');
+    toast.setAttribute('aria-live', 'polite');
+    const message = document.createElement('span');
+    message.textContent = `${name} has been set as the active ${destination} profile and is now reflected on Office Upload.`;
+    const dismiss = document.createElement('button');
+    dismiss.type = 'button';
+    dismiss.className = 'rounded px-2 py-1 text-lg leading-none hover:bg-emerald-100 dark:hover:bg-emerald-900';
+    dismiss.setAttribute('aria-label', 'Dismiss profile confirmation');
+    dismiss.textContent = '×';
+    let timeout;
+    const removeToast = () => {
+      window.clearTimeout(timeout);
+      toast.remove();
+    };
+    dismiss.addEventListener('click', removeToast);
+    toast.append(message, dismiss);
+    document.body.append(toast);
+    timeout = window.setTimeout(removeToast, 6000);
+  }
+
   function updateProfileActionAvailability() {
     summaryProfileActivate.disabled = profileActionsPending.summaryActivate || !summaryProfileSelect.value;
+    summaryProfileDeactivate.disabled = profileActionsPending.summaryDeactivate
+      || !summaryProfileSelect.value || summaryProfileSelect.value !== activeSummaryProfileId;
     summaryProfileSave.disabled = profileActionsPending.summarySave || !summaryProfileSelect.value;
     rankingProfileActivate.disabled = profileActionsPending.rankingActivate || !rankingProfileSelect.value;
+    rankingProfileDeactivate.disabled = profileActionsPending.rankingDeactivate
+      || !rankingProfileSelect.value || rankingProfileSelect.value !== activeRankingProfileId;
     rankingProfileSave.disabled = profileActionsPending.rankingSave || !rankingProfileSelect.value;
   }
 
@@ -391,7 +420,7 @@
     activeSummaryProfileId = result.active_profile_id ? String(result.active_profile_id) : '';
     summaryProfileSelect.replaceChildren();
     for (const profile of summaryImportProfiles) {
-      const option = new Option(`${profile.profile_name}${profile.is_active ? ' · Active' : ''}${profile.original_filename ? ` · ${profile.original_filename}` : ''}`, String(profile.id));
+      const option = new Option(`${profile.profile_name}${profile.is_active ? ' · Active' : ' · Inactive'}${profile.original_filename ? ` · ${profile.original_filename}` : ''}`, String(profile.id));
       summaryProfileSelect.add(option);
     }
     if (!summaryImportProfiles.length) {
@@ -447,7 +476,7 @@
     activeRankingProfileId = result.active_profile_id ? String(result.active_profile_id) : '';
     rankingProfileSelect.replaceChildren();
     for (const profile of rankingImportProfiles) {
-      rankingProfileSelect.add(new Option(`${profile.profile_name}${profile.is_active ? ' · Active' : ''}${profile.original_filename ? ` · ${profile.original_filename}` : ''}`, String(profile.id)));
+      rankingProfileSelect.add(new Option(`${profile.profile_name}${profile.is_active ? ' · Active' : ' · Inactive'}${profile.original_filename ? ` · ${profile.original_filename}` : ''}`, String(profile.id)));
     }
     if (!rankingImportProfiles.length) {
       rankingProfileSelect.add(new Option('No profiles available. Run the pending migrations.', ''));
@@ -548,6 +577,21 @@
     } catch (error) { showNotice(error.message, true); }
     finally { profileActionsPending.summaryActivate = false; updateProfileActionAvailability(); }
   });
+  summaryProfileDeactivate.addEventListener('click', async () => {
+    if (!summaryProfileSelect.value || summaryProfileSelect.value !== activeSummaryProfileId) return;
+    profileActionsPending.summaryDeactivate = true;
+    updateProfileActionAvailability();
+    try {
+      const result = await postProfileSettingsAction('deactivate-import-profile', {
+        destination: 'summary_cards',
+        profile_id: summaryProfileSelect.value
+      });
+      await loadSummaryProfiles(false);
+      window.IRISProfileWorkbookMapper?.refresh();
+      showNotice(`Deactivated Summary Card profile: ${result.profile_name}. It is no longer available on Office Upload.`);
+    } catch (error) { showNotice(error.message, true); }
+    finally { profileActionsPending.summaryDeactivate = false; updateProfileActionAvailability(); }
+  });
   summaryProfileSave.addEventListener('click', async () => {
     if (!summaryProfileSelect.value) { showNotice('Choose a Summary Card profile first.', true); return; }
     if (!summaryProfileName.value.trim()) {
@@ -582,9 +626,8 @@
       }
       await loadSummaryProfiles(false);
       window.IRISProfileWorkbookMapper?.refresh();
-      showNotice(workbookToken
-        ? `Saved and activated Summary Card profile for Office uploads: ${result.profile_name}`
-        : `Saved Summary Card profile: ${result.profile_name}`);
+      if (workbookToken) showProfileConfirmation('Summary Cards', result.profile_name);
+      else showNotice(`Saved Summary Card profile: ${result.profile_name}`);
     } catch (error) { showNotice(error.message, true); }
     finally { profileActionsPending.summarySave = false; updateProfileActionAvailability(); }
   });
@@ -598,6 +641,21 @@
       showNotice(`Active Ranking History profile: ${result.profile_name}`);
     } catch (error) { showNotice(error.message, true); }
     finally { profileActionsPending.rankingActivate = false; updateProfileActionAvailability(); }
+  });
+  rankingProfileDeactivate.addEventListener('click', async () => {
+    if (!rankingProfileSelect.value || rankingProfileSelect.value !== activeRankingProfileId) return;
+    profileActionsPending.rankingDeactivate = true;
+    updateProfileActionAvailability();
+    try {
+      const result = await postProfileSettingsAction('deactivate-import-profile', {
+        destination: 'ranking_history',
+        profile_id: rankingProfileSelect.value
+      });
+      await loadRankingProfiles(false);
+      window.IRISProfileWorkbookMapper?.refresh();
+      showNotice(`Deactivated Ranking History profile: ${result.profile_name}. It is no longer available on Office Upload.`);
+    } catch (error) { showNotice(error.message, true); }
+    finally { profileActionsPending.rankingDeactivate = false; updateProfileActionAvailability(); }
   });
   rankingProfileSave.addEventListener('click', async () => {
     if (!rankingProfileSelect.value) { showNotice('Choose a Ranking History profile first.', true); return; }
@@ -633,9 +691,8 @@
       }
       await loadRankingProfiles(false);
       window.IRISProfileWorkbookMapper?.refresh();
-      showNotice(workbookToken
-        ? `Saved and activated Ranking History profile for Office uploads: ${result.profile_name}`
-        : `Saved Ranking History profile: ${result.profile_name}`);
+      if (workbookToken) showProfileConfirmation('Ranking History', result.profile_name);
+      else showNotice(`Saved Ranking History profile: ${result.profile_name}`);
     } catch (error) { showNotice(error.message, true); }
     finally { profileActionsPending.rankingSave = false; updateProfileActionAvailability(); }
   });

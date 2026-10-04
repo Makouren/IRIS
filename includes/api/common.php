@@ -22,6 +22,28 @@ function json_col($v, $fallback = null) {
     return $v;
 }
 
+function record_merge_template_compatibility_error(array $source, array $target): ?string {
+    $sourceTemplateId = $source['template_id'] ?? null;
+    $targetTemplateId = $target['template_id'] ?? null;
+    $sourceIsGeneral = $sourceTemplateId === null || $sourceTemplateId === '' || (string)$sourceTemplateId === '0';
+    $targetIsGeneral = $targetTemplateId === null || $targetTemplateId === '' || (string)$targetTemplateId === '0';
+    if ($sourceIsGeneral && $targetIsGeneral) return null;
+    if ($sourceIsGeneral !== $targetIsGeneral) {
+        return 'Both records must be General (uncategorized) or assigned to the same template.';
+    }
+    return (string)$sourceTemplateId === (string)$targetTemplateId
+        ? null
+        : 'Both records must use the same template, or both be General (uncategorized).';
+}
+
+function record_merge_records_are_general(array $source, array $target): bool {
+    foreach ([$source, $target] as $record) {
+        $templateId = $record['template_id'] ?? null;
+        if ($templateId !== null && $templateId !== '' && (string)$templateId !== '0') return false;
+    }
+    return true;
+}
+
 function output_record(array $r): array {
     $r['extractedData'] = json_col($r['extractedData'], []);
     $r['graphDrafts'] = json_col($r['graphDrafts'], []);

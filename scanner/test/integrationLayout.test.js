@@ -2,6 +2,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
+
 const readIrisApiSource = () => [
   path.join(__dirname, '..', '..', 'api', 'iris.php'),
   path.join(__dirname, '..', '..', 'includes', 'api', 'common.php'),
@@ -15,7 +16,6 @@ const readIrisApiSource = () => [
     'graphs'
   ].map(handler => path.join(__dirname, '..', '..', 'includes', 'api', 'handlers', `${handler}.php`))
 ].map(file => fs.readFileSync(file, 'utf8')).join('\n');
-
 
 const html = fs.readFileSync(path.join(__dirname, '..', 'index.php'), 'utf8');
 const dashboardStyles = fs.readFileSync(path.join(__dirname, '..', '..', 'user', 'css', 'dashboard.css'), 'utf8');
@@ -54,6 +54,8 @@ const adminRankingsApi = fs.readFileSync(path.join(__dirname, '..', '..', 'api',
 const rankingHistoryImportApi = fs.readFileSync(path.join(__dirname, '..', '..', 'api', 'imports', 'ranking_history_import.php'), 'utf8');
 const publicRankingsApi = fs.readFileSync(path.join(__dirname, '..', '..', 'api', 'rankings.php'), 'utf8');
 const adminArchives = fs.readFileSync(path.join(__dirname, '..', '..', 'admin', 'file_archives.php'), 'utf8');
+const adminSavedGraphs = fs.readFileSync(path.join(__dirname, '..', '..', 'admin', 'saved_graphs.php'), 'utf8');
+const adminFooter = fs.readFileSync(path.join(__dirname, '..', '..', 'admin', 'includes', 'footer.php'), 'utf8');
 const adminPortal = fs.readFileSync(path.join(__dirname, '..', 'js', 'modules', 'adminPortal.js'), 'utf8');
 const savedGraphsTab = fs.readFileSync(path.join(__dirname, '..', 'js', 'modules', 'savedGraphsTab.js'), 'utf8');
 const studioWorkbench = fs.readFileSync(path.join(__dirname, '..', 'js', 'modules', 'studioWorkbench.js'), 'utf8');
@@ -67,6 +69,8 @@ const publicDashboard = [
   fs.readFileSync(path.join(__dirname, '..', '..', 'user', 'js', 'dashboard', 'main.js'), 'utf8'),
   fs.readFileSync(path.join(__dirname, '..', '..', 'user', 'js', 'dashboard', 'chartBuilder.js'), 'utf8')
 ].join('\n');
+const portalNav = fs.readFileSync(path.join(__dirname, '..', '..', 'includes', 'navigation', 'portal_nav.php'), 'utf8');
+const changePasswordApi = fs.readFileSync(path.join(__dirname, '..', '..', 'api', 'change_password.php'), 'utf8');
 const colorCustomizer = fs.readFileSync(path.join(__dirname, '..', 'js', 'modules', 'studioColorCustomizer.js'), 'utf8');
 const importPreviewModal = fs.readFileSync(path.join(__dirname, '..', 'js', 'modules', 'import', 'importPreviewModal.js'), 'utf8');
 const templateManager = fs.readFileSync(path.join(__dirname, '..', '..', 'admin', 'js', 'templateManager.js'), 'utf8');
@@ -79,6 +83,23 @@ const officeUploadProcess = fs.readFileSync(path.join(__dirname, '..', '..', 'ad
 const officeTemplates = fs.readFileSync(path.join(__dirname, '..', '..', 'admin', 'js', 'officeTemplates.js'), 'utf8');
 const changeRefresh = fs.readFileSync(path.join(__dirname, '..', 'js', 'ui', 'changeRefresh.js'), 'utf8');
 const graphDrafts = fs.readFileSync(path.join(__dirname, '..', 'js', 'modules', 'graphsTab.js'), 'utf8');
+
+test('template downloads do not leave the page loader covering the current page', () => {
+  for (const source of [adminFooter, officeUpload]) {
+    assert.match(source, /let templateDownloadPending = false/);
+    assert.ok(source.includes("target.pathname.endsWith('/admin/template_download.php')"));
+    assert.match(source, /if \(templateDownloadPending\)[\s\S]*?return;/);
+  }
+  assert.match(adminFooter, /if \(templateDownloadPending\)[\s\S]*?return;[\s\S]*?if \(window\.IRIS_STUDIO_DIRTY\)/);
+});
+
+test('Studio chart play area is larger and charts keep legends clear of titles', () => {
+  assert.match(html, /class="studio-chart-play-area"/);
+  assert.match(adminEditor, /class="studio-chart-play-area"/);
+  assert.match(styles, /\.studio-chart-play-area\s*\{[\s\S]*?height:\s*clamp\(420px,\s*62vh,\s*560px\)/);
+  assert.doesNotMatch(html, /height:\s*320px;\s*position:\s*relative;\s*width:\s*100%;\s*margin-bottom:\s*0\.75rem/);
+  assert.match(fs.readFileSync(path.join(__dirname, '..', 'js', 'modules', 'chartEngine.js'), 'utf8'), /top: showTitle \? 28 : 0/);
+});
 
 test('Studio and draft chart selectors expose exactly the six supported types in order', () => {
   const expected = [
@@ -134,6 +155,19 @@ test('File Archives has direct navigation that opens and loads its tab', () => {
   assert.match(tabs, /button\.dataset\.adminTab === 'adminFileArchivesPanel'[\s\S]*?renderFileArchives/);
 });
 
+test('Review from File Archives opens the selected record in the Review Editor', () => {
+  const navigation = fs.readFileSync(path.join(__dirname, '..', 'js', 'modules', 'navigation.js'), 'utf8');
+  assert.match(adminPortal, /all\('\.btn-table-load-studio'\)[\s\S]*?ctx\.api\.openReviewStudio\(record\.id\)/);
+  assert.match(navigation, /window\.location\.href = `review_editor\.php\$\{param\}`/);
+  assert.match(navigation, /await ctx\.api\.renderAdminPortal\(recordId\)/);
+});
+
+test('File History table headers have enough room and do not overlap', () => {
+  assert.match(styles, /\.file-history-table\s*\{[^}]*min-width:\s*860px/);
+  assert.match(styles, /\.file-history-table th:first-child,\s*\.file-history-table td:first-child\s*\{[^}]*width:\s*7rem/);
+  assert.match(styles, /\.file-history-table th\s*\{[^}]*white-space:\s*nowrap/);
+});
+
 test('Super Admin menu opens File Archives in the active admin interface', () => {
   assert.match(adminHeader, /base_url\('admin\/file_archives\.php'\)[\s\S]*?File Archives/);
   assert.match(adminArchives, /\$activeNav = 'archives'/);
@@ -142,6 +176,35 @@ test('Super Admin menu opens File Archives in the active admin interface', () =>
   assert.match(adminArchives, /id="fileArchivesBulkActions"/);
   assert.match(adminArchives, /includes\/footer\.php/);
   assert.doesNotMatch(adminEditor, /Scanned Records Archive &amp;? Ingestion Logs|adminRecordsTableBody|adminSearchInput/);
+});
+
+test('Super Admin account and template controls load from Observatory view', () => {
+  assert.match(publicDashboard, /if \(\(\$_SESSION\['role'\] \?\? ''\) === 'super_admin'\): \?>[\s\S]*?account_manager_modal\.php[\s\S]*?template_manager_modal\.php/);
+  assert.match(publicDashboard, /base_url\('admin\/js\/accountManager\.js'\)/);
+  assert.match(publicDashboard, /base_url\('admin\/js\/templateManager\.js'\)/);
+  assert.match(publicDashboard, /base_url\('admin\/js\/profileWorkbookMapper\.js'\)/);
+});
+
+test('Change password opens a shared modal and submits securely from admin and office pages', () => {
+  assert.match(portalNav, /data-password-change-open/);
+  assert.match(portalNav, /id="passwordChangeModal"/);
+  assert.match(portalNav, /base_url\('api\/change_password\.php'\)/);
+  assert.match(fs.readFileSync(path.join(__dirname, '..', 'js', 'ui', 'portalNavigation.js'), 'utf8'), /passwordForm\.addEventListener\('submit'/);
+  assert.match(changePasswordApi, /requireRole\(\['super_admin', 'admin', 'user'\], true\)/);
+  assert.match(changePasswordApi, /HTTP_X_CSRF_TOKEN/);
+  assert.equal(fs.existsSync(path.join(__dirname, '..', '..', 'auth', 'change_password.php')), false);
+});
+
+test('Data and Report Visualization uploads can use General without an active template', () => {
+  assert.match(officeUpload, /Template profile \(optional\)/);
+  assert.match(officeUpload, /<option value="">General \(uncategorized — template can be assigned later\)<\/option>/);
+  assert.match(officeTemplates, /templateSelect\.required = false/);
+  assert.match(officeTemplates, /templateSelect\.disabled = !purpose \|\| hasImportProfile/);
+  assert.match(officeTemplates, /General lets you submit now; the Super Admin can configure a template later/);
+  assert.doesNotMatch(officeUploadProcess, /if \(\$templateId === null && \$uploadPurpose === 'analytics'\)/);
+  assert.match(officeUploadProcess, /\$recordMetadata\['template_status'\] = 'uncategorized'/);
+  assert.match(adminPortal, /record\.metadata\?\.template_status === 'uncategorized'/);
+  assert.match(adminPortal, /GENERAL · TEMPLATE NEEDED/);
 });
 
 test('Super Admin logo navigates to the public Observatory, not the retired admin landing page', () => {
@@ -156,7 +219,7 @@ test('Manage account and template dropdown buttons have link-matched hover feedb
   }
 });
 
-test('record merge requires a chosen direction, resolves server conflicts, and retains source by default', () => {
+test('record merge requires a chosen direction, replaces differing values from source, and retains source by default', () => {
   assert.match(studioAppend, /const superAdmin = mergeButton\?\.dataset\.role === 'super_admin'/);
   assert.match(studioAppend, /String\(candidate\.template_id \?\? ''\) !== String\(record\.template_id\)/);
   assert.match(studioAppend, /name="merge-direction" value="active-target"/);
@@ -168,6 +231,8 @@ test('record merge requires a chosen direction, resolves server conflicts, and r
   assert.match(studioAppend, /TARGET — THIS BECOMES THE UPDATED RECORD/);
   assert.match(studioAppend, /This record remains under its current ID and contains the merged result/);
   assert.match(studioAppend, /The source is not made into the new record/);
+  assert.match(studioAppend, /Source values replace differing values in matching rows/);
+  assert.match(studioAppend, /Source values will replace differing target values/);
   assert.match(studioAppend, /if \(!direction\)/);
   assert.match(studioAppend, /previewRecordMerge/);
   assert.match(studioAppend, /consume_source: modal\.querySelector\('\[data-consume-source\]'\)\.checked/);
@@ -176,7 +241,7 @@ test('record merge requires a chosen direction, resolves server conflicts, and r
   assert.match(irisApi, /Only a Super Admin can merge records/);
   assert.match(irisApi, /source_id.*target_id|source_id/);
   assert.match(irisApi, /source_digest/);
-  assert.match(irisApi, /Resolve every conflict before merging/);
+  assert.match(irisApi, /record_merge_sheet\(\$targetData\[\$targetSheetName\], \$sourceData\[\$sourceSheetName\], \$keyColumns\)/);
   assert.match(irisApi, /'source-at-merge'/);
   assert.match(irisApi, /'pre-merge-target'/);
   assert.match(irisApi, /'post-merge-result'/);
@@ -270,7 +335,9 @@ test('Super Admin has no manual refresh control; public views update from change
   assert.doesNotMatch(changeRefresh, /manualRefresh|refreshStatus|publicRefreshStorageKey|refresh_public|localStorage/);
   assert.match(fs.readFileSync(path.join(__dirname, '..', '..', 'user', 'dashboard.php'), 'utf8'), /\$irisChangeRefreshView = 'public'; require __DIR__ \. '\/\.\.\/includes\/scripts\/change_refresh_script\.php'/);
   assert.match(fs.readFileSync(path.join(__dirname, '..', '..', 'includes', 'scripts', 'change_refresh_script.php'), 'utf8'), /data-view="<\?= e\(\$irisChangeRefreshView \?\? ''\) \?>"/);
-  assert.match(changeRefresh, /if \(isPublicView\) \{\s*if \(isDirty\(\)\) showPendingRefresh\(\);[\s\S]*?else window\.location\.reload\(\);\s*return;\s*\}\s*if \(isSuperAdmin\) \{\s*return;\s*\}/);
+  assert.match(changeRefresh, /if \(isPublicView\) \{\s*if \(isDirty\(\)\) \{[\s\S]*?showPendingRefresh\(\);\s*\} else window\.location\.reload\(\);\s*return;\s*\}\s*if \(isSuperAdmin\) \{\s*return;\s*\}/);
+  assert.match(changeRefresh, /if \(isDirty\(\)\) \{\s*window\.dispatchEvent\(new CustomEvent\('iris:data-changed'/);
+  assert.match(publicDashboard, /addEventListener\('iris:data-changed', \(\) => \{ void loadSummaryCards\(\); \}\)/);
 });
 
 test('Ranking History rows can be published and unpublished from their current state', () => {
@@ -376,6 +443,19 @@ test('Review Editor saves and reopens complete graph configuration from Saved Gr
   assert.match(studioWorkbench, /ctx\.api\.renderSavedGraphsTab/);
 });
 
+test('Saved Graphs includes report visualizations from every file alongside saved charts', () => {
+  assert.match(savedGraphsTab, /function getReportVisualizationGraphs\(records\)/);
+  assert.match(savedGraphsTab, /records\.flatMap\(record =>/);
+  assert.match(savedGraphsTab, /Array\.isArray\(record\.graphDrafts\)/);
+  assert.match(savedGraphsTab, /const reportGraphs = getReportVisualizationGraphs\(records\)/);
+  assert.match(savedGraphsTab, /const graphs = \[\.\.\.savedGraphs, \.\.\.reportGraphs\]/);
+  assert.match(savedGraphsTab, /renderReportVisualizationCard/);
+  assert.match(savedGraphsTab, /card\.dataset\.reportVisualization = 'true'/);
+  assert.match(savedGraphsTab, /visibleGraphs\.filter\(graph => !graph\.is_report_draft\)/);
+  assert.match(adminSavedGraphs, /Saved charts and report visualizations from every file/);
+  assert.match(html, /Saved charts and report visualizations from every file/);
+});
+
 test('Chart colors collapse accessibly and save one shared color independently', () => {
   assert.match(adminEditor, /id="studioColorSectionToggle"[^>]*aria-expanded="false"[^>]*aria-controls="studioColorContent"/);
   assert.match(adminEditor, /id="studioColorSwatches"/);
@@ -425,6 +505,15 @@ test('public summary-card default lists new categories and keeps unpublished one
   assert.match(adminEditor, /categories\.map\(category => \{[\s\S]*?const hasPublishedCards = publishedCategoryIds\.has\(String\(category\.id\)\);[\s\S]*?option\.disabled = !hasPublishedCards/);
   assert.match(adminEditor, /category\.slug === publicDefaultCategorySlug[\s\S]*?publishedCategoryIds\.has\(String\(category\.id\)\)/);
   assert.match(irisApi, /Choose a category with at least one published summary card/);
+});
+
+test('Summary Card and Ranking History search include imported fields and normalized multiword terms', () => {
+  assert.match(adminEditor, /normalizeSearchText = value => String\(value \?\? ''\)\.normalize\('NFD'\)/);
+  assert.match(adminEditor, /card\.custom_fields/);
+  assert.match(adminEditor, /searchTerms\.every\(term => searchable\.includes\(term\)\)/);
+  assert.match(rankingHistoryAdmin, /normalizeSearchText = value => String\(value \?\? ''\)\.normalize\('NFD'\)/);
+  assert.match(rankingHistoryAdmin, /row\.ph_rank, row\.info_text, row\.custom_fields/);
+  assert.match(rankingHistoryAdmin, /searchTerms\.every\(term => searchable\.includes\(term\)\)/);
 });
 
 test('Summary Card manager can add a category without first creating a card', () => {

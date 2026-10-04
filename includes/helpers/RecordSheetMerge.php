@@ -80,11 +80,11 @@ function record_merge_numeric_stats(array $headers, array $rows): array
  * @param array $target Existing target sheet with headers and rows.
  * @param array $source Incoming source sheet with headers and rows.
  * @param array $keyColumns Zero-based target header indexes defining row identity.
- * @param array $resolutions Per-cell source/target choices for conflicting values.
+ * @param bool $allowPartialHeaderOverlap Whether the established overlap threshold may be relaxed.
  * @return array Merged sheet, conflict details, and row/column statistics or validation error.
  * @side-effects None; returns a new sheet structure without mutating either input.
  */
-function record_merge_sheet(array $target, array $source, array $keyColumns, array $resolutions = []): array
+function record_merge_sheet(array $target, array $source, array $keyColumns, bool $allowPartialHeaderOverlap = false): array
 {
     $targetHeaders = $target['headers'] ?? null;
     $sourceHeaders = $source['headers'] ?? null;
@@ -116,7 +116,25 @@ function record_merge_sheet(array $target, array $source, array $keyColumns, arr
         $sourceHeaderIndex[$normalized] = $index;
     }
     $overlap = count(array_intersect_key($targetHeaderIndex, $sourceHeaderIndex));
-    if ($overlap / count($targetHeaderIndex) < 0.5) return ['error' => 'Fewer than half of the target headers match the source worksheet.', 'sheet' => null, 'conflicts' => [], 'unresolved' => 0];
+    if ($allowPartialHeaderOverlap) {
+        if ($overlap === 0) return ['error' => 'General worksheets need at least one shared header to match rows.', 'sheet' => null, 'conflicts' => [], 'unresolved' => 0];
+        $keyColumns = array_values(array_unique(array_filter(
+            $keyColumns,
+            static fn($column): bool => is_int($column)
+                && isset($targetHeaders[$column])
+                && isset($sourceHeaderIndex[record_merge_normalize_text($targetHeaders[$column])])
+        )));
+        if (!$keyColumns) {
+            foreach ($targetHeaderIndex as $normalized => $column) {
+                if (isset($sourceHeaderIndex[$normalized])) {
+                    $keyColumns = [$column];
+                    break;
+                }
+            }
+        }
+    } elseif ($overlap / count($targetHeaderIndex) < 0.5) {
+        return ['error' => 'Fewer than half of the target headers match the source worksheet.', 'sheet' => null, 'conflicts' => [], 'unresolved' => 0];
+    }
     if (!$keyColumns || count($keyColumns) !== count(array_unique($keyColumns))) return ['error' => 'Select at least one unique key column.', 'sheet' => null, 'conflicts' => [], 'unresolved' => 0];
     foreach ($keyColumns as $column) {
         if (!is_int($column) || $column < 0 || !isset($targetHeaders[$column])) return ['error' => 'A selected key column is invalid.', 'sheet' => null, 'conflicts' => [], 'unresolved' => 0];
@@ -201,24 +219,10 @@ function record_merge_sheet(array $target, array $source, array $keyColumns, arr
             $targetValue = $targetRows[$targetRowIndex][$column] ?? null;
             // Blank source cells are omissions, not instructions to erase target values.
             if (record_merge_is_blank($sourceValue) || record_merge_same_value($targetValue, $sourceValue)) continue;
-            $conflictId = $rowIndex . ':' . $column;
-            $resolution = $resolutions[$conflictId] ?? null;
-            $conflicts[] = [
-                'id' => $conflictId,
-                'rowIndex' => $rowIndex,
-                'targetRowIndex' => $targetRowIndex,
-                'column' => $column,
-                'columnName' => $header,
-                'key' => json_decode($key, true, 512, JSON_THROW_ON_ERROR),
-                'targetValue' => $targetValue,
-                'sourceValue' => $sourceValue,
-                'resolution' => in_array($resolution, ['source', 'target'], true) ? $resolution : null,
-            ];
-            if ($resolution === 'source') {
-                // Conflicts change the target only when the preview explicitly chose the source value.
-                $mergedRows[$targetRowIndex][$column] = $sourceValue;
-                $changed = true;
-            }
+            // For differing non-key values, merge semantics intentionally prefer the selected source.
+            $mergedRows[$targetRowIndex][$column] = $sourceValue;
+            $stats['updatedByColumn'][$header] = ($stats['updatedByColumn'][$header] ?? 0) + 1;
+            $changed = true;
         }
         if ($changed) {
             $stats['updated']++;
@@ -229,15 +233,6 @@ function record_merge_sheet(array $target, array $source, array $keyColumns, arr
         }
     }
 
-    foreach ($conflicts as $conflict) {
-        if ($conflict['resolution'] === 'source') {
-            $header = $conflict['columnName'];
-            $stats['updatedByColumn'][$header] = ($stats['updatedByColumn'][$header] ?? 0) + 1;
-        }
-    }
-    $unresolved = count(array_filter($conflicts, static fn(array $conflict): bool => $conflict['resolution'] === null));
-    if ($unresolved > 0) return ['sheet' => null, 'conflicts' => $conflicts, 'unresolved' => $unresolved, 'stats' => $stats];
-
     $headerless = isset($target['rowCount']) && $target['rowCount'] === count($targetRows);
     $sheet = array_merge($target, [
         'headers' => array_values($targetHeaders),
@@ -245,5 +240,5 @@ function record_merge_sheet(array $target, array $source, array $keyColumns, arr
         'rowCount' => count($mergedRows) + ($headerless ? 0 : 1),
         'numericStats' => record_merge_numeric_stats($targetHeaders, $mergedRows),
     ]);
-    return ['sheet' => $sheet, 'conflicts' => $conflicts, 'unresolved' => 0, 'stats' => $stats];
+    return ['sheet' => $sheet, 'conflicts' => [], 'unresolved' => 0, 'stats' => $stats];
 }

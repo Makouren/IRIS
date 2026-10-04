@@ -26,7 +26,8 @@
                 if (!isset($records[$sourceId]) || !isset($records[$targetId])) bad('Source or target record not found.', 404);
                 $source = $records[$sourceId];
                 $target = $records[$targetId];
-                if (empty($source['template_id']) || empty($target['template_id']) || (string)$source['template_id'] !== (string)$target['template_id']) bad('Both records must be assigned to the same template.', 409);
+                $templateCompatibilityError = record_merge_template_compatibility_error($source, $target);
+                if ($templateCompatibilityError !== null) bad($templateCompatibilityError, 409);
                 foreach ([$source, $target] as $record) {
                     if (!in_array(strtolower((string)($record['file_type'] ?? '')), ['xlsx', 'csv', 'tsv'], true)) bad('Both records must use a supported spreadsheet type.', 409);
                 }
@@ -41,9 +42,8 @@
                 || !is_array($sourceData[$sourceSheetName] ?? null) || !is_array($targetData[$targetSheetName] ?? null)) {
                 bad('The selected worksheet must exist in both records.', 409);
             }
-            $resolutions = $data['resolutions'] ?? [];
-            if (!is_array($resolutions)) bad('Conflict resolutions must be an object.');
-            $mergeResult = record_merge_sheet($targetData[$targetSheetName], $sourceData[$sourceSheetName], $keyColumns, $resolutions);
+            $allowPartialHeaderOverlap = record_merge_records_are_general($source, $target);
+            $mergeResult = record_merge_sheet($targetData[$targetSheetName], $sourceData[$sourceSheetName], $keyColumns, $allowPartialHeaderOverlap);
             if (!empty($mergeResult['error'])) bad((string)$mergeResult['error'], 409);
             if ($action === 'preview-record-merge') {
                 echo json_encode([
@@ -90,10 +90,11 @@
                 }
                 $sourceData = json_col($source['extracted_data'] ?? null, []);
                 $targetData = json_col($target['extracted_data'] ?? null, []);
-                $mergeResult = record_merge_sheet($targetData[$targetSheetName], $sourceData[$sourceSheetName], $keyColumns, $resolutions);
+                $allowPartialHeaderOverlap = record_merge_records_are_general($source, $target);
+                $mergeResult = record_merge_sheet($targetData[$targetSheetName], $sourceData[$sourceSheetName], $keyColumns, $allowPartialHeaderOverlap);
                 if (!empty($mergeResult['error'])) throw new RuntimeException((string)$mergeResult['error']);
                 if (!empty($mergeResult['unresolved']) || !is_array($mergeResult['sheet'] ?? null)) {
-                    throw new RuntimeException('Resolve every conflict before merging.');
+                    throw new RuntimeException('The merge preview is no longer valid. Refresh it before merging.');
                 }
 
                 $targetSnapshot = record_file_history_capture($pdo, $target);
@@ -162,6 +163,7 @@
                     ]);
                 if ($consumeSource) {
                     $pdo->prepare('DELETE FROM saved_graphs WHERE record_id = ?')->execute([$sourceId]);
+                    ImportedRecordDataCleanup::remove($pdo, (int)$sourceId);
                     $pdo->prepare('DELETE FROM records WHERE record_id = ?')->execute([$sourceId]);
                     $oldStoredFile = (string)($manifest['old_stored_file'] ?? '');
                     $newStoredFile = (string)($targetMetadata['stored_file'] ?? '');
@@ -498,6 +500,7 @@
             ensure_admin_for_mutation();
             $data=json_input(); $ids=array_values(array_unique(array_filter($data['ids']??[], fn($x)=>is_scalar($x)&&$x!=='')));
             if (!$ids) bad('ids must be a non-empty array');
+            $override = !empty($data['override_protection']);
             $existingRows = [];
             $pdo->beginTransaction();
             try {
@@ -507,6 +510,7 @@
                 $existingRows=$q->fetchAll(PDO::FETCH_ASSOC);
                 $existing=array_column($existingRows,'id');
                 if ($existing) {
+                    ImportedRecordDataCleanup::removeMany($pdo, array_map('intval', $existing), $override);
                     $ph2=implode(',',array_fill(0,count($existing),'?'));
                     $pdo->prepare("DELETE FROM saved_graphs WHERE record_id IN ($ph2)")->execute($existing);
                     $q=$pdo->prepare("DELETE FROM records WHERE record_id IN ($ph2)");$q->execute($existing);
@@ -585,6 +589,7 @@
             $pdo->beginTransaction();
             try {
                 $r = load_record($pdo, $recordId, true);if(!$r)bad('Record not found',404);
+                ImportedRecordDataCleanup::remove($pdo, $recordId);
                 $pdo->prepare('DELETE FROM saved_graphs WHERE record_id=?')->execute([$recordId]);
                 $q=$pdo->prepare('DELETE FROM records WHERE record_id=?');$q->execute([$recordId]);
                 if($q->rowCount() < 1) bad('Record not found',404);

@@ -30,9 +30,6 @@ if ($templateInput !== '') {
 	}
 	$templateId = (int)$parsedTemplateId;
 }
-if ($templateId === null && $uploadPurpose === 'analytics') {
-	flash_redirect('admin/office_upload.php', 'error', 'Choose an active template for the selected upload purpose.');
-}
 $pdo = db();
 $importProfileId = null;
 $selectedTemplate = null;
@@ -184,7 +181,11 @@ try {
 
 	$originalName = basename((string)$file['name']);
 	$originalName = preg_replace('/[\x00-\x1F\x7F]/u', '', $originalName) ?: 'upload.' . $extension;
-	$metadata = json_encode(array_merge($parsed['metadata'], ['stored_file' => $storedName, 'upload_purpose' => $uploadPurpose]), JSON_THROW_ON_ERROR);
+	$recordMetadata = array_merge($parsed['metadata'], ['stored_file' => $storedName, 'upload_purpose' => $uploadPurpose]);
+	if ($uploadPurpose === 'analytics' && $templateId === null) {
+		$recordMetadata['template_status'] = 'uncategorized';
+	}
+	$metadata = json_encode($recordMetadata, JSON_THROW_ON_ERROR);
 	$insert = $pdo->prepare("INSERT INTO records
 		(file_name, file_type, file_size, scanned_at, status, uploaded_by, office_id, uploaded_at,
 		 template_id, import_profile_id, doc_type, raw_text, extracted_data, graph_drafts, admin_notes, metadata, updated_at)

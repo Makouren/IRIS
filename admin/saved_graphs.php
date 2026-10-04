@@ -8,7 +8,7 @@ require_once __DIR__.'/includes/header.php';
     <div style="margin-bottom: 1.5rem; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem;">
         <div>
             <h2 style="font-size: 1.4rem; font-weight: 800; color: var(--clsu-green);">Saved Dashboard Graphs</h2>
-            <p style="font-size: 0.88rem; color: var(--text-muted);">Published chart versions grouped per file record.</p>
+            <p style="font-size: 0.88rem; color: var(--text-muted);">Saved charts and report visualizations from every file, grouped by record.</p>
         </div>
         <div style="display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap;">
             <button id="savedGraphsViewAllBtn" type="button" class="saved-graphs-bulk-button">View All</button>

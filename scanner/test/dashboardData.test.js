@@ -15,7 +15,6 @@ const readIrisApiSource = () => [
     'graphs'
   ].map(handler => path.join(__dirname, '..', '..', 'includes', 'api', 'handlers', `${handler}.php`))
 ].map(file => fs.readFileSync(file, 'utf8')).join('\n');
-
 const { prepareCircularData, serializeChartState } = require('../js/charts/chartData');
 const { pairSelectedText } = require('../js/ingestion/sourceIngestion');
 const { normalizeGraphExportItem, buildPrintableGraphSheet, buildSavedChartOption } = require('../js/charts/graphExport');
@@ -98,7 +97,10 @@ test('all six chart builders use live rows, precision formatting, and mapped col
   assert.equal(area.series[0].type, 'line');
   assert.equal(area.series[0].stack, 'Total');
   assert.deepEqual(bar.xAxis.data, ['Beta', 'Alpha']);
+  assert.equal(bar.legend, undefined, 'single-series bar charts do not need a legend that can overlap the title');
   assert.deepEqual(bar.series[0].data.map(point => point.itemStyle.color), ['#112233', '#445566']);
+  assert.equal(area.legend.top, 28, 'multi-series legends sit below the title');
+  assert.ok(area.grid.top > area.legend.top, 'the chart plot starts below the legend');
   assert.equal(pie.series[0].radius, '55%');
   assert.deepEqual(pie.series[0].data.map(point => point.itemStyle.color), ['#112233', '#445566']);
   assert.deepEqual(doughnut.series[0].radius, ['38%', '65%']);
@@ -227,6 +229,29 @@ test('saved rank line charts invert the value axis and keep raw ranks', () => {
     if (originalDocument === undefined) delete global.document;
     else global.document = originalDocument;
   }
+});
+
+test('saved rank metadata and reversed order match the Studio chart rendering', () => {
+  const option = buildSavedGraphOption({
+    chart_type: 'line',
+    rank_semantic: 'rank',
+    labels: ['First', 'Second', 'Third'],
+    values_data: [132, 92, 48],
+    chart_data: {
+      irisConfig: {
+        type: 'line',
+        rankSemantic: true,
+        reverseOrder: true,
+        labels: ['First', 'Second', 'Third'],
+        rawValues: [132, 92, 48],
+        series: [{ name: 'Regional Rank', data: [132, 92, 48] }]
+      }
+    }
+  });
+
+  assert.equal(option.yAxis.inverse, true);
+  assert.deepEqual(option.xAxis.data, ['Third', 'Second', 'First']);
+  assert.deepEqual(option.series[0].data.map(point => point.value), [48, 92, 132]);
 });
 
 test('published pie labels are white with no text stroke in dark mode', () => {
@@ -680,6 +705,19 @@ test('builds a printable graph sheet with row data and branding', () => {
   assert.match(html, /aria-label="Bar chart"/);
 });
 
+test('print graph sheets can embed the shared renderer output', () => {
+  const chartImage = 'data:image/svg+xml;charset=UTF-8,%3Csvg%3E%3C%2Fsvg%3E';
+  const html = buildPrintableGraphSheet({
+    title: 'Rank trend',
+    chart_type: 'line',
+    labels: ['2025', '2026'],
+    values_data: [12, 8]
+  }, { chartImage });
+
+  assert.match(html, /<img class="chart-preview" src="data:image\/svg\+xml;charset=UTF-8,/);
+  assert.doesNotMatch(html, /<polyline/);
+});
+
 test('text export contains SQL statements and graph metadata comments', () => {
   assert.match(savedGraphsSource, /export function buildTextExport/);
   assert.match(savedGraphsSource, /CREATE TABLE IF NOT EXISTS/);
@@ -710,7 +748,7 @@ test('saved graph publish controls work for individual and bulk actions', () => 
 test('public scanner graphs are gated by explicit graph publication only', () => {
   const dashboardApi = fs.readFileSync(path.join(__dirname, '..', '..', 'api', 'dashboard_graphs.php'), 'utf8');
   const graphApi = readIrisApiSource();
-  const publicDashboard = fs.readFileSync(path.join(__dirname, '..', '..', 'user', 'dashboard.php'), 'utf8');
+  const publicDashboard = publicDashboardSource;
   assert.match(dashboardApi, /WHERE sg\.is_published = 1/);
   assert.match(dashboardApi, /Cache-Control: no-store/);
   assert.match(publicDashboard, /cache: 'no-store'/);
@@ -752,8 +790,8 @@ test('saved graph publish helpers are exposed globally for all files', () => {
 });
 
 test('public dashboard includes a manual summary card snapshot section and admin card controls', () => {
-  const dashboardSource = fs.readFileSync(path.join(__dirname, '..', '..', 'user', 'dashboard.php'), 'utf8');
-  const adminSource = fs.readFileSync(path.join(__dirname, '..', '..', 'admin', 'review_editor.php'), 'utf8');
+  const dashboardSource = publicDashboardSource;
+  const adminSource = reviewEditorSource;
   assert.match(dashboardSource, /Latest Performance Snapshot/i);
   assert.match(dashboardSource, /summary-card|snapshot-cards/i);
   assert.match(adminSource, /summary card|summary-card|summaryCards/i);
@@ -850,7 +888,7 @@ test('Ranking History chart cards avoid duplicating the ranking matrix and retai
 });
 
 test('public removal hides charts without deleting the saved graph record', () => {
-  const dashboardSource = fs.readFileSync(path.join(__dirname, '..', '..', 'user', 'dashboard.php'), 'utf8');
+  const dashboardSource = publicDashboardSource;
   const apiSource = readIrisApiSource();
   assert.match(dashboardSource, /Unpublish|Hide this published chart from the Observatory/);
   assert.match(dashboardSource, /action=unpublish/);

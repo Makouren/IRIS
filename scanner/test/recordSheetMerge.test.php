@@ -12,38 +12,27 @@ function assertMergeSame(mixed $expected, mixed $actual, string $message): void
 }
 
 $target = [
-    'headers' => ['Category', 'Rank'],
-    'rows' => [['A', 5], ['Target only', 3]],
+    'headers' => ['Category', 'Population'],
+    'rows' => [['A', 14000], ['Target only', 3]],
     'rowCount' => 3,
     'numericStats' => [],
 ];
 $source = [
-    'headers' => ['Category', 'Rank'],
-    'rows' => [['A', 4], ['Source only', 2]],
+    'headers' => ['Category', 'Population'],
+    'rows' => [['A', 15000], ['Source only', 2]],
     'rowCount' => 3,
     'numericStats' => [],
 ];
 
 $preview = record_merge_sheet($target, $source, [0]);
-assertMergeSame(1, count($preview['conflicts']), 'different values for the same key and column should conflict.');
-assertMergeSame(null, $preview['sheet'], 'an unresolved merge must not return an applicable sheet.');
-assertMergeSame(1, $preview['unresolved'], 'the conflicting value should be unresolved.');
-assertMergeSame(5, $preview['conflicts'][0]['targetValue'], 'the conflict should include the target value.');
-assertMergeSame(4, $preview['conflicts'][0]['sourceValue'], 'the conflict should include the source value.');
+assertMergeSame([], $preview['conflicts'], 'differing values should be replaced automatically, not presented as conflicts.');
+assertMergeSame(0, $preview['unresolved'], 'automatic source replacement should leave no unresolved conflicts.');
+assertMergeSame([['A', 15000], ['Target only', 3], ['Source only', 2]], $preview['sheet']['rows'], 'source values should replace matching target values and union new rows.');
+assertMergeSame(['Population' => 1], $preview['stats']['updatedByColumn'], 'source replacements should be counted by column.');
 
-$conflictId = $preview['conflicts'][0]['id'];
-$keepTarget = record_merge_sheet($target, $source, [0], [$conflictId => 'target']);
-$takeSource = record_merge_sheet($target, $source, [0], [$conflictId => 'source']);
-assertMergeSame([['A', 5], ['Target only', 3], ['Source only', 2]], $keepTarget['sheet']['rows'], 'target resolution should preserve target values and union new rows.');
-assertMergeSame([['A', 4], ['Target only', 3], ['Source only', 2]], $takeSource['sheet']['rows'], 'source resolution should apply source values and union new rows.');
-assertMergeSame(0, $takeSource['unresolved'], 'the explicit source choice should resolve the conflict.');
-
-$reverse = record_merge_sheet($source, $target, [0], ['0:1' => 'source']);
-assertMergeSame([['A', 5], ['Source only', 2], ['Target only', 3]], $reverse['sheet']['rows'], 'reversing direction should make the selected source value win.');
-
-$badResolution = record_merge_sheet($target, $source, [0], [$conflictId => 'discard']);
-assertMergeSame(null, $badResolution['sheet'], 'unsupported conflict choices must not produce an applicable sheet.');
-assertMergeSame(1, $badResolution['unresolved'], 'unsupported conflict choices must remain unresolved.');
+$blankSource = ['headers' => ['Category', 'Population'], 'rows' => [['A', '  ']], 'rowCount' => 2];
+$preserveTarget = record_merge_sheet($target, $blankSource, [0]);
+assertMergeSame(14000, $preserveTarget['sheet']['rows'][0][1], 'blank source values should not erase target values.');
 
 $missingKey = record_merge_sheet($target, ['headers' => ['Rank'], 'rows' => [[4]], 'rowCount' => 2], [0]);
 assertMergeSame(null, $missingKey['sheet'], 'a source missing the selected key must be rejected.');

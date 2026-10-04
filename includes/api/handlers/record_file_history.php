@@ -46,6 +46,7 @@
             $restoredUploadName = null;
             $newHistoryFiles = [];
             $apiRestoredRecord = null;
+            // Restore the record and its file metadata together so failed copies cannot leave partial state.
             $pdo->beginTransaction();
             try {
                 $currentQuery = $pdo->prepare('SELECT * FROM records WHERE record_id = ? FOR UPDATE');

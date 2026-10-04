@@ -218,6 +218,10 @@
         return `<svg class="chart-preview" viewBox="0 0 ${width} ${height}" role="img" aria-label="${escapeHtml(chartLabel)}">${grid}${bars}${labelsSvg}</svg>`;
       }
 
+      const chart = context.chartImage
+        ? `<img class="chart-preview" src="${escapeHtml(context.chartImage)}" alt="${escapeHtml(formatChartTypeLabel(chartType))}" />`
+        : buildChartSvg();
+
       return `
         <!DOCTYPE html>
         <html lang="en">
@@ -271,6 +275,7 @@
               display: block;
               width: 100%;
               height: 320px;
+              object-fit: contain;
               margin: 20px 0 24px;
               background: #ffffff;
             }
@@ -318,7 +323,7 @@
             </div>
             <h1>${escapeHtml(title)}</h1>
             <div class="meta">Printable export created from saved and cleaned graph data.</div>
-            ${buildChartSvg()}
+            ${chart}
             <table>
               <thead>
                 <tr>
@@ -346,7 +351,10 @@
         const recordName = typeof context.recordNameForGraph === 'function'
           ? context.recordNameForGraph(graph)
           : (context.recordName || 'IRIS Report');
-        const document = new DOMParser().parseFromString(buildPrintableGraphSheet(graph, { recordName }), 'text/html');
+        const chartImage = typeof context.chartImageForGraph === 'function'
+          ? context.chartImageForGraph(graph)
+          : context.chartImage;
+        const document = new DOMParser().parseFromString(buildPrintableGraphSheet(graph, { recordName, chartImage }), 'text/html');
         const sheet = document.querySelector('.sheet');
         const actions = sheet?.querySelector('.actions');
         if (actions) actions.remove();

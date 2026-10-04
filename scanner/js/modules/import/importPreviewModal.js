@@ -51,6 +51,13 @@ if (modal) {
         return;
       }
     }
+    if (destination === 'ranking_history') {
+      button.innerHTML = '<i class="fa-solid fa-file-import" aria-hidden="true"></i> ';
+      button.append(document.createTextNode(label));
+      button.className = 'summary-card-manager-menu-item';
+      anchor.before(button);
+      return;
+    }
     if (!button.textContent) {
       button.innerHTML = '<i class="fa-solid fa-file-import" aria-hidden="true"></i> ';
       button.append(document.createTextNode(label));
@@ -453,7 +460,7 @@ if (modal) {
       state.selected.clear();
       reviewedCheckbox.checked = false;
       renderRows();
-      document.dispatchEvent(new CustomEvent('iris:template-import-complete', { detail: result }));
+      document.dispatchEvent(new CustomEvent('iris:template-import-complete', { detail: { ...result, destination: state.destination } }));
     } catch (error) {
       if (error.requires_sheet_selection) {
         showSheetChoices(error);

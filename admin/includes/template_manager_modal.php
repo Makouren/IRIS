@@ -11,6 +11,7 @@
                 <div class="space-y-3">
                     <label class="block text-sm font-semibold">Available Summary Card profiles<select data-summary-profile-select class="mt-1 block w-full rounded-lg border border-gray-300 bg-white p-2.5 text-sm dark:border-slate-700 dark:bg-slate-800"><option value="">Loading profiles…</option></select></label>
                     <button type="button" data-summary-profile-activate class="rounded-md border border-emerald-700 px-3 py-2 text-sm font-bold text-emerald-900 hover:bg-emerald-100 dark:text-emerald-200 dark:hover:bg-emerald-950">Set as active profile</button>
+                    <button type="button" data-summary-profile-deactivate class="rounded-md border border-red-700 px-3 py-2 text-sm font-bold text-red-900 hover:bg-red-100 disabled:cursor-not-allowed disabled:opacity-50 dark:text-red-200 dark:hover:bg-red-950">Deactivate profile</button>
                     <label class="block text-sm font-semibold">Profile name<input data-summary-profile-name type="text" maxlength="150" required class="mt-1 block w-full rounded-lg border border-gray-300 bg-white p-2.5 text-sm dark:border-slate-700 dark:bg-slate-800"></label>
                     <button type="button" data-summary-profile-save class="rounded-md bg-emerald-700 px-3 py-2 text-sm font-bold text-white hover:bg-emerald-800">Save profile settings</button>
                 </div>
@@ -49,6 +50,7 @@
                 <div class="space-y-3">
                     <label class="block text-sm font-semibold">Available Ranking History profiles<select data-ranking-profile-select class="mt-1 block w-full rounded-lg border border-gray-300 bg-white p-2.5 text-sm dark:border-slate-700 dark:bg-slate-800"><option value="">Loading profiles…</option></select></label>
                     <button type="button" data-ranking-profile-activate class="rounded-md border border-sky-700 px-3 py-2 text-sm font-bold text-sky-900 hover:bg-sky-100 dark:text-sky-200 dark:hover:bg-sky-950">Set as active profile</button>
+                    <button type="button" data-ranking-profile-deactivate class="rounded-md border border-red-700 px-3 py-2 text-sm font-bold text-red-900 hover:bg-red-100 disabled:cursor-not-allowed disabled:opacity-50 dark:text-red-200 dark:hover:bg-red-950">Deactivate profile</button>
                     <label class="block text-sm font-semibold">Profile name<input data-ranking-profile-name type="text" maxlength="150" required class="mt-1 block w-full rounded-lg border border-gray-300 bg-white p-2.5 text-sm dark:border-slate-700 dark:bg-slate-800"></label>
                     <button type="button" data-ranking-profile-save class="rounded-md bg-sky-700 px-3 py-2 text-sm font-bold text-white hover:bg-sky-800">Save profile settings</button>
                 </div>

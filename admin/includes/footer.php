@@ -32,9 +32,21 @@
     <script>
         (function () {
             const loader = document.getElementById('page-loader');
+            let templateDownloadPending = false;
+            let templateDownloadReset;
             const hideLoader = () => { if (loader) loader.classList.add('hidden'); };
             setTimeout(hideLoader, 90);
             window.addEventListener('load', hideLoader);
+
+            document.addEventListener('click', (event) => {
+                const link = event.target.closest('a[href]');
+                if (!link) return;
+                const target = new URL(link.href, window.location.href);
+                if (!target.pathname.endsWith('/admin/template_download.php')) return;
+                templateDownloadPending = true;
+                window.clearTimeout(templateDownloadReset);
+                templateDownloadReset = window.setTimeout(() => { templateDownloadPending = false; }, 2000);
+            }, true);
 
             document.querySelectorAll('.logo-refresh-trigger').forEach((link) => {
                 link.addEventListener('click', function (event) {
@@ -51,12 +63,19 @@
             });
 
             window.addEventListener('beforeunload', (event) => {
+                if (templateDownloadPending) {
+                    templateDownloadPending = false;
+                    window.clearTimeout(templateDownloadReset);
+                    return;
+                }
                 if (window.IRIS_STUDIO_DIRTY) {
                     event.preventDefault();
                     event.returnValue = 'You have unsaved changes in the Review Editor. Are you sure you want to leave?';
                     return event.returnValue;
                 }
+                if (loader) loader.classList.remove('hidden');
             });
+            window.addEventListener('pagehide', () => { if (loader) loader.classList.add('hidden'); });
 
             window.addEventListener('resize', () => {
                 if (window.IRISApp?.state?.studioChartInstance) {

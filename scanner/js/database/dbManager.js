@@ -219,12 +219,12 @@ class DatabaseManager {
     return payload;
   }
 
-  async deleteRecords(ids) {
+  async deleteRecords(ids, { override = false } = {}) {
     await this.initPromise;
     const recordIds = [...new Set((ids || []).filter(Boolean))];
     if (!recordIds.length) throw new Error('No records selected.');
     const response = await fetch(this.config.endpoints.recordsBulkDelete, {
-      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ids: recordIds })
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ids: recordIds, override_protection: override })
     });
     const payload = await response.json().catch(() => ({}));
     if (!response.ok) throw new Error(payload.error || `Bulk delete failed (HTTP ${response.status})`);
@@ -497,17 +497,50 @@ class DatabaseManager {
     return response.json();
   }
 
+  renderGraphPrintImage(graphData) {
+    if (typeof window.echarts?.init !== 'function' || typeof GraphExport === 'undefined' || typeof GraphExport.buildSavedChartOption !== 'function') {
+      throw new Error('The shared chart renderer is unavailable. Reload the page and try printing again.');
+    }
+    const width = 1200;
+    const height = 560;
+    const host = document.createElement('div');
+    host.style.cssText = `position:fixed;left:-10000px;top:0;width:${width}px;height:${height}px;overflow:hidden;`;
+    document.body.appendChild(host);
+    let chart;
+    try {
+      chart = window.echarts.init(host, null, { renderer: 'svg', width, height });
+      chart.setOption(GraphExport.buildSavedChartOption(graphData, {
+        width,
+        theme: { dark: false }
+      }), true);
+      const image = chart.getDataURL({ type: 'svg', backgroundColor: '#FFFFFF' });
+      if (!image.startsWith('data:image/svg+xml')) {
+        throw new Error('The chart renderer did not produce an SVG print image.');
+      }
+      return image;
+    } finally {
+      chart?.dispose?.();
+      host.remove();
+    }
+  }
+
   printGraphSheet(graphData, context = {}) {
     if (typeof GraphExport !== 'undefined' && GraphExport.buildPrintableGraphSheet) {
-      const html = GraphExport.buildPrintableGraphSheet(graphData, context);
       const popup = window.open('', '_blank', 'width=1200,height=900');
       if (!popup) {
         throw new Error('Popup blocked. Please allow popups to print the graph sheet.');
       }
-      popup.document.write(html);
-      popup.document.close();
-      popup.focus();
-      return popup;
+      try {
+        const chartImage = this.renderGraphPrintImage(graphData);
+        const html = GraphExport.buildPrintableGraphSheet(graphData, { ...context, chartImage });
+        popup.document.write(html);
+        popup.document.close();
+        popup.focus();
+        return popup;
+      } catch (error) {
+        popup.close();
+        throw error;
+      }
     }
 
     return null;
@@ -515,15 +548,23 @@ class DatabaseManager {
 
   printGraphSheets(graphs, context = {}) {
     if (typeof GraphExport !== 'undefined' && GraphExport.buildPrintableGraphSheets) {
-      const html = GraphExport.buildPrintableGraphSheets(graphs, context);
       const popup = window.open('', '_blank', 'width=1200,height=900');
       if (!popup) {
         throw new Error('Popup blocked. Please allow popups to print the graphs.');
       }
-      popup.document.write(html);
-      popup.document.close();
-      popup.focus();
-      return popup;
+      try {
+        const html = GraphExport.buildPrintableGraphSheets(graphs, {
+          ...context,
+          chartImageForGraph: graph => this.renderGraphPrintImage(graph)
+        });
+        popup.document.write(html);
+        popup.document.close();
+        popup.focus();
+        return popup;
+      } catch (error) {
+        popup.close();
+        throw error;
+      }
     }
 
     return null;

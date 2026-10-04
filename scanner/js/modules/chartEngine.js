@@ -37,6 +37,10 @@ function normalizeChartType(type) {
   return CHART_TYPES.has(normalized) ? normalized : 'bar';
 }
 
+function isRankSemantic(value) {
+  return value === true || value === 1 || ['1', 'true', 'rank'].includes(String(value ?? '').trim().toLowerCase());
+}
+
 export function getChartTheme(theme = {}) {
   const dark = Boolean(theme.dark);
   return {
@@ -75,8 +79,8 @@ function buildLineOption(rows, config, colors, theme, context, showTitle, precis
   const labels = orderedRows.map(row => row.label);
   const sourceSeries = series.length ? series : [{ name: config.seriesName || 'Value', data: rows.map(row => row.value) }];
   const option = baseOption(config, colors, theme, context, showTitle);
-  option.grid = { left: '5%', right: '5%', top: showTitle ? 52 : '8%', bottom: labels.length > 7 ? '16%' : '8%', containLabel: true };
-  if (sourceSeries.length > 1) option.legend = { data: sourceSeries.map((item, index) => item.name || `Series ${index + 1}`), textStyle: { color: textColor } };
+  option.grid = { left: '5%', right: '5%', top: showTitle ? (sourceSeries.length > 1 ? 76 : 52) : (sourceSeries.length > 1 ? 48 : '8%'), bottom: labels.length > 7 ? '16%' : '8%', containLabel: true };
+  if (sourceSeries.length > 1) option.legend = { data: sourceSeries.map((item, index) => item.name || `Series ${index + 1}`), top: showTitle ? 28 : 0, textStyle: { color: textColor } };
   option.tooltip.formatter = params => (Array.isArray(params) ? params : [params]).map(point => `${point.seriesName ? `${point.seriesName}<br/>` : ''}${point.name}: ${format(point.data?.rawValue ?? point.value)}`).join('<br/>');
   option.xAxis = { type: 'category', data: labels, axisLabel: { color: textColor }, axisLine: { lineStyle: { color: gridColor } } };
   const maxRankValue = Number(config.rankValueMax ?? Math.max(...rows.map(row => row.value), 0));
@@ -113,8 +117,8 @@ function buildStackedAreaOption(rows, config, colors, theme, context, showTitle,
   const labels = orderedRows.map(row => row.label);
   const sourceSeries = series.length ? series : [{ name: config.seriesName || 'Value', data: rows.map(row => row.value) }];
   const option = baseOption(config, colors, theme, context, showTitle);
-  option.grid = { left: '5%', right: '5%', top: showTitle ? 52 : '8%', bottom: labels.length > 7 ? '16%' : '8%', containLabel: true };
-  option.legend = { data: sourceSeries.map((item, index) => item.name || `Series ${index + 1}`), type: 'scroll', textStyle: { color: textColor } };
+  option.grid = { left: '5%', right: '5%', top: showTitle ? 76 : 48, bottom: labels.length > 7 ? '16%' : '8%', containLabel: true };
+  option.legend = { data: sourceSeries.map((item, index) => item.name || `Series ${index + 1}`), type: 'scroll', top: showTitle ? 28 : 0, textStyle: { color: textColor } };
   option.tooltip = { ...option.tooltip, axisPointer: { type: 'cross', label: { backgroundColor: '#6a7985' } }, formatter: params => (Array.isArray(params) ? params : [params]).map(point => `${point.seriesName}<br/>${point.name}: ${format(point.data?.rawValue ?? point.value)}`).join('<br/>') };
   option.xAxis = { type: 'category', boundaryGap: false, data: labels, axisLabel: { color: textColor }, axisLine: { lineStyle: { color: gridColor } } };
   option.yAxis = { type: 'value', min: config.valueAxisMin, max: config.valueAxisMax, axisLabel: { color: textColor, formatter: format }, axisLine: { lineStyle: { color: gridColor } }, splitLine: { lineStyle: { color: gridColor } } };
@@ -143,7 +147,6 @@ function buildBarOption(rows, config, colors, theme, context, showTitle, precisi
   const labels = orderedRows.map(row => row.label);
   const option = baseOption(config, colors, theme, context, showTitle);
   option.grid = { left: '5%', right: '5%', top: showTitle ? 52 : '8%', bottom: labels.length > 7 ? '16%' : '8%', containLabel: true };
-  option.legend = { data: [config.seriesName || 'Value'], textStyle: { color: textColor } };
   option.tooltip.formatter = params => (Array.isArray(params) ? params : [params]).map(point => `${point.name}: ${format(point.data?.rawValue ?? point.value)}`).join('<br/>');
   option.xAxis = { type: 'category', data: labels, axisLabel: { color: textColor, rotate: labels.length > 6 ? 30 : 0 }, axisLine: { lineStyle: { color: gridColor } } };
   option.yAxis = { type: 'value', min: config.valueAxisMin, max: config.valueAxisMax, axisLabel: { color: textColor, formatter: format }, axisLine: { lineStyle: { color: gridColor } }, splitLine: { lineStyle: { color: gridColor } } };
@@ -270,7 +273,7 @@ export function buildSavedGraphOption(graphData, { width = 0, theme = null, colo
     ...config,
     irisConfig: { ...config, colors: customColors || source.colors || config.colors, fieldColors: globalThis.IRISFieldColors || {}, fieldColorUpdatedAt, chartUpdatedAt: graphUpdatedAt },
     orientation: source.orientation || config.orientation,
-    rankSemantic: source.rank_semantic ?? source.rankSemantic ?? config.rankSemantic,
+    rankSemantic: isRankSemantic(source.rank_semantic) || isRankSemantic(source.rankSemantic) || isRankSemantic(config.rankSemantic),
     valueAxisMin: source.value_axis_min ?? config.valueAxisMin,
     valueAxisMax: source.value_axis_max ?? config.valueAxisMax,
     rankValueMax: source.rank_value_max ?? source.rankValueMax ?? config.rankValueMax,
@@ -379,7 +382,8 @@ export function renderStudioChart(arg1, arg2, arg3 = {}) {
   const rankSemantic = window.ChartMapping.isRankField(sheet.headers[valueCol]);
   const headerName = sheet.headers[valueCol] || 'Value';
   if (subtitle) subtitle.textContent = `Live interactive rendering from: ${info.name}`;
-  if (titleInput && !titleInput.getAttribute('data-customized')) titleInput.value = `${headerName} — ${info.name}`;
+  const isManualData = (info.name || '').replace(/[_\s]/g, '').toLowerCase() === 'manualdata';
+  if (titleInput && !titleInput.getAttribute('data-customized')) titleInput.value = isManualData ? headerName : `${headerName} — ${info.name}`;
   if (typeof window.echarts === 'undefined') return empty('The chart renderer is unavailable. Reload the page and try again.');
   const yearSelect = elements.yearSelect || document.getElementById('studioYearSelect');
   const reverseOrderInput = elements.reverseOrder || document.getElementById('studioReverseOrder');
@@ -536,6 +540,7 @@ export function renderStudioChart(arg1, arg2, arg3 = {}) {
     labels: labels.slice(),
     rawValues: rawValues.slice(),
     type,
+    rankSemantic,
     groupField: type === 'nestedPie' ? groupField : null,
     seriesField: type === 'stackedArea' ? seriesField : null,
     series: stackedSeries,
@@ -546,7 +551,7 @@ export function renderStudioChart(arg1, arg2, arg3 = {}) {
     reverseOrder
   };
   show();
-  const chartConfig = { ...state.studioChartConfig, type, title: titleInput?.value || `${headerName} — ${info.name}`, seriesName: headerName, valueLabel: headerName, rankSemantic, nestedGroups: nested?.groups || [], colors: state.studioChartOverrides, fieldColors: globalThis.IRISFieldColors || {}, fieldColorUpdatedAt: globalThis.IRISFieldColorUpdatedAt || {}, chartUpdatedAt: state.studioActiveGraphUpdatedAt, chartColorsOverrideShared: Array.isArray(state.studioChartOverrides) };
+  const chartConfig = { ...state.studioChartConfig, type, title: titleInput?.value || (isManualData ? headerName : `${headerName} — ${info.name}`), seriesName: headerName, valueLabel: headerName, rankSemantic, nestedGroups: nested?.groups || [], colors: state.studioChartOverrides, fieldColors: globalThis.IRISFieldColors || {}, fieldColorUpdatedAt: globalThis.IRISFieldColorUpdatedAt || {}, chartUpdatedAt: state.studioActiveGraphUpdatedAt, chartColorsOverrideShared: Array.isArray(state.studioChartOverrides) };
   const option = buildChartOption({ type, labels, values, rawValues, series: stackedSeries, config: chartConfig, colors: chartColors, theme: { dark: document.documentElement.classList.contains('dark') }, precision: displayPrecision, context: { width: canvas.clientWidth }, showTitle: true });
   if (!state.studioChartInstance) {
     state.studioChartInstance = window.echarts.init(canvas);

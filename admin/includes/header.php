@@ -247,7 +247,7 @@ $pageTitle = $pageTitle ?? 'IRIS Admin Control Panel';
         @keyframes spin{to{transform:rotate(360deg)}}
     </style>
 
-    <div id="page-loader" aria-live="polite" aria-label="Loading page">
+    <div id="page-loader" class="hidden" aria-live="polite" aria-label="Loading page">
         <div class="iris-loader" aria-hidden="true"></div>
     </div>
 

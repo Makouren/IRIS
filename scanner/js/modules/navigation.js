@@ -38,7 +38,7 @@ export function initNavigation(ctx) {
     scannerView?.scrollIntoView({ behavior: 'smooth', block: 'start' });
     if (adminView) {
       adminView.style.display = 'block';
-      await ctx.api.renderAdminPortal();
+      await ctx.api.renderAdminPortal(recordId);
     }
   };
 }

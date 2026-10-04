@@ -19,20 +19,39 @@ function sheetsFor(record) {
   return Object.entries(data).filter(([, sheet]) => Array.isArray(sheet?.headers) && Array.isArray(sheet?.rows));
 }
 
-function bestSheetFor(record, activeSheetName, activeHeaders) {
+function bestSheetFor(record, activeSheetName, activeHeaders, allowPartialHeaderOverlap = false) {
   const sheets = sheetsFor(record);
   if (!sheets.length) return null;
   const exact = sheets.find(([name]) => name === activeSheetName);
   if (exact) return { name: exact[0], sheet: exact[1] };
   if (sheets.length === 1) return { name: sheets[0][0], sheet: sheets[0][1] };
-  const normalize = value => window.TableFilter?.normalize?.(value) || String(value ?? '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
-  const active = new Set(activeHeaders.map(normalize).filter(Boolean));
+  const active = new Set(activeHeaders.map(normalizedHeader).filter(Boolean));
   const ranked = sheets.map(([name, sheet]) => {
-    const candidate = new Set(sheet.headers.map(normalize).filter(Boolean));
+    const candidate = new Set(sheet.headers.map(normalizedHeader).filter(Boolean));
     const overlap = [...active].filter(header => candidate.has(header)).length;
     return { name, sheet, ratio: active.size ? overlap / active.size : 0 };
   }).sort((left, right) => right.ratio - left.ratio);
-  return ranked[0]?.ratio >= 0.5 ? { name: ranked[0].name, sheet: ranked[0].sheet } : null;
+  return (allowPartialHeaderOverlap ? ranked[0]?.ratio > 0 : ranked[0]?.ratio >= 0.5)
+    ? { name: ranked[0].name, sheet: ranked[0].sheet }
+    : null;
+}
+
+function normalizedTemplateId(record) {
+  const templateId = record?.template_id;
+  return templateId === null || templateId === undefined || templateId === '' || String(templateId) === '0'
+    ? null
+    : String(templateId);
+}
+
+function canMergeTemplates(left, right) {
+  const leftTemplateId = normalizedTemplateId(left);
+  const rightTemplateId = normalizedTemplateId(right);
+  return leftTemplateId === null && rightTemplateId === null
+    || leftTemplateId !== null && leftTemplateId === rightTemplateId;
+}
+
+function normalizedHeader(value) {
+  return String(value ?? '').toLowerCase().normalize('NFKD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]+/g, ' ').trim().replace(/\s+/g, ' ');
 }
 
 function previewTable(sheet, rowStatuses = null) {
@@ -100,7 +119,7 @@ export function initStudioAppend(ctx) {
   const openSourcePicker = candidates => {
     const modal = showModal(`<div class="modal-card" style="max-width:720px;max-height:calc(100vh - 2rem);overflow:auto">
       <div class="modal-header"><h3 class="modal-title">Choose merge direction and record</h3><button type="button" class="export-cancel-button" data-cancel>Cancel</button></div>
-      <p style="margin:.5rem 0 1rem">Choose a direction first, then select the other record. Source data is merged into the target; target-only rows stay. Conflicts must be resolved before anything changes.</p>
+      <p style="margin:.5rem 0 1rem">Choose a direction first, then select the other record. Source values replace differing values in matching rows; blank source cells leave target values unchanged. Target-only rows stay.</p>
       <fieldset style="display:grid;gap:.75rem;margin:0 0 1rem;padding:.75rem;border:1px solid #cbd5e1;border-radius:6px">
         <legend>Merge direction</legend>
         <label style="display:grid;grid-template-columns:auto 1fr;gap:.5rem;align-items:start">
@@ -142,11 +161,19 @@ export function initStudioAppend(ctx) {
     const target = activeIsTarget ? active : selected.record;
     const sourceInfo = activeIsTarget ? selected.sheet : { name: activeInfo.name, sheet: activeInfo.data };
     const targetInfo = activeIsTarget ? { name: activeInfo.name, sheet: activeInfo.data } : selected.sheet;
-    let keyColumns = window.SheetMerge.defaultKeyColumns(targetInfo.sheet.headers, targetInfo.sheet.rows);
+    const isGeneralPair = normalizedTemplateId(source) === null && normalizedTemplateId(target) === null;
+    const sourceHeaders = new Set(sourceInfo.sheet.headers.map(normalizedHeader).filter(Boolean));
+    const sharedKeyColumns = targetInfo.sheet.headers
+      .map((header, index) => ({ header, index }))
+      .filter(({ header }) => sourceHeaders.has(normalizedHeader(header)));
+    const sharedKeyColumnIndices = new Set(sharedKeyColumns.map(({ index }) => index));
+    let keyColumns = window.SheetMerge.defaultKeyColumns(targetInfo.sheet.headers, targetInfo.sheet.rows)
+      .filter(index => sharedKeyColumnIndices.has(index))
+      .slice(0, 1);
+    if (!keyColumns.length && sharedKeyColumns.length) keyColumns = [sharedKeyColumns[0].index];
     let latestPreview = null;
     let previewSequence = 0;
     let previewError = '';
-    let resolutions = {};
     let confirmed = false;
     const modal = showModal(`<div class="modal-card" style="max-width:1200px;max-height:calc(100vh - 2rem);overflow:auto">
       <div class="modal-header"><h3 class="modal-title">Review record merge</h3><button type="button" class="export-cancel-button" data-cancel>Cancel</button></div>
@@ -154,7 +181,7 @@ export function initStudioAppend(ctx) {
         <section><h4 style="font-weight:800;margin:.35rem 0">SOURCE — changes come from this record</h4><p>${escapeHtml(source.fileName || 'Untitled')} · Record ${escapeHtml(source.id)} · ${escapeHtml(sourceInfo.name)} · ${sourceInfo.sheet.rows.length} rows</p><p>Its matching-row changes and new rows are applied to the target below.</p><div data-source-preview></div></section>
         <section style="padding:.65rem;border:2px solid #16a34a;border-radius:6px;background:#f0fdf4"><h4 style="font-weight:800;margin:.35rem 0;color:#166534">TARGET — THIS BECOMES THE UPDATED RECORD</h4><p><strong>${escapeHtml(target.fileName || 'Untitled')}</strong> · Record ${escapeHtml(target.id)} · ${escapeHtml(targetInfo.name)} · ${targetInfo.sheet.rows.length} rows</p><p>This record remains under its current ID and contains the merged result. The source is not made into the new record.</p><div data-target-preview></div></section>
       </div>
-      <section style="margin-top:1rem"><h4 style="font-weight:800">Key columns</h4><div data-key-list style="display:flex;flex-wrap:wrap;gap:.5rem;margin:.5rem 0"></div></section>
+      <section style="margin-top:1rem"><h4 style="font-weight:800">Key columns</h4>${isGeneralPair ? '<p>General worksheets can have different layouts. IRIS uses a shared column to match rows and merges only columns present in both worksheets; source-only columns are ignored.</p>' : ''}<div data-key-list style="display:flex;flex-wrap:wrap;gap:.5rem;margin:.5rem 0"></div></section>
       <section data-conflicts style="margin:.75rem 0"></section>
       <section data-validation role="status" aria-live="polite" style="margin:.75rem 0;padding:.75rem;background:#f8fafc;border:1px solid #cbd5e1;border-radius:6px"></section>
       <section data-merged-preview style="margin:.75rem 0"></section>
@@ -167,7 +194,7 @@ export function initStudioAppend(ctx) {
     modal.querySelector('[data-source-preview]').innerHTML = previewTable(sourceInfo.sheet);
     modal.querySelector('[data-target-preview]').innerHTML = previewTable(targetInfo.sheet);
     const keyList = modal.querySelector('[data-key-list]');
-    targetInfo.sheet.headers.forEach((header, index) => {
+    sharedKeyColumns.forEach(({ header, index }) => {
       const label = document.createElement('label');
       label.style.cssText = 'display:inline-flex;align-items:center;gap:.35rem;padding:.25rem .45rem;border:1px solid #cbd5e1;border-radius:4px';
       const checkbox = document.createElement('input');
@@ -179,6 +206,9 @@ export function initStudioAppend(ctx) {
       label.append(checkbox, text);
       keyList.appendChild(label);
     });
+    if (!sharedKeyColumns.length) {
+      keyList.textContent = 'These worksheets do not have a shared header to use as a merge key.';
+    }
 
     const refreshReview = async () => {
       keyColumns = [...modal.querySelectorAll('[data-key-column]:checked')].map(input => Number(input.dataset.keyColumn));
@@ -190,12 +220,17 @@ export function initStudioAppend(ctx) {
       latestPreview = null;
       mergeButton.disabled = true;
       mergedPreview.innerHTML = '';
+      if (!sharedKeyColumns.length) {
+        validation.textContent = 'These worksheets do not share a header. They cannot be matched safely for merging.';
+        conflictSection.innerHTML = '';
+        return;
+      }
       if (!keyColumns.length) {
         validation.textContent = 'Select at least one key column.';
         conflictSection.innerHTML = '';
         return;
       }
-      validation.textContent = 'Checking for conflicts...';
+      validation.textContent = 'Preparing merge preview...';
       try {
         const preview = await ctx.dbManager.previewRecordMerge({
           source_id: source.id,
@@ -203,19 +238,13 @@ export function initStudioAppend(ctx) {
           source_sheet_name: sourceInfo.name,
           target_sheet_name: targetInfo.name,
           key_columns: keyColumns,
-          resolutions,
           method: 'merge'
         });
         if (!modal.isConnected || sequence !== previewSequence) return;
         latestPreview = preview;
         previewError = '';
-        if (preview.conflicts.length) {
-          conflictSection.innerHTML = `<h4 style="font-weight:800">Conflicts</h4><p>Every differing value for a matching key must be explicitly resolved. No target changes have been made.</p>${preview.conflicts.map(conflict => `<fieldset style="margin:.5rem 0;padding:.65rem;border:1px solid #f59e0b;border-radius:5px"><legend>Row ${conflict.rowIndex + 1} · ${escapeHtml(conflict.columnName)}</legend><p>Target: ${escapeHtml(conflict.targetValue ?? '')}<br>Source: ${escapeHtml(conflict.sourceValue ?? '')}</p><label><input type="radio" name="conflict-${escapeHtml(conflict.id)}" data-conflict="${escapeHtml(conflict.id)}" value="target" ${resolutions[conflict.id] === 'target' ? 'checked' : ''}> Keep target</label> <label><input type="radio" name="conflict-${escapeHtml(conflict.id)}" data-conflict="${escapeHtml(conflict.id)}" value="source" ${resolutions[conflict.id] === 'source' ? 'checked' : ''}> Take source</label></fieldset>`).join('')}`;
-          validation.textContent = preview.unresolved ? `${preview.unresolved} conflict(s) still need a choice.` : 'All conflicts are resolved.';
-        } else {
-          conflictSection.innerHTML = '';
-          validation.innerHTML = `<strong style="color:#166534">No conflicts found.</strong><p>Inserted ${preview.stats.inserted}; updated ${preview.stats.updated}; unchanged ${preview.stats.unchanged}; skipped ${preview.stats.skipped}; duplicate incoming ${preview.stats.duplicateIncoming}; duplicate existing ${preview.stats.duplicateExisting}.</p><p>Ignored source-only columns: ${(preview.stats.ignoredColumns || []).map(escapeHtml).join(', ') || 'none'}</p>`;
-        }
+        conflictSection.innerHTML = '';
+        validation.innerHTML = `<strong style="color:#166534">Source values will replace differing target values.</strong><p>Inserted ${preview.stats.inserted}; updated ${preview.stats.updated}; unchanged ${preview.stats.unchanged}; skipped ${preview.stats.skipped}; duplicate incoming ${preview.stats.duplicateIncoming}; duplicate existing ${preview.stats.duplicateExisting}.</p><p>Ignored source-only columns: ${(preview.stats.ignoredColumns || []).map(escapeHtml).join(', ') || 'none'}</p>`;
         if (preview.sheet) {
           mergedPreview.innerHTML = `<h4 style="font-weight:800">Proposed target result</h4>${previewTable(preview.sheet, preview.stats?.rowStatus)}`;
         }
@@ -229,13 +258,6 @@ export function initStudioAppend(ctx) {
     };
 
     keyList.addEventListener('change', () => {
-      resolutions = {};
-      refreshReview();
-    });
-    modal.querySelector('[data-conflicts]').addEventListener('change', event => {
-      const choice = event.target.closest('[data-conflict]');
-      if (!choice) return;
-      resolutions[choice.dataset.conflict] = choice.value;
       refreshReview();
     });
     modal.querySelector('[data-reviewed]').addEventListener('change', event => {
@@ -255,7 +277,6 @@ export function initStudioAppend(ctx) {
           source_sheet_name: sourceInfo.name,
           target_sheet_name: targetInfo.name,
           key_columns: keyColumns,
-          resolutions,
           source_digest: latestPreview.source_digest,
           target_digest: latestPreview.target_digest,
           method: 'merge',
@@ -264,8 +285,7 @@ export function initStudioAppend(ctx) {
       } catch (error) {
         button.disabled = false;
         button.textContent = 'Merge';
-        const detail = error.payload?.conflicts?.length ? ' Conflicts changed since preview; refresh and resolve them again.' : '';
-        alert(`Merge was not applied: ${error.message}${detail}`);
+        alert(`Merge was not applied: ${error.message} Refresh the preview and try again.`);
         await refreshReview();
         return;
       }
@@ -333,10 +353,6 @@ export function initStudioAppend(ctx) {
       alert('Save or discard current edits first');
       return;
     }
-    if (record.template_id === null || record.template_id === undefined || record.template_id === '') {
-      alert('This record has no linked template. Assign a template before merging.');
-      return;
-    }
     let records;
     try {
       records = await ctx.dbManager.getAllRecords();
@@ -344,15 +360,33 @@ export function initStudioAppend(ctx) {
       alert(`Unable to load records: ${error.message || error}`);
       return;
     }
-    const candidates = records.flatMap(candidate => {
-      if (String(candidate.id) === String(record.id)
-        || String(candidate.template_id ?? '') !== String(record.template_id)
-        || !['xlsx', 'csv', 'tsv'].includes(String(candidate.fileType || '').toLowerCase())) return [];
-      const sheet = bestSheetFor(candidate, info.name, info.data.headers);
+    const otherSpreadsheetRecords = records.filter(candidate =>
+      String(candidate.id) !== String(record.id)
+      && ['xlsx', 'csv', 'tsv'].includes(String(candidate.fileType || '').toLowerCase())
+    );
+    const activeTemplateId = normalizedTemplateId(record);
+    const hasGeneralMismatch = otherSpreadsheetRecords.some(candidate =>
+      (activeTemplateId === null) !== (normalizedTemplateId(candidate) === null)
+    );
+    const hasDifferentTemplate = otherSpreadsheetRecords.some(candidate => {
+      const candidateTemplateId = normalizedTemplateId(candidate);
+      return activeTemplateId !== null && candidateTemplateId !== null && activeTemplateId !== candidateTemplateId;
+    });
+    const candidates = otherSpreadsheetRecords.flatMap(candidate => {
+      if (!canMergeTemplates(record, candidate)) return [];
+      const isGeneralPair = activeTemplateId === null && normalizedTemplateId(candidate) === null;
+      const sheet = bestSheetFor(candidate, info.name, info.data.headers, isGeneralPair);
       return sheet ? [{ record: candidate, sheet }] : [];
     });
     if (!candidates.length) {
-      alert('No other record with the same linked template and a compatible worksheet was found.');
+      const message = hasGeneralMismatch
+        ? 'A General (uncategorized) record can only be merged with another General record, not one assigned to a template.'
+        : hasDifferentTemplate
+          ? 'Records assigned to different templates cannot be merged. Choose another record with the same template.'
+          : activeTemplateId === null
+            ? 'No other General (uncategorized) record with a compatible worksheet was found.'
+            : 'No other record with the same template and a compatible worksheet was found.';
+      alert(message);
       return;
     }
     openSourcePicker(candidates);

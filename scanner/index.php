@@ -247,7 +247,7 @@
         <div style="margin-bottom: 1.5rem; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem;">
           <div>
             <h3 style="font-size: 1.1rem; font-weight: 800; color: var(--clsu-green);">Saved Dashboard Graphs</h3>
-            <p style="font-size: 0.85rem; color: var(--text-muted);">Published chart versions grouped per file record.</p>
+            <p style="font-size: 0.85rem; color: var(--text-muted);">Saved charts and report visualizations from every file, grouped by record.</p>
           </div>
           <div style="display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap;">
             <button id="savedGraphsViewAllBtn" type="button" class="saved-graphs-bulk-button">View All</button>
@@ -493,7 +493,7 @@
               </div>
 
               <!-- Chart Canvas -->
-              <div style="height: 320px; position: relative; width: 100%; margin-bottom: 0.75rem;">
+              <div class="studio-chart-play-area">
                 <div id="studioChartCanvas" style="height: 100%; width: 100%;"></div>
                 <div id="studioChartEmptyState" style="display:none; position:absolute; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center; background:rgba(248,250,248,0.95); border-radius:var(--radius-sm); border:2px dashed #CBD5E1;">
                   <span style="font-size:2rem;"><i class="fa-solid fa-chart-column" aria-hidden="true"></i></span>
@@ -592,12 +592,19 @@
           </label>
         </div>
         <div class="table-container" style="box-shadow: var(--card-shadow);">
-          <div id="fileArchivesBulkActions" class="admin-bulk-actions" hidden>
-            <span id="fileArchivesBulkSelectionCount">0 records selected</span>
-            <button id="fileArchivesBulkPublish" type="button" class="archive-load-button" disabled><i class="fa-solid fa-circle-check" aria-hidden="true"></i> Publish</button>
-            <button id="fileArchivesBulkUnpublish" type="button" class="export-cancel-button" disabled><i class="fa-solid fa-eye-slash" aria-hidden="true"></i> Unpublish</button>
-            <button id="fileArchivesBulkDelete" type="button" class="archive-delete-button" disabled><i class="fa-solid fa-trash" aria-hidden="true"></i> Bulk Delete</button>
+          <div id="fileArchivesBulkActions" class="admin-bulk-actions summary-card-manager-actions" hidden style="display: flex; gap: 0.75rem; align-items: center; background: #f8fafc; padding: 0.75rem; border-bottom: 1px solid var(--border-light);">
+            <span id="fileArchivesBulkSelectionCount" style="font-size: 0.85rem; font-weight: 700; color: var(--text-muted); margin-right: auto;">0 records selected</span>
             <button id="fileArchivesClearSelection" type="button" class="export-cancel-button">Clear selection</button>
+            <button id="fileArchivesBulkDelete" type="button" class="archive-delete-button" disabled><i class="fa-solid fa-trash" aria-hidden="true"></i> Delete</button>
+            <details class="summary-card-manager-actions-menu" style="position: relative;">
+                <summary class="summary-card-manager-menu-toggle" style="cursor: pointer; padding: 0.4rem 0.75rem; border: 1px solid var(--border-light); border-radius: 0.375rem; background: #fff; font-size: 0.8rem; font-weight: 700;">
+                    <i class="fa-solid fa-ellipsis" aria-hidden="true"></i> Actions
+                </summary>
+                <div class="summary-card-manager-menu" aria-label="File archive actions" style="position: absolute; right: 0; top: 100%; margin-top: 0.25rem; background: #fff; border: 1px solid var(--border-light); border-radius: 0.375rem; padding: 0.25rem; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06); z-index: 50; display: flex; flex-direction: column; min-width: 180px;">
+                    <button id="fileArchivesBulkPublish" type="button" style="text-align: left; padding: 0.5rem; background: none; border: none; width: 100%; font-size: 0.8rem; cursor: pointer; border-radius: 0.25rem;" onmouseover="this.style.background='#f1f5f9'" onmouseout="this.style.background='none'" disabled><i class="fa-solid fa-circle-check" aria-hidden="true" style="margin-right: 0.4rem;"></i> Publish Selected</button>
+                    <button id="fileArchivesBulkUnpublish" type="button" style="text-align: left; padding: 0.5rem; background: none; border: none; width: 100%; font-size: 0.8rem; cursor: pointer; border-radius: 0.25rem;" onmouseover="this.style.background='#f1f5f9'" onmouseout="this.style.background='none'" disabled><i class="fa-solid fa-circle-minus" aria-hidden="true" style="margin-right: 0.4rem;"></i> Unpublish Selected</button>
+                </div>
+            </details>
           </div>
           <div class="overflow-x-auto">
             <table class="data-table">
@@ -622,11 +629,11 @@
   <script src="js/data/samples.js"></script>
   <script src="js/scanner.js"></script>
   <script src="js/tables/tableFilter.js"></script>
-  <script src="js/charts/chartData.js?v=iris-chart-builder-20261001"></script>
+  <script src="js/charts/chartData.js?v=<?= (int) filemtime(__DIR__.'/js/charts/chartData.js') ?>"></script>
   <script src="js/charts/chartMapping.js"></script>
   <script src="js/ingestion/sourceIngestion.js"></script>
   <script src="js/viewer/documentPagination.js"></script>
-  <script src="js/charts/graphExport.js"></script>
+  <script src="js/charts/graphExport.js?v=<?= (int) filemtime(__DIR__.'/js/charts/graphExport.js') ?>"></script>
   <script type="module" src="js/app.js?v=<?= (int) filemtime(__DIR__.'/js/app.js') ?>"></script>
 
 </body>

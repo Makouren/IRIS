@@ -66,8 +66,10 @@
     version = nextVersion;
     if (announce) channel?.postMessage({ version });
     if (isPublicView) {
-      if (isDirty()) showPendingRefresh();
-      else window.location.reload();
+      if (isDirty()) {
+        window.dispatchEvent(new CustomEvent('iris:data-changed', { detail: { version: nextVersion } }));
+        showPendingRefresh();
+      } else window.location.reload();
       return;
     }
     if (isSuperAdmin) {
