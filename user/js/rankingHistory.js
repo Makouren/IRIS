@@ -89,19 +89,24 @@
     const trigger = filtersControl.querySelector('summary');
     if (!trigger) return;
     const anchor = trigger.getBoundingClientRect();
-    const panel = filtersPopover.getBoundingClientRect();
     const margin = 12;
-    const left = Math.max(margin, Math.min(anchor.right - panel.width, window.innerWidth - panel.width - margin));
     const below = anchor.bottom + 8;
-    const top = below + panel.height <= window.innerHeight - margin
-      ? below
-      : Math.max(margin, anchor.top - panel.height - 8);
+    // Clamp the popover's max-height to the available space below the anchor
+    const availableBelow = window.innerHeight - below - margin;
+    filtersPopover.style.maxHeight = `${Math.max(120, availableBelow)}px`;
+    const panel = filtersPopover.getBoundingClientRect();
+    const left = Math.max(margin, Math.min(anchor.right - panel.width, window.innerWidth - panel.width - margin));
     filtersPopover.style.left = `${Math.round(left)}px`;
-    filtersPopover.style.top = `${Math.round(top)}px`;
+    filtersPopover.style.top = `${Math.round(below)}px`;
   }
 
   filtersControl?.addEventListener('toggle', () => {
     if (!filtersControl.open) return;
+    // Double rAF: first frame renders the popover, second frame measures it after layout
+    requestAnimationFrame(() => requestAnimationFrame(positionFiltersPopover));
+  });
+  // Re-position when the inner Year range sub-details is expanded/collapsed (changes panel height)
+  document.getElementById('rankingYearRangeControl')?.addEventListener('toggle', () => {
     requestAnimationFrame(positionFiltersPopover);
   });
   document.addEventListener('click', event => {
@@ -112,6 +117,11 @@
   });
   window.addEventListener('resize', positionFiltersPopover);
   window.addEventListener('scroll', positionFiltersPopover, true);
+  // Close popover when the ranking history section's scroll container scrolls
+  document.getElementById('ranking-history')?.addEventListener('scroll', () => {
+    if (filtersControl?.open) filtersControl.open = false;
+  }, { passive: true });
+
 
   function renderYearOptions() {
     const years = [...new Set(rankingRows().map(row => Number(row.year)))].filter(Number.isFinite).sort((left, right) => left - right);

@@ -16,11 +16,11 @@ try {
         $sql = "SELECT sg.graph_id AS id, sg.record_id, sg.title, sg.scope, sg.chart_type, sg.orientation, sg.chart_options AS chart_data,
                    sg.value_axis_reversed, sg.value_axis_min, sg.value_axis_max,
                    sg.rank_semantic, sg.rank_value_min, sg.rank_value_max,
-                 sg.is_published, sg.created_at, sg.updated_at,
+                 /* sg.colors */ sg.is_published, sg.created_at, sg.updated_at,
                    (SELECT COUNT(*) FROM saved_graphs versioned WHERE versioned.record_id = sg.record_id AND versioned.created_at <= sg.created_at) AS version,
                  r.file_name AS source_file_name, r.file_type AS source_file_type, r.status AS source_status
             FROM saved_graphs sg
-             INNER JOIN records r ON r.record_id = sg.record_id
+             LEFT JOIN records r ON r.record_id = sg.record_id
                         WHERE sg.is_published = 1
             ORDER BY sg.created_at DESC";
     $rows = $pdo->query($sql)->fetchAll(PDO::FETCH_ASSOC);

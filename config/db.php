@@ -1,5 +1,9 @@
 <?php
-const IRIS_DB_HOST='127.0.0.1'; const IRIS_DB_PORT='3306'; const IRIS_DB_NAME='iris_db_3nf'; const IRIS_DB_USER='root'; const IRIS_DB_PASS='rooters';
+/**
+ * Purpose: Defines the PHP database connection settings and database change-tracking support.
+ */
+
+const IRIS_DB_HOST='127.0.0.1'; const IRIS_DB_PORT='3306'; const IRIS_DB_NAME='iris_db_3nf'; const IRIS_DB_USER='root'; const IRIS_DB_PASS='';
 
 final class IRISChangeTracker
 {

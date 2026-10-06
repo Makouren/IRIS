@@ -47,7 +47,10 @@
                 bad('The selected worksheet must exist in both records.', 409);
             }
             $allowPartialHeaderOverlap = record_merge_records_are_general($source, $target);
-            $mergeResult = record_merge_sheet($targetData[$targetSheetName], $sourceData[$sourceSheetName], $keyColumns, $allowPartialHeaderOverlap);
+            $mergeMode = (string)($data['merge_mode'] ?? 'upsert');
+            $mergeResult = $allowPartialHeaderOverlap
+                ? record_merge_sheet($targetData[$targetSheetName], $sourceData[$sourceSheetName], $keyColumns, $allowPartialHeaderOverlap, $mergeMode)
+                : record_merge_sheet($targetData[$targetSheetName], $sourceData[$sourceSheetName], $keyColumns, false, $mergeMode);
             if (!empty($mergeResult['error'])) bad((string)$mergeResult['error'], 409);
             if ($action === 'preview-record-merge') {
                 echo json_encode([
@@ -95,7 +98,8 @@
                 $sourceData = json_col($source['extracted_data'] ?? null, []);
                 $targetData = json_col($target['extracted_data'] ?? null, []);
                 $allowPartialHeaderOverlap = record_merge_records_are_general($source, $target);
-                $mergeResult = record_merge_sheet($targetData[$targetSheetName], $sourceData[$sourceSheetName], $keyColumns, $allowPartialHeaderOverlap);
+                $mergeMode = (string)($data['merge_mode'] ?? 'upsert');
+                $mergeResult = record_merge_sheet($targetData[$targetSheetName], $sourceData[$sourceSheetName], $keyColumns, $allowPartialHeaderOverlap, $mergeMode);
                 if (!empty($mergeResult['error'])) throw new RuntimeException((string)$mergeResult['error']);
                 if (!empty($mergeResult['unresolved']) || !is_array($mergeResult['sheet'] ?? null)) {
                     throw new RuntimeException('The merge preview is no longer valid. Refresh it before merging.');
@@ -112,30 +116,30 @@
 
                 if ($consumeSource) {
                     $trashDirectory = merge_trash_directory(true);
-                    if (!$trashDirectory) throw new RuntimeException('Private merge recovery storage is unavailable.');
-                    cleanup_expired_merge_trash($trashDirectory);
-                    $trashId = bin2hex(random_bytes(12));
-                    $manifestPath = $trashDirectory . DIRECTORY_SEPARATOR . $trashId . '.json';
-                    $temporaryManifestPath = $manifestPath . '.tmp';
-                    $targetMetadataBefore = json_col($target['metadata'] ?? null, []);
-                    $oldStoredFile = is_array($targetMetadataBefore) ? (string)($targetMetadataBefore['stored_file'] ?? '') : '';
-                    if (!preg_match('/^[a-f0-9]{48}\.(xlsx|csv|tsv)$/', $oldStoredFile)) $oldStoredFile = null;
-                    $sourceGraphs = $sourceSnapshot['saved_graphs'] ?? [];
-                    $manifest = [
-                        'trash_id' => $trashId,
-                        'created_at' => gmdate('c'),
-                        'old_id' => (string)$targetId,
-                        'office_id' => (string)$sourceId,
-                        'old_row' => $target,
-                        'office_row' => $source,
-                        'office_saved_graphs' => $sourceGraphs,
-                        'old_stored_file' => $oldStoredFile,
-                    ];
-                    $encodedManifest = json_encode($manifest, JSON_THROW_ON_ERROR);
-                    if (file_put_contents($temporaryManifestPath, $encodedManifest, LOCK_EX) === false || !rename($temporaryManifestPath, $manifestPath)) {
-                        throw new RuntimeException('Unable to write merge recovery manifest.');
+                    if ($trashDirectory) cleanup_expired_merge_trash($trashDirectory);
+                    if ($trashDirectory) {
+                        $trashId = bin2hex(random_bytes(12));
+                        $manifestPath = $trashDirectory . DIRECTORY_SEPARATOR . $trashId . '.json';
+                        $temporaryManifestPath = $manifestPath . '.tmp';
+                        $targetMetadataBefore = json_col($target['metadata'] ?? null, []);
+                        $oldStoredFile = is_array($targetMetadataBefore) ? (string)($targetMetadataBefore['stored_file'] ?? '') : '';
+                        if (!preg_match('/^[a-f0-9]{48}\.(xlsx|csv|tsv)$/', $oldStoredFile)) $oldStoredFile = null;
+                        $sourceGraphs = $sourceSnapshot['saved_graphs'] ?? [];
+                        $manifest = [
+                            'trash_id' => $trashId,
+                            'created_at' => gmdate('c'),
+                            'old_id' => (string)$targetId,
+                            'office_id' => (string)$sourceId,
+                            'old_row' => $target,
+                            'office_row' => $source,
+                            'office_saved_graphs' => $sourceGraphs,
+                            'old_stored_file' => $oldStoredFile,
+                        ];
+                        $encodedManifest = json_encode($manifest, JSON_THROW_ON_ERROR);
+                        if (file_put_contents($temporaryManifestPath, $encodedManifest, LOCK_EX) !== false && rename($temporaryManifestPath, $manifestPath)) {
+                            chmod($manifestPath, 0640);
+                        }
                     }
-                    chmod($manifestPath, 0640);
                 }
 
                 $mergedData = $targetData;
@@ -176,9 +180,15 @@
                         $extension = pathinfo($oldStoredFile, PATHINFO_EXTENSION);
                         $trashPath = $trashDirectory . DIRECTORY_SEPARATOR . $trashId . '.' . $extension;
                         if ($sourcePath && !file_exists($trashPath)) {
-                            if (!rename($sourcePath, $trashPath)) throw new RuntimeException('Unable to move the previous target file to recovery storage.');
-                            chmod($trashPath, 0640);
-                            $movedTargetFile = $sourcePath;
+                            if (!@rename($sourcePath, $trashPath) && !@copy($sourcePath, $trashPath)) {
+                                error_log('IRIS could not archive previous target file to trash.');
+                            } else {
+                                @unlink($sourcePath);
+                                chmod($trashPath, 0640);
+                                $movedTargetFile = $sourcePath;
+                            }
+
+
                         }
                     }
                 }

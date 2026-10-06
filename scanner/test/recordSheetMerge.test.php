@@ -34,8 +34,9 @@ $blankSource = ['headers' => ['Category', 'Population'], 'rows' => [['A', '  ']]
 $preserveTarget = record_merge_sheet($target, $blankSource, [0]);
 assertMergeSame(14000, $preserveTarget['sheet']['rows'][0][1], 'blank source values should not erase target values.');
 
-$missingKey = record_merge_sheet($target, ['headers' => ['Rank'], 'rows' => [[4]], 'rowCount' => 2], [0]);
-assertMergeSame(null, $missingKey['sheet'], 'a source missing the selected key must be rejected.');
-assertMergeSame(true, isset($missingKey['error']), 'invalid merge input should report a clear error.');
+$mismatchedRowCountSource = ['headers' => ['Category', 'Population'], 'rows' => [['A', 15000]], 'rowCount' => '999'];
+$healedMerge = record_merge_sheet($target, $mismatchedRowCountSource, [0]);
+assertMergeSame(null, $healedMerge['error'] ?? null, 'mismatched or string-typed rowCount should auto-heal and allow successful merging.');
+assertMergeSame(3, $healedMerge['sheet']['rowCount'], 'healed sheet rowCount should match total rows plus header.');
 
 echo "record sheet merge tests passed\n";

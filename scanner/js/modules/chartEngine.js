@@ -67,6 +67,7 @@ function baseOption(config, colors, theme, context, showTitle, trigger = 'axis')
   const option = {
     color: colors,
     textStyle: { color: textColor },
+    legend: { textStyle: { color: textColor } },
     tooltip: { trigger, backgroundColor: tooltipBackground, borderColor: tooltipBorder, textStyle: { color: labelColor } },
     animationDuration: context.animate === false ? 0 : 350
   };
@@ -149,6 +150,7 @@ function buildBarOption(rows, config, colors, theme, context, showTitle, precisi
   const orderedRows = config.reverseOrder ? rows.slice().reverse() : rows;
   const labels = orderedRows.map(row => row.label);
   const option = baseOption(config, colors, theme, context, showTitle);
+  delete option.legend;
   option.grid = { left: '5%', right: '5%', top: showTitle ? 52 : '8%', bottom: labels.length > 7 ? '16%' : '8%', containLabel: true };
   option.tooltip.formatter = params => (Array.isArray(params) ? params : [params]).map(point => `${point.name}: ${format(point.data?.rawValue ?? point.value)}`).join('<br/>');
   option.xAxis = { type: 'category', data: labels, axisLabel: { color: textColor, rotate: labels.length > 6 ? 30 : 0 }, axisLine: { lineStyle: { color: gridColor } } };
@@ -230,23 +232,32 @@ function buildNestedPieOption(_rows, config, colors, theme, context, showTitle, 
   return option;
 }
 
-export function buildChartOption({ type, labels = [], values = [], rawValues = values, series = [], config = {}, colors = [], theme = {}, precision = 2, context = {}, showTitle = false } = {}) {
+export function buildChartOption({ type, labels = [], values = [], rawValues = values, series = [], config = {}, colors = [], theme = {}, precision = 2, context = {}, showTitle = false, showLabels = true } = {}) {
   type = normalizeChartType(type || config.type);
   const irisConfig = config.irisConfig || config;
   const resolvedColors = colors.length ? colors : DEFAULT_CHART_COLORS;
   const rows = labels.map((label, index) => ({ label: String(label ?? `Item ${index + 1}`), value: Number(rawValues[index] ?? values[index] ?? 0), rawValue: Number(rawValues[index] ?? values[index] ?? 0) }));
   const optionArgs = [config, resolvedColors, theme, context, showTitle, precision];
-  if (type === 'line') return buildLineOption(rows, ...optionArgs, series);
-  if (type === 'stackedArea') return buildStackedAreaOption(rows, ...optionArgs, series);
-  if (type === 'bar') return buildBarOption(rows, ...optionArgs);
-  if (type === 'pie') return buildPieOption(rows, ...optionArgs);
-  if (type === 'doughnut') return buildDoughnutOption(rows, ...optionArgs);
-  if (type === 'nestedPie') return buildNestedPieOption(rows, { ...config, irisConfig }, resolvedColors, theme, context, showTitle, precision);
+  let option;
+  if (type === 'line') option = buildLineOption(rows, ...optionArgs, series);
+  else if (type === 'stackedArea') option = buildStackedAreaOption(rows, ...optionArgs, series);
+  else if (type === 'bar') option = buildBarOption(rows, ...optionArgs);
+  else if (type === 'pie') option = buildPieOption(rows, ...optionArgs);
+  else if (type === 'doughnut') option = buildDoughnutOption(rows, ...optionArgs);
+  else if (type === 'nestedPie') option = buildNestedPieOption(rows, { ...config, irisConfig }, resolvedColors, theme, context, showTitle, precision);
 
-  return buildBarOption(rows, config, resolvedColors, theme, context, showTitle, precision);
+  else option = buildBarOption(rows, config, resolvedColors, theme, context, showTitle, precision);
+
+  if (showLabels === false) {
+    option.series?.forEach(s => {
+      s.label = { ...(s.label || {}), show: false };
+      s.labelLine = { ...(s.labelLine || {}), show: false };
+    });
+  }
+  return option;
 }
 
-export function buildSavedGraphOption(graphData, { width = 0, theme = null, colors: customColors = null } = {}) {
+export function buildSavedGraphOption(graphData, { width = 0, theme = null, colors: customColors = null, showLabels = true } = {}) {
   const source = graphData || {};
   const config = source.irisConfig || source.chart_data?.irisConfig || source.chartData?.irisConfig || source.config || {};
   const legacyData = source.chart_data || source.chartData || source;
@@ -288,7 +299,11 @@ export function buildSavedGraphOption(graphData, { width = 0, theme = null, colo
     colors: customColors || source.colors || config.colors,
     updated_at: graphUpdatedAt
   };
-  return buildChartOption({ type, labels, values, rawValues: values, series: config.series || legacySeries, config: graphConfig, colors: resolvedColors, theme: theme || { dark: typeof document !== 'undefined' && document.documentElement.classList.contains('dark') }, precision: config.precision ?? 2, context: { width }, showTitle: false });
+  const resolvedTheme = theme || { dark: typeof document !== 'undefined' && document.documentElement.classList.contains('dark') };
+  const option = buildChartOption({ type, labels, values, rawValues: values, series: config.series || legacySeries, config: graphConfig, colors: resolvedColors, theme: resolvedTheme, precision: config.precision ?? 2, context: { width }, showTitle: false, showLabels });
+  const themeObj = getChartTheme(resolvedTheme);
+  option.legend = option.legend || { textStyle: { color: themeObj.textColor } };
+  return option;
 }
 
 export function createChart(element, type, graphData, { reverseOrder = false, colors: customColors = null, theme = null } = {}) {
@@ -555,7 +570,7 @@ export function renderStudioChart(arg1, arg2, arg3 = {}) {
   };
   show();
   const chartConfig = { ...state.studioChartConfig, type, title: titleInput?.value || (isManualData ? headerName : `${headerName} — ${info.name}`), seriesName: headerName, valueLabel: headerName, rankSemantic, nestedGroups: nested?.groups || [], colors: state.studioChartOverrides, fieldColors: globalThis.IRISFieldColors || {}, fieldColorUpdatedAt: globalThis.IRISFieldColorUpdatedAt || {}, chartUpdatedAt: state.studioActiveGraphUpdatedAt, chartColorsOverrideShared: Array.isArray(state.studioChartOverrides) };
-  const option = buildChartOption({ type, labels, values, rawValues, series: stackedSeries, config: chartConfig, colors: chartColors, theme: { dark: document.documentElement.classList.contains('dark') }, precision: displayPrecision, context: { width: canvas.clientWidth }, showTitle: true });
+  const option = buildChartOption({ type, labels, values, rawValues, series: stackedSeries, config: chartConfig, colors: chartColors, theme: { dark: document.documentElement.classList.contains('dark') }, precision: displayPrecision, context: { width: canvas.clientWidth }, showTitle: false });
   if (!state.studioChartInstance) {
     state.studioChartInstance = window.echarts.init(canvas);
     state.studioChartCanvas = canvas;

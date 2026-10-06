@@ -185,6 +185,13 @@ export function initStudioAppend(ctx) {
         <section style="padding:.65rem;border:2px solid #16a34a;border-radius:6px;background:#f0fdf4"><h4 style="font-weight:800;margin:.35rem 0;color:#166534">TARGET — THIS BECOMES THE UPDATED RECORD</h4><p><strong>${escapeHtml(target.fileName || 'Untitled')}</strong> · Record ${escapeHtml(target.id)} · ${escapeHtml(targetInfo.name)} · ${targetInfo.sheet.rows.length} rows</p><p>This record remains under its current ID and contains the merged result. The source is not made into the new record.</p><div data-target-preview></div></section>
       </div>
       <section style="margin-top:1rem"><h4 style="font-weight:800">Key columns</h4>${isGeneralPair ? '<p>General worksheets can have different layouts. IRIS uses a shared column to match rows and merges only columns present in both worksheets; source-only columns are ignored.</p>' : ''}<div data-key-list style="display:flex;flex-wrap:wrap;gap:.5rem;margin:.5rem 0"></div></section>
+      ${superAdmin ? `<section style="margin-top:1rem"><h4 style="font-weight:800">Merge mode</h4>
+        <div data-merge-mode-group style="display:flex;gap:1rem;margin:.5rem 0">
+          <label style="display:flex;align-items:center;gap:.35rem"><input type="radio" name="merge_mode" value="upsert"> Update and Insert</label>
+          <label style="display:flex;align-items:center;gap:.35rem"><input type="radio" name="merge_mode" value="update_only" checked> Update only</label>
+          <label style="display:flex;align-items:center;gap:.35rem"><input type="radio" name="merge_mode" value="insert_only"> Insert only</label>
+        </div>
+      </section>` : ''}
       <section data-conflicts style="margin:.75rem 0"></section>
       <section data-validation role="status" aria-live="polite" style="margin:.75rem 0;padding:.75rem;background:#f8fafc;border:1px solid #cbd5e1;border-radius:6px"></section>
       <section data-merged-preview style="margin:.75rem 0"></section>
@@ -241,7 +248,8 @@ export function initStudioAppend(ctx) {
           source_sheet_name: sourceInfo.name,
           target_sheet_name: targetInfo.name,
           key_columns: keyColumns,
-          method: 'merge'
+          method: 'merge',
+          merge_mode: modal.querySelector('[name="merge_mode"]:checked')?.value || 'upsert'
         });
         if (!modal.isConnected || sequence !== previewSequence) return;
         latestPreview = preview;
@@ -261,6 +269,9 @@ export function initStudioAppend(ctx) {
     };
 
     keyList.addEventListener('change', () => {
+      refreshReview();
+    });
+    modal.querySelector('[data-merge-mode-group]')?.addEventListener('change', () => {
       refreshReview();
     });
     modal.querySelector('[data-reviewed]').addEventListener('change', event => {
@@ -283,6 +294,7 @@ export function initStudioAppend(ctx) {
           source_digest: latestPreview.source_digest,
           target_digest: latestPreview.target_digest,
           method: 'merge',
+          merge_mode: modal.querySelector('[name="merge_mode"]:checked')?.value || 'upsert',
           consume_source: modal.querySelector('[data-consume-source]').checked
         });
       } catch (error) {
@@ -373,7 +385,7 @@ export function initStudioAppend(ctx) {
     );
     const hasDifferentTemplate = otherSpreadsheetRecords.some(candidate => {
       const candidateTemplateId = normalizedTemplateId(candidate);
-      return activeTemplateId !== null && candidateTemplateId !== null && activeTemplateId !== candidateTemplateId;
+      return String(candidate.template_id ?? '') !== String(record.template_id) && activeTemplateId !== null && candidateTemplateId !== null && activeTemplateId !== candidateTemplateId;
     });
     const candidates = otherSpreadsheetRecords.flatMap(candidate => {
       if (!canMergeTemplates(record, candidate)) return [];

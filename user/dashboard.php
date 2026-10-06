@@ -211,6 +211,11 @@ try {
                     <p class="text-xs text-gray-500 dark:text-gray-400">Published institutional data and reports</p>
                 </div>
                 <div class="flex flex-wrap items-center gap-3">
+                    <label for="publishedGraphLabels" class="text-xs font-semibold text-gray-600 dark:text-gray-300">Chart labels</label>
+                    <select id="publishedGraphLabels" class="rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-xs font-semibold text-gray-800 shadow-sm focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/30 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100">
+                        <option value="show">Show labels</option>
+                        <option value="hide">Hide labels</option>
+                    </select>
                     <label for="publishedGraphLayout" class="text-xs font-semibold text-gray-600 dark:text-gray-300">Graph layout</label>
                     <select id="publishedGraphLayout" class="rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-xs font-semibold text-gray-800 shadow-sm focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/30 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100">
                         <option value="side-by-side">Side by side</option>

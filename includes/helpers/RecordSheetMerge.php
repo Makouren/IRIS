@@ -88,7 +88,7 @@ function record_merge_numeric_stats(array $headers, array $rows): array
  * @return array Merged sheet, conflict details, and row/column statistics or validation error.
  * @side-effects None; returns a new sheet structure without mutating either input.
  */
-function record_merge_sheet(array $target, array $source, array $keyColumns, bool $allowPartialHeaderOverlap = false): array
+function record_merge_sheet(array $target, array $source, array $keyColumns, bool $allowPartialHeaderOverlap = false, string $mergeMode = 'upsert'): array
 {
     $targetHeaders = $target['headers'] ?? null;
     $sourceHeaders = $source['headers'] ?? null;
@@ -98,12 +98,24 @@ function record_merge_sheet(array $target, array $source, array $keyColumns, boo
         || !$targetHeaders || !$sourceHeaders || !$targetRows || !$sourceRows) {
         return ['error' => 'Both selected worksheets must have headers and data rows.', 'sheet' => null, 'conflicts' => [], 'unresolved' => 0];
     }
-    foreach ([[$target, $targetRows], [$source, $sourceRows]] as [$sheet, $rows]) {
-        if (!isset($sheet['rowCount']) || !is_int($sheet['rowCount'])
-            || !in_array($sheet['rowCount'], [count($rows), count($rows) + 1], true)) {
-            return ['error' => 'A worksheet row count does not match its data.', 'sheet' => null, 'conflicts' => [], 'unresolved' => 0];
+    foreach ([&$target, &$source] as &$sheet) {
+        $rows = is_array($sheet['rows'] ?? null) ? $sheet['rows'] : [];
+        $headers = is_array($sheet['headers'] ?? null) ? $sheet['headers'] : [];
+        $rawCount = $sheet['rowCount'] ?? null;
+        if (is_numeric($rawCount)) {
+            $rc = (int)$rawCount;
+            if ($rc === count($rows) || $rc === count($rows) + 1) {
+                $sheet['rowCount'] = $rc;
+            } else {
+                $sheet['rowCount'] = count($rows) + ($headers ? 1 : 0);
+            }
+        } else {
+            $sheet['rowCount'] = count($rows) + ($headers ? 1 : 0);
         }
     }
+    unset($sheet);
+
+
 
     $targetHeaderIndex = [];
     foreach ($targetHeaders as $index => $header) {
@@ -200,6 +212,10 @@ function record_merge_sheet(array $target, array $source, array $keyColumns, boo
         }
         $matches = $targetMatches[$key] ?? [];
         if (!$matches) {
+            if ($mergeMode === 'update_only') {
+                $stats['skipped']++;
+                continue;
+            }
             // A new key appends one row; existing keys update in place below.
             $added = [];
             foreach ($targetHeaders as $header) {
@@ -212,6 +228,10 @@ function record_merge_sheet(array $target, array $source, array $keyColumns, boo
             continue;
         }
 
+        if ($mergeMode === 'insert_only') {
+            $stats['skipped']++;
+            continue;
+        }
         $stats['duplicateExisting'] += max(0, count($matches) - 1);
         $targetRowIndex = $matches[0];
         $changed = false;

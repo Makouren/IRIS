@@ -1,9 +1,10 @@
 <div id="templateManagerModal" data-api="<?= e(base_url('api/templates.php')) ?>" data-csrf="<?= e(csrf_token()) ?>" data-download-base="<?= e(base_url('admin/template_download.php')) ?>" data-max-upload-bytes="<?= IRIS_MAX_UPLOAD_BYTES ?>" data-max-upload-label="<?= e(iris_upload_limit_label()) ?>" class="fixed inset-0 z-[1100] hidden items-center justify-center bg-slate-950/60 p-4" aria-hidden="true">
-    <section class="max-h-[90vh] w-full max-w-4xl overflow-y-auto rounded-xl border border-gray-200 bg-white p-5 shadow-2xl dark:border-slate-700 dark:bg-slate-900" role="dialog" aria-modal="true" aria-labelledby="templateManagerTitle">
-        <header class="mb-5 flex items-start justify-between gap-4 border-b border-gray-200 pb-4 dark:border-slate-700">
+    <section class="flex max-h-[90vh] w-full max-w-4xl flex-col overflow-hidden rounded-xl border border-gray-200 bg-white shadow-2xl dark:border-slate-700 dark:bg-slate-900" role="dialog" aria-modal="true" aria-labelledby="templateManagerTitle">
+        <header class="z-10 flex flex-shrink-0 items-start justify-between gap-4 border-b border-gray-200 bg-white p-5 dark:border-slate-700 dark:bg-slate-900">
             <div><h2 id="templateManagerTitle" class="text-lg font-extrabold">Manage Templates</h2><p class="mt-1 text-sm text-gray-500 dark:text-slate-400">Office templates available during file submission.</p></div>
             <button type="button" data-template-manager-close class="rounded-lg px-3 py-1 text-2xl leading-none text-gray-500 hover:bg-gray-100 dark:hover:bg-slate-800" aria-label="Close">&times;</button>
         </header>
+        <div class="overflow-y-auto p-5 pt-4">
         <div id="templateManagerNotice" class="mb-4 hidden rounded-lg p-3 text-sm" role="status"></div>
         <section class="mb-5 rounded-lg border border-emerald-200 bg-emerald-50/60 p-4 dark:border-emerald-900 dark:bg-emerald-950/20" aria-labelledby="summaryCardProfileHeading">
             <div class="mb-3"><h3 id="summaryCardProfileHeading" class="text-sm font-bold">Summary Card import profile</h3><p data-active-summary-profile class="mt-1 text-xs text-gray-600 dark:text-slate-300">Loading active profile…</p></div>
@@ -97,6 +98,7 @@
                 <p class="text-xs text-gray-500 dark:text-slate-400">XLSX, XLS, CSV, or DOCX. Maximum <?= e(iris_upload_limit_label()) ?>.</p>
                 <button type="submit" class="rounded-lg bg-emerald-700 px-4 py-2 text-sm font-bold text-white hover:bg-emerald-800"><i class="fa-solid fa-cloud-arrow-up mr-1" aria-hidden="true"></i>Upload template</button>
             </form>
+        </div>
         </div>
     </section>
 </div>

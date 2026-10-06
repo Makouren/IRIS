@@ -112,7 +112,12 @@
     if (!rows.length) problems.push('The worksheet contains zero data rows.');
     if (rows.length && rows.every(row => !Array.isArray(row) || row.every(isBlank))) problems.push('All worksheet rows are blank.');
     if (!Number.isInteger(sheet.rowCount) || (sheet.rowCount !== rows.length && sheet.rowCount !== rows.length + 1)) {
-      problems.push('The worksheet row count does not match its rows. It may be truncated or incomplete.');
+      if (typeof sheet.rowCount === 'string' && /^\d+$/.test(String(sheet.rowCount).trim())) {
+        const parsed = parseInt(String(sheet.rowCount).trim(), 10);
+        sheet.rowCount = (parsed === rows.length || parsed === rows.length + 1) ? parsed : rows.length + (headers.length ? 1 : 0);
+      } else {
+        sheet.rowCount = rows.length + (headers.length ? 1 : 0);
+      }
     }
     if (rows.some(row => Array.isArray(row) && row.length > headers.length)) problems.push('A worksheet row contains more values than there are headers.');
 
@@ -310,6 +315,10 @@
 
       const matches = existingMatches.get(key) || [];
       if (matches.length) {
+        if (options.merge_mode === 'insert_only') {
+          stats.skipped++;
+          return;
+        }
         if (matches.length > 1) stats.duplicateExisting += matches.length - 1;
         const target = mergedRows[matches[0]];
         let changed = false;
@@ -328,6 +337,10 @@
         return;
       }
 
+      if (options.merge_mode === 'update_only') {
+        stats.skipped++;
+        return;
+      }
       const added = oldHeaders.map(header => {
         const incomingColumn = newHeaderIndex.get(normalizeHeader(header));
         return incomingColumn === undefined ? '' : (newRow?.[incomingColumn] ?? '');

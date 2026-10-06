@@ -82,6 +82,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
+  grid-template-columns: 6rem 7.5rem 5.8rem;
 }
 
 .record-actions-trigger {

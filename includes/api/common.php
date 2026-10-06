@@ -192,6 +192,7 @@ function require_graph_colors(array $data): ?array {
 
 function upload_storage_root(): ?string {
     $storagePath = getenv('IRIS_UPLOAD_DIR') ?: dirname(__DIR__, 4) . DIRECTORY_SEPARATOR . 'iris-private-uploads';
+    if (!is_dir($storagePath)) @mkdir($storagePath, 0750, true);
     $realStorage = realpath($storagePath);
     if (!$realStorage || !is_dir($realStorage)) return null;
     $documentRoot = realpath((string)($_SERVER['DOCUMENT_ROOT'] ?? ''));
@@ -247,10 +248,14 @@ function record_file_history_copy_record_file(array $record): ?array {
     $storedName = is_array($metadata) ? (string)($metadata['stored_file'] ?? '') : '';
     if ($storedName === '') return null;
     $sourcePath = stored_upload_path($storedName);
-    if (!$sourcePath) throw new RuntimeException('A record references a source file that cannot be read; the merge was not applied.');
+    if (!$sourcePath) return null;
     $root = upload_storage_root();
-    if (!$root) throw new RuntimeException('Private File History storage is unavailable.');
-    return RecordFileHistory::storeFile($sourcePath, $root, (string)($record['file_name'] ?? 'source file'), (string)($record['file_type'] ?? ''));
+    if (!$root) return null;
+    try {
+        return RecordFileHistory::storeFile($sourcePath, $root, (string)($record['file_name'] ?? 'source file'), (string)($record['file_type'] ?? ''));
+    } catch (\Throwable $e) {
+        return null;
+    }
 }
 
 function record_file_history_insert(

@@ -1,4 +1,4 @@
-<?php
+﻿<?php
 /**
  * Purpose: Admin page for office upload; uses the shared admin layout and server-side access checks.
  */
@@ -61,6 +61,9 @@ $error = flash('error');
         .iris-loader::before{content:"";position:absolute;inset:10px;border-radius:50%;background:rgba(15,23,42,.9);border:2px solid rgba(255,255,255,.18)}
         .iris-loader::after{content:"IRIS";position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:800;letter-spacing:.12em;color:#d1fae5}
         @keyframes spin{to{transform:rotate(360deg)}}
+        html:not(.dark) .admin-footer { background: #1E6031 !important; border-top: 3px solid #E0A70D !important; color: #fff !important; }
+        html:not(.dark) .admin-footer span, html:not(.dark) .admin-footer div { color: rgba(255,255,255,.9) !important; }
+        html:not(.dark) .admin-footer-title { color: #fff !important; }
     </style>
 </head>
 <body class="dot-grid-dashboard min-h-screen text-gray-900 dark:text-gray-100">
@@ -87,10 +90,10 @@ $error = flash('error');
                 <div data-template-control>
                     <label for="officeTemplateSelect" class="block text-sm font-semibold">Template profile (optional)</label>
                     <select id="officeTemplateSelect" name="template_id" disabled class="form-input disabled:opacity-50">
-                        <option value="">General (uncategorized — template can be assigned later)</option>
+                        <option value="">General (uncategorized â€” template can be assigned later)</option>
                         <?php foreach ($templates as $template): ?>
                             <option value="<?= (int)$template['id'] ?>" data-purpose="<?= e($template['upload_purpose']) ?>">
-                                <?= e($template['name'] . ' — ' . $template['original_filename']) ?>
+                                <?= e($template['name'] . ' â€” ' . $template['original_filename']) ?>
                             </option>
                         <?php endforeach; ?>
                     </select>
@@ -112,7 +115,7 @@ $error = flash('error');
                     <?php foreach ($uploads as $upload): ?>
                         <?php $uploadStatus = $upload['status'] ?: 'Pending Review'; ?>
                         <tr>
-                            <td><span class="office-file-name" title="<?= e($upload['fileName']) ?>"><?= e($upload['fileName']) ?></span><span class="block text-xs font-normal text-gray-500 dark:text-slate-400"><?= e(strtoupper((string)$upload['fileType'])) ?> · <?= number_format((int)$upload['fileSize'] / 1048576, 2) ?> MB</span></td>
+                            <td><span class="office-file-name" title="<?= e($upload['fileName']) ?>"><?= e($upload['fileName']) ?></span><span class="block text-xs font-normal text-gray-500 dark:text-slate-400"><?= e(strtoupper((string)$upload['fileType'])) ?> Â· <?= number_format((int)$upload['fileSize'] / 1048576, 2) ?> MB</span></td>
                             <td><?= e(match ($upload['upload_purpose']) { 'summary_cards' => 'Summary Cards', 'ranking_history' => 'Ranking History', default => 'Data & Report Visualization' }) ?></td>
                             <td><?= e($upload['uploaded_at'] ?: $upload['scannedAt']) ?></td>
                             <td><span class="badge <?= $uploadStatus === 'Approved' ? 'badge-low' : 'badge-medium' ?> office-status-badge"><?= e($uploadStatus === 'Approved' ? 'Published' : $uploadStatus) ?></span></td>
@@ -135,10 +138,21 @@ $error = flash('error');
                 </label>
             </div>
             <div id="activeTemplatesList" data-api="<?= e(base_url('api/templates.php')) ?>" data-download-base="<?= e(base_url('admin/template_download.php')) ?>" class="office-active-templates">
-                <p class="py-4 text-sm text-gray-700 dark:text-slate-300">Loading active templates…</p>
+                <p class="py-4 text-sm text-gray-700 dark:text-slate-300">Loading active templatesâ€¦</p>
             </div>
         </section>
     </main>
+    <footer class="admin-footer bg-white dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700 py-6 mt-12">
+        <div class="dashboard-container flex flex-col sm:flex-row items-center justify-between text-xs text-gray-500 dark:text-gray-400 gap-4">
+            <div class="flex items-center space-x-2">
+                <span class="font-bold admin-footer-title text-gray-800 dark:text-gray-200">CLSU Observatory</span>
+                <span>&bull; IAO'S INTERNATIONAL RAPPORT INSIGHT SYSTEM</span>
+            </div>
+            <div>
+                Powered by Flowbite &amp; Tailwind CSS
+            </div>
+        </div>
+    </footer>
     <script>
         (() => {
             const form = document.querySelector('form[action*="upload_process.php"]');

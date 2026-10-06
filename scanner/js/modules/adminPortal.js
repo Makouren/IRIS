@@ -439,7 +439,7 @@ export function initAdminPortal(ctx) {
               ${approved ? `<button class="record-actions-menu-item btn-table-unpublish" type="button" role="menuitem" data-id="${recordId}" title="Unpublish this record and its saved charts"><i class="fa-solid fa-eye-slash" aria-hidden="true"></i><span>Unpublish</span></button>` : `<button class="record-actions-menu-item btn-table-approve" type="button" role="menuitem" data-id="${recordId}"><i class="fa-solid fa-circle-check" aria-hidden="true"></i><span>Publish</span></button>`}
               <div class="record-actions-menu-divider" role="separator"></div>
               <div class="record-actions-menu-group">Information</div>
-              <button class="record-actions-menu-item btn-table-history" type="button" role="menuitem" data-id="${recordId}"><i class="fa-solid fa-clock-rotate-left" aria-hidden="true"></i><span>File History</span></button>
+              <button class="record-actions-menu-item btn-table-history" type="button" role="menuitem" data-id="${escape(record.id)}"><i class="fa-solid fa-clock-rotate-left" aria-hidden="true"></i><span>File History</span></button>
               ${record.metadata?.stored_file ? `<a class="record-actions-menu-item" role="menuitem" href="${escape(projectBase)}/admin/upload_source.php?id=${encodeURIComponent(record.id)}" target="_blank" rel="noopener"><i class="fa-solid fa-file-arrow-up" aria-hidden="true"></i><span>Source</span></a>` : ''}
               <div class="record-actions-menu-divider" role="separator"></div>
               <div class="record-actions-menu-group">Danger zone</div>
@@ -491,7 +491,8 @@ export function initAdminPortal(ctx) {
       clearGraphEditState(true);
       ctx.state.studioActiveRecord = record;
       ctx.api.renderStudioWorkbench(record);
-      $('studioChartCanvas')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      const workbench = $('studioChartCanvas') || $('studioWorkbench');
+      if (workbench) requestAnimationFrame(() => workbench.scrollIntoView({ behavior: 'smooth', block: 'start' }));
       showToast('Review detected column roles and acknowledge warnings before approval.');
     });
 
@@ -712,8 +713,10 @@ export function initAdminPortal(ctx) {
   };
 
   $('fileArchivesBulkDelete')?.addEventListener('click', () => confirmBulk('delete'));
-  $('fileArchivesBulkPublish')?.addEventListener('click', () => confirmBulk('publish'));
-  $('fileArchivesBulkUnpublish')?.addEventListener('click', () => confirmBulk('unpublish'));
+  const adminBulkPublish = () => confirmBulk('publish');
+  const adminBulkUnpublish = () => confirmBulk('unpublish');
+  $('fileArchivesBulkPublish')?.addEventListener('click', adminBulkPublish);
+  $('fileArchivesBulkUnpublish')?.addEventListener('click', adminBulkUnpublish);
   $('fileArchivesClearSelection')?.addEventListener('click', () => { selectedRecordIds.clear(); bindSelection(); });
   $('fileArchiveSearchInput')?.addEventListener('input', () => renderFileArchives());
   $('fileArchivePurposeFilter')?.addEventListener('change', () => renderFileArchives());

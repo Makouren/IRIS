@@ -54,6 +54,7 @@
             loadPublishedScannerGraphs();
         });
 
+        // Summary Card display options: No decimals, 1 decimal, 2 decimals
         function formatSummaryCardValue(value, precision) {
             const raw = String(value ?? '').trim();
             if (raw === '') return '';
@@ -422,7 +423,9 @@
         // --- Published Observatory Graphs ---
         let chartInstances = [];
         let publishedGraphLayout = 'side-by-side';
+        let publishedGraphLabels = 'show';
         const publishedGraphLayoutSelect = document.getElementById('publishedGraphLayout');
+        const publishedGraphLabelsSelect = document.getElementById('publishedGraphLabels');
 
         publishedGraphLayoutSelect?.addEventListener('change', () => {
             publishedGraphLayout = publishedGraphLayoutSelect.value === 'one-per-row' ? 'one-per-row' : 'side-by-side';
@@ -431,6 +434,23 @@
                 scopeGrid.classList.toggle('grid-cols-1', true);
             });
             requestAnimationFrame(() => chartInstances.forEach(chart => chart?.resize?.()));
+        });
+        function updatePublishedGraphLabels() {
+            document.querySelectorAll('.scanner-published-card').forEach(card => {
+                const element = card.querySelector('[id^="scannerPublishedChart_"]');
+                if (element && card._publishedGraph && card._publishedChart) {
+                    card._publishedChart.setOption(window.IRISChartBuilder.buildSavedGraphOption(card._publishedGraph, {
+                        width: element.clientWidth,
+                        theme: { dark: document.documentElement.classList.contains('dark') },
+                        showLabels: publishedGraphLabels === 'show'
+                    }), true);
+                }
+            });
+        }
+
+        publishedGraphLabelsSelect?.addEventListener('change', () => {
+            publishedGraphLabels = publishedGraphLabelsSelect.value === 'hide' ? 'hide' : 'show';
+            updatePublishedGraphLabels();
         });
 
         // Live Filters
@@ -524,7 +544,8 @@
                 chartInstances.push(chart);
                 chart.setOption(window.IRISChartBuilder.buildSavedGraphOption(graph, {
                     width: elem.clientWidth,
-                    theme: { dark: document.documentElement.classList.contains('dark') }
+                    theme: { dark: document.documentElement.classList.contains('dark') },
+                    showLabels: publishedGraphLabels === 'show'
                 }));
                 });
             });
@@ -559,7 +580,8 @@
                 if (element && card._publishedGraph && card._publishedChart) {
                     card._publishedChart.setOption(window.IRISChartBuilder.buildSavedGraphOption(card._publishedGraph, {
                         width: element.clientWidth,
-                        theme: { dark: document.documentElement.classList.contains('dark') }
+                        theme: { dark: document.documentElement.classList.contains('dark') },
+                        showLabels: publishedGraphLabels === 'show'
                     }), true);
                 }
             });

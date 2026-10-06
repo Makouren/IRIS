@@ -182,6 +182,20 @@ class GraphEngine {
       }];
       return option;
     }
+    if (type === 'polarArea' || type === 'polar-area') {
+      option.tooltip = { trigger: 'item', formatter: '{b}: {c}' };
+      option.angleAxis = { type: 'category', data: labels };
+      option.radiusAxis = {};
+      option.polar = {};
+      option.series = [{
+        name: seriesName,
+        type: 'bar',
+        coordinateSystem: 'polar',
+        data: values,
+        itemStyle: { color: palette.border }
+      }];
+      return option;
+    }
     option.xAxis = { type: 'category', data: labels, axisLabel: { interval: 0 } };
     option.yAxis = { type: 'value', name: seriesName };
     option.series = [{

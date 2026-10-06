@@ -248,7 +248,7 @@ test('record merge requires a chosen direction, replaces differing values from s
   assert.match(irisApi, /Only a Super Admin can merge records/);
   assert.match(irisApi, /source_id.*target_id|source_id/);
   assert.match(irisApi, /source_digest/);
-  assert.match(irisApi, /record_merge_sheet\(\$targetData\[\$targetSheetName\], \$sourceData\[\$sourceSheetName\], \$keyColumns\)/);
+  assert.match(irisApi, /record_merge_sheet\(\$targetData\[\$targetSheetName\], \$sourceData\[\$sourceSheetName\], \$keyColumns/);
   assert.match(irisApi, /'source-at-merge'/);
   assert.match(irisApi, /'pre-merge-target'/);
   assert.match(irisApi, /'post-merge-result'/);

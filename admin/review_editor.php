@@ -300,10 +300,6 @@ require_once __DIR__.'/includes/header.php';
                                 <option value="Needs Revision">Needs Revision</option>
                             </select>
                         </div>
-                        <div style="grid-column: 1 / -1;">
-                            <label class="form-label" style="font-weight: 800; font-size: 0.78rem; color: #334155; text-transform: uppercase; margin-bottom: 0.35rem; display: block;">Admin Verification Notes</label>
-                            <textarea id="studioNotesInput" class="form-input" rows="2" placeholder="Add verification logs and approval notes..." style="font-weight: 500; color: #0F172A; line-height: 1.5;"></textarea>
-                        </div>
                     </div>
 
                     <div style="display: flex; justify-content: flex-end; gap: 0.85rem; padding-top: 1rem; border-top: 1px solid var(--border-light);">

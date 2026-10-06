@@ -5,7 +5,9 @@
             display: grid;
             grid-template-columns: repeat(auto-fit, minmax(min(270px, 100%), 1fr));
             gap: 1rem;
+            min-width: 0;
         }
+        .summary-card-grid > * { min-width: 0; }
         .iris-hover-card {
             position: relative;
             transition: transform .2s ease, box-shadow .2s ease;
@@ -53,7 +55,7 @@
         .scanner-public-scroll-header {
             position: sticky;
             top: -1rem;
-            z-index: 5;
+            z-index: 45;
             margin: -1rem -1rem 0;
             padding: 1rem 1.5rem .65rem;
             border-bottom: 1px solid #B8CCBD;

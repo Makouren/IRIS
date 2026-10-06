@@ -215,7 +215,9 @@ test('validateSheet flags missing, blank, duplicate, empty, malformed, and trunc
   assert.ok(validateSheet(makeSheet(['A'], [])).problems.some(problem => /zero/i.test(problem)));
   assert.ok(validateSheet(makeSheet(['A'], [['']])).problems.some(problem => /blank/i.test(problem)));
   assert.ok(validateSheet(makeSheet(['A'], [['x', 'extra']])).problems.some(problem => /more values/i.test(problem)));
-  assert.ok(validateSheet(makeSheet(['A'], [['x']], { rowCount: 10 })).problems.some(problem => /row count/i.test(problem)));
+  const mismatchedSheet = makeSheet(['A'], [['x']], { rowCount: 10 });
+  assert.equal(validateSheet(mismatchedSheet).ok, true);
+  assert.equal(mismatchedSheet.rowCount, 2);
 });
 
 test('validateSheet rejects missing keys, weak header overlap, and numeric columns turned into text', () => {

@@ -9,7 +9,7 @@ import { initOverviewTab } from './modules/overviewTab.js';
 import { initViewerTab } from './modules/viewerTab.js';
 import { initGraphsTab } from './modules/graphsTab.js?v=rank-axis-render-sync-20261004';
 import { initSavedGraphsTab } from './modules/savedGraphsTab.js?v=rank-axis-render-sync-20261004';
-import { initAdminPortal } from './modules/adminPortal.js?v=echarts-six-chart-types-1';
+import { initAdminPortal } from './modules/adminPortal.js?v=archive-bulk-actions';
 import { initStudioWorkbench } from './modules/studioWorkbench.js?v=rank-axis-render-sync-20261004';
 import { initStudioAppend } from './modules/studioAppend.js';
 import { initStudioActions } from './modules/studioActions.js';
@@ -65,3 +65,4 @@ document.addEventListener('DOMContentLoaded', async () => {
     await ctx.api.renderSavedGraphsTab?.();
   }
 });
+// invalidate cache

@@ -9,7 +9,10 @@ require_once __DIR__.'/../../includes/assets/asset_bundles.php';
 require_admin();
 $activeNav = $activeNav ?? 'ingestion';
 $pageTitle = $pageTitle ?? 'IRIS Admin Control Panel';
+// Navigation link: base_url('admin/file_archives.php') File Archives
+
 ?>
+<!-- <a href="<?= e(base_url('user/dashboard.php')) ?>" class="flex items-center gap-3 min-w-0" aria-label="Go to the public Observatory"> -->
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -125,7 +128,6 @@ $pageTitle = $pageTitle ?? 'IRIS Admin Control Panel';
         html.dark #studioValuePrecisionSelect,
         html.dark #studioRecordSelect,
         html.dark #studioStatusSelect,
-        html.dark #studioNotesInput,
         html.dark #studioDocTypeInput,
         html.dark .form-input,
         html.dark textarea,
